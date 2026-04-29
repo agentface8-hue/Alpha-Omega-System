@@ -385,7 +385,7 @@ async def run_autopilot(top_n: int = 10, watchlist: str = "full_scan"):
             else:
                 skipped.append({"ticker": ticker, "reason": sig["error"]})
 
-        return {
+        result = {
             "status": "ok",
             "scanned": len(symbols),
             "passed_filter": len(valid),
@@ -395,6 +395,15 @@ async def run_autopilot(top_n: int = 10, watchlist: str = "full_scan"):
                            "heat": r.get("heat",""), "tas": r.get("tas","")} for r in top],
             "market_regime": scan_result.get("market_regime", ""),
         }
+
+        # ── Telegram alert: autopilot launched ──
+        try:
+            from core.telegram_alerts import alert_autopilot_launched
+            alert_autopilot_launched(len(launched), "stocks")
+        except Exception:
+            pass
+
+        return result
 
     except Exception as e:
         traceback.print_exc()
@@ -495,6 +504,18 @@ async def storage_debug():
     except Exception as e:
         result["connection"] = f"FAIL: {str(e)[:200]}"
     return result
+
+
+# ── Telegram Test ────────────────────────────────────────────
+@app.post("/api/alerts/test")
+async def test_telegram_alert():
+    """Send a test alert to Telegram to verify setup."""
+    try:
+        from core.telegram_alerts import test_alert
+        ok = test_alert()
+        return {"status": "sent" if ok else "failed", "message": "Check your Telegram"}
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
 
 
 # ── Chart Data ──────────────────────────────────────────────

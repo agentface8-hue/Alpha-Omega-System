@@ -543,6 +543,14 @@ def create_turbo_signal(symbol: str, asset_type: str = "stock",
     active = store.load_active()
     active.append(signal)
     store.save_active(active)
+
+    # ── Telegram alert: new signal ──
+    try:
+        from core.telegram_alerts import alert_signal_created
+        alert_signal_created(signal)
+    except Exception:
+        pass
+
     return signal
 
 
@@ -648,12 +656,27 @@ def check_signals() -> Dict[str, Any]:
         if price >= s["tp1"] and not s["tp1_hit"]:
             s["tp1_hit"] = True
             s["tp1_hit_time"] = datetime.datetime.utcnow().isoformat()
+            try:
+                from core.telegram_alerts import alert_tp_hit
+                alert_tp_hit(s, "tp1", price)
+            except Exception:
+                pass
         if price >= s["tp2"] and not s["tp2_hit"]:
             s["tp2_hit"] = True
             s["tp2_hit_time"] = datetime.datetime.utcnow().isoformat()
+            try:
+                from core.telegram_alerts import alert_tp_hit
+                alert_tp_hit(s, "tp2", price)
+            except Exception:
+                pass
         if price >= s["tp3"] and not s["tp3_hit"]:
             s["tp3_hit"] = True
             s["tp3_hit_time"] = datetime.datetime.utcnow().isoformat()
+            try:
+                from core.telegram_alerts import alert_tp_hit
+                alert_tp_hit(s, "tp3", price)
+            except Exception:
+                pass
 
         # ── Close conditions ──
         is_turbo = s.get("turbo", False)
@@ -671,6 +694,11 @@ def check_signals() -> Dict[str, Any]:
             s["close_price"] = round(actual_fill, 4)
             s["pnl_pct"] = round((actual_fill - entry) / entry * 100, 2)
             should_close = True
+            try:
+                from core.telegram_alerts import alert_sl_hit
+                alert_sl_hit(s, actual_fill)
+            except Exception:
+                pass
 
         elif is_turbo and s["tp1_hit"]:
             close_status = "TP1_HIT"
@@ -915,6 +943,15 @@ def close_signal(signal_id: str, reason: str = "manual") -> Optional[Dict]:
 
     store.save_active(remaining)
     store.save_closed(closed)
+
+    # ── Telegram alert: manual close ──
+    if target:
+        try:
+            from core.telegram_alerts import alert_signal_closed
+            alert_signal_closed(target, reason, target.get("close_price", 0))
+        except Exception:
+            pass
+
     return target
 
 
