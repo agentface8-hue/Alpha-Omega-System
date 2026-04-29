@@ -512,7 +512,7 @@ async def get_chart_data(symbol: str, interval: str = "1d"):
             hist = ticker.history(period="6mo", interval="1d")
 
         if hist.empty:
-            raise HTTPException(status_code=404, detail=f"No data for {symbol}")
+            return {"symbol": symbol.upper(), "interval": interval, "candles": [], "sr_levels": [], "channel": None}
 
         hist = hist.tail(60)
         candles = []
@@ -626,7 +626,8 @@ async def alpha_mega(lookback_days: int = 30):
                         candidates[t] = key
 
             scanner = SwingScanner()
-            raw = scanner.scan(list(candidates.keys()))
+            raw_result = scanner.scan(list(candidates.keys()))
+            raw = raw_result.get("results", []) if isinstance(raw_result, dict) else (raw_result or [])
 
             # Filter: no hard fail, market cap >= $10B, has conviction score
             filtered = [r for r in raw
