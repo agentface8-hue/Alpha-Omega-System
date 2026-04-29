@@ -499,26 +499,50 @@ async def storage_debug():
 
 # ── Chart Data ──────────────────────────────────────────────
 @app.get("/api/chart/{symbol}")
-async def get_chart_data(symbol: str, interval: str = "1d"):
-    """Return OHLC candles + S/R levels + linear regression channel for charting."""
+async def get_chart_data(symbol: str, interval: str = "1d", period: str = "6M"):
+    """Return OHLC candles + S/R + channel + buy/sell signals + MTF analysis."""
     try:
         import yfinance as yf
         import numpy as np
+        import pandas as pd
 
         ticker = yf.Ticker(symbol.upper())
-        if interval == "1w":
-            hist = ticker.history(period="2y", interval="1wk")
-        else:
-            hist = ticker.history(period="6mo", interval="1d")
+
+        # Period → yfinance string
+        period_map = {"1M":"1mo","3M":"3mo","6M":"6mo","1Y":"1y","3Y":"2y","5Y":"5y"}
+        yf_period  = period_map.get(period, "6mo")
+
+        # Fetch data based on interval
+        if interval == "1h":
+            yf_period = period_map.get(period, "1mo") if period in ["1M","3M"] else "1mo"
+            hist = ticker.history(period=yf_period, interval="60m")
+        elif interval == "4h":
+            yf_period = period_map.get(period, "3mo") if period in ["1M","3M","6M"] else "3mo"
+            h1 = ticker.history(period=yf_period, interval="60m")
+            if not h1.empty:
+                hist = h1.resample("4h").agg({"Open":"first","High":"max","Low":"min","Close":"last","Volume":"sum"}).dropna()
+            else:
+                hist = h1
+        elif interval == "1w":
+            hist = ticker.history(period=yf_period, interval="1wk")
+        else:  # 1d default
+            hist = ticker.history(period=yf_period, interval="1d")
 
         if hist.empty:
-            return {"symbol": symbol.upper(), "interval": interval, "candles": [], "sr_levels": [], "channel": None}
+            return {"symbol": symbol.upper(), "interval": interval, "period": period,
+                    "candles": [], "sr_levels": [], "channel": None, "signals": [], "mtf": {}}
 
-        hist = hist.tail(60)
+        # Format timestamps
+        def fmt_ts(ts):
+            try:
+                return ts.strftime("%Y-%m-%d %H:%M") if interval in ["1h","4h"] else ts.strftime("%Y-%m-%d")
+            except:
+                return str(ts)[:16]
+
         candles = []
         for ts, row in hist.iterrows():
             candles.append({
-                "t": ts.strftime("%Y-%m-%d"),
+                "t": fmt_ts(ts),
                 "o": round(float(row["Open"]), 2),
                 "h": round(float(row["High"]), 2),
                 "l": round(float(row["Low"]), 2),
@@ -530,30 +554,65 @@ async def get_chart_data(symbol: str, interval: str = "1d"):
         highs  = hist["High"].values
         lows   = hist["Low"].values
 
+        # S/R levels from swing pivots
         sr_levels = []
         for i in range(2, len(closes) - 2):
             if highs[i] > highs[i-1] and highs[i] > highs[i-2] and highs[i] > highs[i+1] and highs[i] > highs[i+2]:
                 sr_levels.append({"level": round(float(highs[i]), 2), "type": "resistance"})
             if lows[i] < lows[i-1] and lows[i] < lows[i-2] and lows[i] < lows[i+1] and lows[i] < lows[i+2]:
                 sr_levels.append({"level": round(float(lows[i]), 2), "type": "support"})
-
         filtered_sr = []
         for lvl in sr_levels:
             if not any(abs(l["level"] - lvl["level"]) / max(lvl["level"], 1) < 0.005 for l in filtered_sr):
                 filtered_sr.append(lvl)
 
+        # Linear regression channel
         x = np.arange(len(closes))
         m, b = np.polyfit(x, closes, 1)
-        std = float(np.std(closes - (m * x + b)))
-        n = len(closes) - 1
+        std  = float(np.std(closes - (m * x + b)))
+        n    = len(closes) - 1
         channel = {
             "upper": [round(float(b + 2*std), 2), round(float(m*n + b + 2*std), 2)],
             "mid":   [round(float(b), 2),          round(float(m*n + b), 2)],
             "lower": [round(float(b - 2*std), 2),  round(float(m*n + b - 2*std), 2)]
         }
 
-        return {"symbol": symbol.upper(), "interval": interval, "candles": candles,
-                "sr_levels": filtered_sr[:8], "channel": channel}
+        # Buy/Sell signals via EMA20/EMA50 crossover
+        close_s = hist["Close"]
+        ema20   = close_s.ewm(span=20, adjust=False).mean()
+        ema50   = close_s.ewm(span=50, adjust=False).mean()
+        signals = []
+        for i in range(1, len(close_s)):
+            prev_diff = float(ema20.iloc[i-1]) - float(ema50.iloc[i-1])
+            curr_diff = float(ema20.iloc[i])   - float(ema50.iloc[i])
+            if prev_diff <= 0 and curr_diff > 0:
+                signals.append({"t": fmt_ts(hist.index[i]), "type": "BUY",  "price": round(float(close_s.iloc[i]), 2)})
+            elif prev_diff >= 0 and curr_diff < 0:
+                signals.append({"t": fmt_ts(hist.index[i]), "type": "SELL", "price": round(float(close_s.iloc[i]), 2)})
+
+        # MTF analysis — BULL if price > EMA20 on each timeframe
+        def mtf_trend(iv, per):
+            try:
+                h = ticker.history(period=per, interval=iv)
+                if h.empty or len(h) < 5: return "NEUTRAL"
+                if iv == "60m" and per == "4h_resample":
+                    h = h.resample("4h").agg({"Open":"first","High":"max","Low":"min","Close":"last","Volume":"sum"}).dropna()
+                c  = h["Close"]
+                e  = c.ewm(span=20, adjust=False).mean()
+                return "BULL" if float(c.iloc[-1]) > float(e.iloc[-1]) else "BEAR"
+            except:
+                return "NEUTRAL"
+
+        mtf = {
+            "tf_1h": mtf_trend("60m",  "5d"),
+            "tf_4h": mtf_trend("60m",  "4h_resample"),
+            "tf_1d": mtf_trend("1d",   "3mo"),
+            "tf_1w": mtf_trend("1wk",  "1y"),
+        }
+
+        return {"symbol": symbol.upper(), "interval": interval, "period": period,
+                "candles": candles, "sr_levels": filtered_sr[:10],
+                "channel": channel, "signals": signals, "mtf": mtf}
 
     except HTTPException:
         raise
