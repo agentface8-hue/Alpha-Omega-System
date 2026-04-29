@@ -1,5 +1,6 @@
 import React from 'react';
-import { TrendingUp, TrendingDown, ShieldAlert, ShieldCheck, Minus } from 'lucide-react';
+import { TrendingUp, TrendingDown, ShieldAlert, ShieldCheck, Minus, AlertTriangle } from 'lucide-react';
+import { useState, useEffect } from 'react';
 
 const DecisionRow = ({ label, value, suffix, color }) => (
   <div style={{ display:'flex', alignItems:'center', gap:8, padding:'3px 0' }}>
@@ -28,7 +29,18 @@ const MTFRow = ({ label, val }) => {
 
 const ResultCard = ({ result }) => {
   if (!result) return null;
-  const { consensus_view, confidence_score, executioner_decision, full_report, trade_params, mtf_analysis } = result;
+  const { consensus_view, confidence_score, executioner_decision, full_report, trade_params, mtf_analysis, symbol } = result;
+
+  const [earnings, setEarnings] = useState(null);
+  const API = import.meta.env.VITE_API_URL || 'http://127.0.0.1:8000';
+
+  useEffect(() => {
+    if (!symbol && !result.symbol) return;
+    const sym = symbol || result.symbol;
+    fetch(`${API}/api/earnings/${sym}`)
+      .then(r => r.json()).then(d => setEarnings(d)).catch(() => {});
+  }, [result]);
+
   const decision = executioner_decision || 'PENDING';
   const upper = decision.toUpperCase();
   const isBuy  = upper.includes('BUY');
@@ -58,7 +70,26 @@ const ResultCard = ({ result }) => {
       </div>
 
       <div style={{ padding:'14px 16px' }}>
-        {/* ── Structured trade rows ── */}
+      {/* ── Earnings Warning ── */}
+      {earnings?.warning && (
+        <div style={{ background:'#2a1500', border:'1px solid #f97316', borderRadius:6,
+          padding:'8px 12px', marginBottom:12, display:'flex', alignItems:'center', gap:8 }}>
+          <AlertTriangle size={13} color="#f97316" />
+          <span style={{ color:'#f97316', fontSize:11, fontFamily:'sans-serif', fontWeight:'bold' }}>
+            {earnings.warning_msg}
+          </span>
+          <span style={{ color:'#7c4a1e', fontSize:10, fontFamily:'sans-serif', marginLeft:'auto' }}>
+            {earnings.earnings_date}
+          </span>
+        </div>
+      )}
+      {earnings && !earnings.warning && earnings.earnings_date && (
+        <div style={{ color:'#2a4a5a', fontSize:9, fontFamily:'sans-serif', marginBottom:8 }}>
+          Next earnings: {earnings.earnings_date} ({earnings.days_until}d)
+        </div>
+      )}
+
+      {/* ── Structured trade rows ── */}
         {trade_params ? (
           <div style={{ display:'flex', flexDirection:'column', gap:2, marginBottom:12 }}>
             <div style={{ display:'flex', alignItems:'center', gap:10, marginBottom:4 }}>

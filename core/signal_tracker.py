@@ -544,7 +544,26 @@ def create_turbo_signal(symbol: str, asset_type: str = "stock",
     active.append(signal)
     store.save_active(active)
 
-    # ── Telegram alert: new signal ──
+    # ── Earnings proximity check ──
+    try:
+        import yfinance as yf
+        from datetime import date
+        cal = yf.Ticker(sym).calendar
+        if cal is not None and not cal.empty:
+            col = cal.columns[0]
+            dt = col.date() if hasattr(col, 'date') else date.fromisoformat(str(col)[:10])
+            days = (dt - date.today()).days
+            if 0 <= days <= 7:
+                signal["earnings_warning"] = f"⚠ EARNINGS IN {days} DAY{'S' if days!=1 else ''} — targets unreliable"
+                signal["earnings_date"] = str(dt)
+                store.save_active(active)
+                # Telegram earnings warning
+                from core.telegram_alerts import _send
+                _send(f"⚠ <b>EARNINGS WARNING — {sym}</b>\nEarnings in <b>{days} day{'s' if days!=1 else ''}</b> ({dt})\nSignal created but targets may be unreliable.")
+    except Exception:
+        pass
+
+    # ── Telegram alert ──
     try:
         from core.telegram_alerts import alert_signal_created
         alert_signal_created(signal)

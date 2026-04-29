@@ -762,3 +762,312 @@ async def alpha_mega(lookback_days: int = 30):
     except Exception as e:
         traceback.print_exc()
         raise HTTPException(status_code=500, detail=str(e))
+
+
+# ═══════════════════════════════════════════════════════════════════
+# #1  EARNINGS CALENDAR
+# ═══════════════════════════════════════════════════════════════════
+@app.get("/api/earnings/{symbol}")
+async def get_earnings(symbol: str):
+    """Return next earnings date + days until + EPS estimates."""
+    try:
+        import yfinance as yf
+        from datetime import date, datetime
+        tk = yf.Ticker(symbol.upper())
+        cal = tk.calendar
+        result = {"symbol": symbol.upper(), "earnings_date": None, "days_until": None,
+                  "warning": False, "warning_msg": ""}
+        if cal is not None and not cal.empty:
+            try:
+                # calendar is a DataFrame with dates as columns
+                col = cal.columns[0]
+                dt = col
+                if hasattr(dt, 'date'):
+                    dt = dt.date()
+                elif isinstance(dt, str):
+                    dt = date.fromisoformat(dt[:10])
+                today = date.today()
+                days = (dt - today).days
+                result["earnings_date"] = str(dt)
+                result["days_until"] = days
+                if 0 <= days <= 7:
+                    result["warning"] = True
+                    result["warning_msg"] = f"⚠ EARNINGS IN {days} DAY{'S' if days != 1 else ''} — high volatility risk"
+            except Exception:
+                pass
+        return result
+    except Exception as e:
+        traceback.print_exc()
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+
+# ═══════════════════════════════════════════════════════════════════
+# #2  PORTFOLIO RISK LAYER
+# ═══════════════════════════════════════════════════════════════════
+SECTOR_MAP = {
+    "AAPL":"Tech","MSFT":"Tech","NVDA":"Tech","AMD":"Tech","GOOGL":"Tech","META":"Tech","AMZN":"Tech",
+    "TSLA":"Consumer","NFLX":"Consumer","DIS":"Consumer","NKE":"Consumer","SBUX":"Consumer",
+    "JPM":"Finance","GS":"Finance","BAC":"Finance","V":"Finance","MA":"Finance","BRK-B":"Finance",
+    "JNJ":"Health","PFE":"Health","UNH":"Health","ABBV":"Health","LLY":"Health","MRK":"Health",
+    "XOM":"Energy","CVX":"Energy","COP":"Energy","SLB":"Energy",
+    "BA":"Industrials","CAT":"Industrials","HON":"Industrials","GE":"Industrials",
+    "BTC":"Crypto","ETH":"Crypto","SOL":"Crypto","XRP":"Crypto","ADA":"Crypto",
+}
+
+@app.get("/api/portfolio/risk")
+async def portfolio_risk():
+    """
+    Analyse current open signals for concentration risk, drawdown, and correlation.
+    """
+    try:
+        from core import signal_store as store
+        active = store.load_active()
+
+        if not active:
+            return {"risk_level": "LOW", "signals": 0, "warnings": [],
+                    "sector_exposure": {}, "worst_case_loss_pct": 0}
+
+        # Sector exposure
+        sector_exposure: dict = {}
+        for s in active:
+            sec = SECTOR_MAP.get(s["ticker"], "Other")
+            sector_exposure[sec] = sector_exposure.get(sec, 0) + 1
+
+        # Concentration warnings
+        warnings = []
+        for sec, cnt in sector_exposure.items():
+            if cnt >= 3:
+                warnings.append(f"🔴 HIGH CONCENTRATION: {cnt} open signals in {sec}")
+            elif cnt == 2:
+                warnings.append(f"🟡 MODERATE: 2 signals in {sec}")
+
+        # Worst-case drawdown if ALL SLs hit simultaneously
+        total_risk_pct = 0.0
+        signal_risks = []
+        for s in active:
+            entry = s.get("entry_price", 0)
+            sl    = s.get("targets", {}).get("sl") or s.get("sl", 0)
+            if entry > 0 and sl > 0:
+                risk_pct = round((sl - entry) / entry * 100, 2)
+                signal_risks.append({"ticker": s["ticker"], "risk_pct": risk_pct})
+                total_risk_pct += risk_pct
+            else:
+                signal_risks.append({"ticker": s["ticker"], "risk_pct": 0})
+
+        worst_case = round(total_risk_pct / len(active), 2) if active else 0
+
+        # Overall risk level
+        max_conc = max(sector_exposure.values()) if sector_exposure else 0
+        if max_conc >= 4 or len(active) >= 8:
+            risk_level = "HIGH"
+        elif max_conc >= 3 or len(active) >= 5:
+            risk_level = "MEDIUM"
+        else:
+            risk_level = "LOW"
+
+        if worst_case < -3:
+            warnings.append(f"🔴 WORST CASE: all SLs hit = {worst_case:.1f}% portfolio loss")
+
+        return {
+            "risk_level": risk_level,
+            "signals": len(active),
+            "warnings": warnings,
+            "sector_exposure": sector_exposure,
+            "signal_risks": signal_risks,
+            "worst_case_loss_pct": worst_case,
+        }
+    except Exception as e:
+        traceback.print_exc()
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+
+# ═══════════════════════════════════════════════════════════════════
+# #3  LEARNING LOOP / ANALYTICS
+# ═══════════════════════════════════════════════════════════════════
+@app.get("/api/analytics/performance")
+async def analytics_performance():
+    """
+    Derive win rates, conviction accuracy, and regime performance from closed signals.
+    This IS the learning loop — the system reflects on its own trades.
+    """
+    try:
+        from core import signal_store as store
+        closed = store.load_closed()
+
+        if not closed:
+            return {"total": 0, "message": "No closed signals yet. Run Auto-Pilot to generate signals."}
+
+        wins   = [s for s in closed if s.get("pnl_pct", 0) > 0]
+        losses = [s for s in closed if s.get("pnl_pct", 0) <= 0]
+        total  = len(closed)
+        win_rate = round(len(wins) / total * 100, 1) if total else 0
+
+        # Average P&L
+        avg_win  = round(sum(s["pnl_pct"] for s in wins)  / len(wins),  2) if wins  else 0
+        avg_loss = round(sum(s["pnl_pct"] for s in losses) / len(losses), 2) if losses else 0
+
+        # Profit factor
+        gross_profit = sum(s["pnl_pct"] for s in wins)  if wins   else 0
+        gross_loss   = abs(sum(s["pnl_pct"] for s in losses)) if losses else 1
+        profit_factor = round(gross_profit / gross_loss, 2) if gross_loss else 0
+
+        # Win rate by conviction bucket
+        buckets = {"50-59": [], "60-69": [], "70-79": [], "80-89": [], "90+": []}
+        for s in closed:
+            c = s.get("conviction", s.get("scan_data", {}).get("conviction_pct", 0)) or 0
+            b = "50-59" if c < 60 else "60-69" if c < 70 else "70-79" if c < 80 else "80-89" if c < 90 else "90+"
+            buckets[b].append(s)
+        conviction_breakdown = {}
+        for b, sigs in buckets.items():
+            if sigs:
+                w = sum(1 for s in sigs if s.get("pnl_pct", 0) > 0)
+                conviction_breakdown[b] = {"trades": len(sigs), "win_rate": round(w/len(sigs)*100, 1)}
+
+        # Win rate by market regime
+        regime_breakdown = {}
+        for s in closed:
+            reg = s.get("market_context", {}).get("regime", "Unknown")
+            if reg not in regime_breakdown:
+                regime_breakdown[reg] = {"trades": 0, "wins": 0}
+            regime_breakdown[reg]["trades"] += 1
+            if s.get("pnl_pct", 0) > 0:
+                regime_breakdown[reg]["wins"] += 1
+        for reg in regime_breakdown:
+            t = regime_breakdown[reg]["trades"]
+            w = regime_breakdown[reg]["wins"]
+            regime_breakdown[reg]["win_rate"] = round(w/t*100, 1) if t else 0
+
+        # TP/SL hit rates
+        tp1_hits = sum(1 for s in closed if s.get("tp1_hit")) 
+        tp2_hits = sum(1 for s in closed if s.get("tp2_hit"))
+        stopped  = sum(1 for s in closed if "STOPPED" in s.get("status", ""))
+
+        # MAE/MFE averages
+        avg_mae = round(sum(s.get("mae_pct", 0) for s in closed) / total, 2) if total else 0
+        avg_mfe = round(sum(s.get("mfe_pct", 0) for s in closed) / total, 2) if total else 0
+
+        return {
+            "total": total,
+            "wins": len(wins),
+            "losses": len(losses),
+            "win_rate": win_rate,
+            "avg_win_pct": avg_win,
+            "avg_loss_pct": avg_loss,
+            "profit_factor": profit_factor,
+            "tp1_hit_rate": round(tp1_hits / total * 100, 1) if total else 0,
+            "tp2_hit_rate": round(tp2_hits / total * 100, 1) if total else 0,
+            "stopped_out_rate": round(stopped / total * 100, 1) if total else 0,
+            "avg_mae_pct": avg_mae,
+            "avg_mfe_pct": avg_mfe,
+            "conviction_breakdown": conviction_breakdown,
+            "regime_breakdown": regime_breakdown,
+        }
+    except Exception as e:
+        traceback.print_exc()
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+
+# ═══════════════════════════════════════════════════════════════════
+# #4  REAL-TIME DATA — Alpaca (optional, falls back to yfinance)
+# ═══════════════════════════════════════════════════════════════════
+@app.get("/api/price/live/{symbol}")
+async def get_live_price(symbol: str):
+    """
+    Try Alpaca first (real-time), fall back to yfinance (15-20min delayed).
+    Returns price + source + delay indicator.
+    """
+    import os, yfinance as yf
+    sym = symbol.upper()
+    alpaca_key    = os.environ.get("ALPACA_API_KEY", "")
+    alpaca_secret = os.environ.get("ALPACA_SECRET_KEY", "")
+
+    # Try Alpaca real-time
+    if alpaca_key and alpaca_secret:
+        try:
+            import urllib.request, json as _json
+            url = f"https://data.alpaca.markets/v2/stocks/{sym}/trades/latest"
+            req = urllib.request.Request(url, headers={
+                "APCA-API-KEY-ID": alpaca_key,
+                "APCA-API-SECRET-KEY": alpaca_secret,
+                "User-Agent": "Mozilla/5.0"
+            })
+            with urllib.request.urlopen(req, timeout=5) as r:
+                data = _json.loads(r.read().decode())
+                price = float(data["trade"]["p"])
+                return {"symbol": sym, "price": price, "source": "alpaca", "realtime": True, "delay_min": 0}
+        except Exception:
+            pass  # Fall through to yfinance
+
+    # yfinance fallback
+    try:
+        tk = yf.Ticker(sym)
+        hist = tk.history(period="1d", interval="1m")
+        if not hist.empty:
+            price = float(hist["Close"].iloc[-1])
+            return {"symbol": sym, "price": round(price, 4), "source": "yfinance", "realtime": False, "delay_min": 15}
+    except Exception:
+        pass
+
+    raise HTTPException(status_code=404, detail=f"Could not fetch price for {sym}")
+
+
+@app.get("/api/data/source")
+async def get_data_source():
+    """Returns which data source is active: alpaca (real-time) or yfinance (delayed)."""
+    import os
+    alpaca_key = os.environ.get("ALPACA_API_KEY", "")
+    return {
+        "source": "alpaca" if alpaca_key else "yfinance",
+        "realtime": bool(alpaca_key),
+        "delay_min": 0 if alpaca_key else 15,
+        "label": "LIVE" if alpaca_key else "DELAYED ~15min"
+    }
+
+
+# ═══════════════════════════════════════════════════════════════════
+# #5  SECTOR FLIP ALERTS (called from check_signals or on demand)
+# ═══════════════════════════════════════════════════════════════════
+_SECTOR_TREND_CACHE: dict = {}  # {etf: {"trend": "BULL"/"BEAR", "ts": float}}
+
+@app.post("/api/alerts/sector-check")
+async def check_sector_flips():
+    """
+    Check all 11 sector ETFs for BULL→BEAR or BEAR→BULL flips.
+    Fires Telegram alert on flip. Call this periodically or manually.
+    """
+    import time, yfinance as yf
+    import pandas as pd
+    SECTOR_ETFS = {
+        "XLK": "Info Tech",   "XLF": "Financials",  "XLV": "Health Care",
+        "XLI": "Industrials", "XLY": "Cons. Disc.",  "XLP": "Cons. Staples",
+        "XLE": "Energy",      "XLC": "Comm. Svcs",   "XLU": "Utilities",
+        "XLB": "Materials",   "XLRE": "Real Estate",
+    }
+    flips = []
+    for etf, name in SECTOR_ETFS.items():
+        try:
+            tk = yf.Ticker(etf)
+            hist = tk.history(period="5d", interval="1d")
+            if hist.empty or len(hist) < 2:
+                continue
+            close = hist["Close"]
+            ema20 = float(close.ewm(span=20, adjust=False).mean().iloc[-1])
+            current = float(close.iloc[-1])
+            trend = "BULL" if current > ema20 else "BEAR"
+            prev = _SECTOR_TREND_CACHE.get(etf, {}).get("trend")
+            _SECTOR_TREND_CACHE[etf] = {"trend": trend, "ts": time.time()}
+            if prev and prev != trend:
+                flips.append({"etf": etf, "sector": name, "from": prev, "to": trend})
+                try:
+                    from core.telegram_alerts import _send
+                    emoji = "🟢" if trend == "BULL" else "🔴"
+                    _send(f"{emoji} <b>SECTOR FLIP — {name}</b>\n{etf}: {prev} → <b>{trend}</b>\n🕐 {__import__('datetime').datetime.utcnow().strftime('%H:%M UTC')}")
+                except Exception:
+                    pass
+        except Exception:
+            pass
+    return {"checked": len(SECTOR_ETFS), "flips": flips, "flips_count": len(flips)}
+

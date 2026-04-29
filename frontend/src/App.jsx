@@ -1,5 +1,5 @@
 import React, { useState } from 'react';
-import { Search, Activity, BarChart3 } from 'lucide-react';
+import { Search, Activity, BarChart3, Brain } from 'lucide-react';
 import Terminal from './components/Terminal';
 import ResultCard from './components/ResultCard';
 import LiveTicker from './components/LiveTicker';
@@ -9,6 +9,7 @@ import BacktestDashboard from './components/BacktestDashboard';
 import SignalTracker from './components/SignalTracker';
 import ChartPanel from './components/ChartPanel';
 import AlphaMegaDashboard from './components/AlphaMegaDashboard';
+import Analytics from './components/Analytics';
 import LoginScreen from './components/LoginScreen';
 import { playThinkingSound, playSuccessSound, playErrorSound } from './utils/sounds';
 
@@ -150,6 +151,9 @@ const App = () => {
         <button onClick={() => setActiveTab('alphamega')} style={{ background:activeTab==='alphamega'?"#0d1a2a":"transparent", color:activeTab==='alphamega'?"#c084fc":"#4a6070", border:"none", borderBottom:activeTab==='alphamega'?"2px solid #c084fc":"2px solid transparent", padding:"10px 20px", fontSize:12, fontWeight:"bold", fontFamily:"sans-serif", cursor:"pointer", display:"flex", alignItems:"center", gap:6, letterSpacing:1 }}>
           <BarChart3 size={14} /> ALPHA-MEGA
         </button>
+        <button onClick={() => setActiveTab('analytics')} style={{ background:activeTab==='analytics'?"#0d1a2a":"transparent", color:activeTab==='analytics'?"#00d4ff":"#4a6070", border:"none", borderBottom:activeTab==='analytics'?"2px solid #00d4ff":"2px solid transparent", padding:"10px 20px", fontSize:12, fontWeight:"bold", fontFamily:"sans-serif", cursor:"pointer", display:"flex", alignItems:"center", gap:6, letterSpacing:1 }}>
+          <Brain size={14} /> ANALYTICS
+        </button>
       </div>
 
       {/* Content */}
@@ -161,6 +165,8 @@ const App = () => {
         <SignalTracker />
       ) : activeTab === 'alphamega' ? (
         <AlphaMegaDashboard />
+      ) : activeTab === 'analytics' ? (
+        <Analytics />
       ) : (
       <main className="main-container">
         {/* Search */}

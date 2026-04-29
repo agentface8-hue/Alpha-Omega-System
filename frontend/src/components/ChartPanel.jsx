@@ -102,13 +102,14 @@ const PnLBlock = ({ candles, signals }) => {
 };
 
 const ChartPanel = ({ symbol, tradeParams }) => {
-  const [data, setData]       = useState(null);
-  const [interval, setIv]     = useState('1d');
-  const [period, setPeriod]   = useState('6M');
-  const [chartType, setType]  = useState('candle');
-  const [loading, setLoading] = useState(false);
-  const [error, setError]     = useState(null);
-  const [dims, setDims]       = useState({ w:900, h:520 });
+  const [data, setData]         = useState(null);
+  const [interval, setIv]       = useState('1d');
+  const [period, setPeriod]     = useState('6M');
+  const [chartType, setType]    = useState('candle');
+  const [loading, setLoading]   = useState(false);
+  const [error, setError]       = useState(null);
+  const [dims, setDims]         = useState({ w:900, h:520 });
+  const [earnings, setEarnings] = useState(null);
   const wrapRef = useRef(null);
 
   useEffect(() => {
@@ -121,6 +122,12 @@ const ChartPanel = ({ symbol, tradeParams }) => {
   }, []);
 
   useEffect(() => { if (symbol) fetchChart(); }, [symbol, interval, period]);
+  useEffect(() => {
+    if (!symbol) return;
+    const base = import.meta.env.VITE_API_URL || 'http://127.0.0.1:8000';
+    fetch(`${base}/api/earnings/${symbol}`)
+      .then(r => r.json()).then(d => setEarnings(d)).catch(() => {});
+  }, [symbol]);
 
   const fetchChart = async () => {
     setLoading(true); setError(null); setData(null);
@@ -304,6 +311,22 @@ const ChartPanel = ({ symbol, tradeParams }) => {
         {/* Axes */}
         <line x1={PAD.l} y1={PAD.t} x2={PAD.l} y2={h-PAD.b} stroke="#1e2d3d" strokeWidth="1" />
         <line x1={PAD.l} y1={h-PAD.b} x2={w-PAD.r} y2={h-PAD.b} stroke="#1e2d3d" strokeWidth="1" />
+
+        {/* Earnings vertical line */}
+        {earnings?.earnings_date && (() => {
+          const earningsStr = earnings.earnings_date.slice(0,10);
+          const earningsIdx = candles.findIndex(c => c.t.slice(0,10) >= earningsStr);
+          if (earningsIdx < 0) return null;
+          const ex = idxFn(earningsIdx);
+          const ec = earnings.warning ? '#f97316' : '#7c3aed';
+          return (
+            <g>
+              <line x1={ex} y1={PAD.t} x2={ex} y2={h-PAD.b} stroke={ec} strokeWidth="1.5" strokeDasharray="4 3" opacity="0.8" />
+              <rect x={ex-16} y={PAD.t} width={32} height={14} fill={ec} rx="2" opacity="0.9" />
+              <text x={ex} y={PAD.t+10} textAnchor="middle" fontSize="7" fill="#000" fontFamily="sans-serif" fontWeight="bold">EARN</text>
+            </g>
+          );
+        })()}
       </svg>
     );
   };
@@ -330,6 +353,12 @@ const ChartPanel = ({ symbol, tradeParams }) => {
             <span style={{ color: changePositive ? '#00ff88' : '#ff4466', fontSize:11,
               fontFamily:'sans-serif', fontWeight:'bold' }}>
               {changePositive ? '▲' : '▼'} {Math.abs(dayChange).toFixed(2)}%
+            </span>
+          )}
+          {earnings?.warning && (
+            <span style={{ background:'#2a1500', border:'1px solid #f97316', borderRadius:4,
+              color:'#f97316', fontSize:9, fontFamily:'sans-serif', padding:'2px 8px', fontWeight:'bold' }}>
+              ⚠ EARN {earnings.days_until}d
             </span>
           )}
         </div>
