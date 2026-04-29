@@ -21,8 +21,8 @@ Alpha-Omega is an AI-powered stock/crypto trading analysis system:
 
 | Component | Platform | URL | Remote |
 |-----------|----------|-----|--------|
-| Frontend | Vercel | https://alpha-omega-ngfw.vercel.app | `vercel` → github.com/agentface8-hue/Alpha-Omega |
-| Backend | Render | https://alpha-omega-api.onrender.com | `origin` → github.com/ipurches/Alpha-Omega-System |
+| Frontend | Vercel | https://alpha-omega-ngfw.vercel.app | `origin` → github.com/agentface8-hue/Alpha-Omega-System |
+| Backend | Render | https://alpha-omega-api.onrender.com | `origin` → github.com/agentface8-hue/Alpha-Omega-System |
 | Local dev | localhost | http://127.0.0.1:8000 (backend), :5173 (frontend) | — |
 
 ### Deploy workflow:
@@ -30,8 +30,7 @@ Alpha-Omega is an AI-powered stock/crypto trading analysis system:
 cd C:\Users\asus\Alpha-Omega-System
 git add .
 git commit -m "description"
-git push origin main    # triggers Render backend deploy
-git push vercel main    # triggers Vercel frontend deploy
+git push origin main    # triggers BOTH Render backend + Vercel frontend
 ```
 
 ### Frontend build (required before deploy):
@@ -269,12 +268,11 @@ Render free tier wipes files on redeploy. This means:
 - Crypto is near-realtime
 - Signal tracker has staleness detection built in
 
-### Git Remotes
+### Git Remote (single remote now)
 ```
-origin  → github.com/ipurches/Alpha-Omega-System  (Render)
-vercel  → github.com/agentface8-hue/Alpha-Omega   (Vercel)
+origin  → github.com/agentface8-hue/Alpha-Omega-System  (Render + Vercel)
 ```
-Always push to BOTH after changes.
+One push deploys everything. No more dual remotes.
 
 ### API Keys (.env)
 ```
