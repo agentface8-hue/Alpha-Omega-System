@@ -331,6 +331,10 @@ def _build_result(data: Dict, regime: Dict, conviction: int, pillars: Dict,
         "rr": data.get("rr", 0),
         "plan": "",
         "rsi": data.get("rsi", 50),
+        # Channel slope exit signal — true = momentum fading, consider early exit
+        "slope_declining": lr_slope < -0.02,
+        "lr_slope_pct": lr_slope,
+        "early_exit_flag": lr_slope < -0.02 and conviction > 60,
     }
 
 

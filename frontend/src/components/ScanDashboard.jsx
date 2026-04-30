@@ -281,7 +281,16 @@ const ScanDashboard = () => {
                       <td style={{...td, color:"#c084fc", fontWeight:"bold", fontSize:13}}>{r.qty || "—"}</td>
                       <td style={{...td, color:r.vol_ratio>2?"#fbbf24":r.vol_ratio>1.5?"#00ff88":"#94a3b8", fontFamily:"sans-serif", fontSize:12}}>{r.vol_ratio ? `×${r.vol_ratio}` : "—"}</td>
                       <td style={{...td, color:r.earnings_warning?.includes("⚠")?"#ff4466":"#8899aa", fontFamily:"sans-serif", fontSize:10}}>{r.earnings_warning}</td>
-                      <td style={{...td, fontSize:10, color:"#8899aa", maxWidth:200, whiteSpace:"normal", fontFamily:"sans-serif", lineHeight:1.5}}>{r.ta_note}</td>
+                      <td style={{...td, fontSize:10, color:"#8899aa", maxWidth:200, whiteSpace:"normal", fontFamily:"sans-serif", lineHeight:1.5}}>
+                        {r.early_exit_flag && (
+                          <div style={{ marginBottom:4 }}>
+                            <span style={{ background:"rgba(255,68,102,0.12)", color:"#ff4466", border:"1px solid rgba(255,68,102,0.3)", fontSize:9, padding:"2px 6px", borderRadius:3, fontWeight:"bold" }}>
+                              ⚠️ SLOPE DECLINING — consider early exit
+                            </span>
+                          </div>
+                        )}
+                        {r.ta_note}
+                      </td>
                     </tr>
                     {isExp && r.plan && (
                       <tr>

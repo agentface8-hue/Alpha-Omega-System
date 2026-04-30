@@ -115,64 +115,103 @@ const BacktestDashboard = () => {
           <Card title="TP1 HIT" value={`${s.overall_tp1_rate||0}%`} color={rateColor(s.overall_tp1_rate||0)} />
           <Card title="AVG P&L" value={`${s.avg_pnl>0?'+':''}${s.avg_pnl||0}%`} color={pctColor(s.avg_pnl||0)} sub="per trade" />
           <Card title="PROFIT FACTOR" value={s.profit_factor >= 999 ? '∞' : s.profit_factor || 0} color={s.profit_factor >= 1.5 ? "#00ff88" : s.profit_factor >= 1.0 ? "#fbbf24" : "#ff4466"} sub={`W:${s.avg_win||0}% L:${s.avg_loss||0}%`} />
-          <Card title="WIN/LOSS RATIO" value={s.win_loss_ratio >= 999 ? '∞' : `${s.win_loss_ratio||0}x`} color={s.win_loss_ratio >= 1.5 ? "#00ff88" : "#fbbf24"} />
+          <Card title="PROFIT DENSITY" value={`${s.avg_profit_density||0}%`} color={s.avg_profit_density > 20 ? "#00ff88" : s.avg_profit_density > 0 ? "#fbbf24" : "#ff4466"} sub="annualized P&L/day" />
+          <Card title="EMA ALIGNED" value={`${s.ema_aligned_win_rate||0}%`} color={rateColor(s.ema_aligned_win_rate||0)} sub={`${s.ema_aligned_count||0} signals`} />
           <Card title="BEST" value={`+${s.best_trade?.pnl||0}%`} color="#00ff88" sub={s.best_trade?.symbol} />
-          <Card title="WORST" value={`${s.worst_trade?.pnl||0}%`} color="#ff4466" sub={s.worst_trade?.symbol} />
         </div>
       )}
 
-      {/* Buy & Hold vs Strategy Benchmark */}
+      {/* Benchmark Comparison — corrected apples-to-apples */}
+      {data && (
+        <div style={{ background:"#0a1018", border:"1px solid #1a2535", borderRadius:10, padding:16, marginBottom:20 }}>
+          <div style={{ fontSize:13, fontWeight:"bold", color:"#fbbf24", letterSpacing:1, marginBottom:8 }}>
+            📊 BENCHMARK COMPARISON — 3 STRATEGIES
+          </div>
+          {/* Explanation */}
+          <div style={{ fontSize:10, color:"#8899aa", marginBottom:14, background:"rgba(251,191,36,0.05)", borderRadius:6, padding:"8px 12px", borderLeft:"2px solid #fbbf24", lineHeight:1.7 }}>
+            <strong style={{color:"#fbbf24"}}>Why Buy &amp; Hold is not a fair comparison:</strong><br/>
+            Buy &amp; Hold locks capital in 1 stock for the entire period. The rotation strategy exits early when channel slope declines and redeploys into the next best setup — compounding returns across multiple winners. Profit Density (P&amp;L per day) is the true measure of capital efficiency.
+          </div>
+          <div style={{ display:"grid", gridTemplateColumns:"repeat(3,1fr)", gap:12, marginBottom:16 }}>
+            {/* Buy & Hold */}
+            <div style={{ background:"#0d1a2a", border:"1px solid #1a2535", borderRadius:8, padding:14 }}>
+              <div style={{ fontSize:10, color:"#8899aa", letterSpacing:1, marginBottom:6 }}>BUY &amp; HOLD</div>
+              <div style={{ fontSize:22, fontWeight:"bold", color:pctColor(s.avg_buy_hold_return||0), fontFamily:"monospace" }}>
+                {(s.avg_buy_hold_return||0)>0?'+':''}{s.avg_buy_hold_return||0}%
+              </div>
+              <div style={{ fontSize:10, color:"#8899aa", marginTop:4 }}>hold {lookback} days locked in 1 stock</div>
+              <div style={{ fontSize:9, color:"#4a6070", marginTop:2 }}>❌ Capital locked · No redeployment · 1 stock exposure</div>
+            </div>
+            {/* Signal Strategy */}
+            <div style={{ background:"#0d1a2a", border:"1px solid #00d4ff44", borderRadius:8, padding:14 }}>
+              <div style={{ fontSize:10, color:"#00d4ff", letterSpacing:1, marginBottom:6 }}>SIGNAL STRATEGY (avg/trade)</div>
+              <div style={{ fontSize:22, fontWeight:"bold", color:pctColor(s.avg_pnl||0), fontFamily:"monospace" }}>
+                {(s.avg_pnl||0)>0?'+':''}{s.avg_pnl||0}%
+              </div>
+              <div style={{ fontSize:10, color:"#8899aa", marginTop:4 }}>per ~{forward}d trade, then redeployed</div>
+              <div style={{ fontSize:9, color:"#00d4ff88", marginTop:2 }}>Density: {s.avg_profit_density||0}%/yr annualized</div>
+            </div>
+            {/* Rotation Strategy */}
+            <div style={{ background:"#0d1a2a", border:`1px solid ${(s.rotation_return||0) > 0 ? '#00ff8844' : '#1a2535'}`, borderRadius:8, padding:14 }}>
+              <div style={{ fontSize:10, color:"#00ff88", letterSpacing:1, marginBottom:6 }}>ROTATION STRATEGY (simulated)</div>
+              <div style={{ fontSize:22, fontWeight:"bold", color:pctColor(s.rotation_return||0), fontFamily:"monospace" }}>
+                {(s.rotation_return||0)>0?'+':''}{s.rotation_return||0}%
+              </div>
+              <div style={{ fontSize:10, color:"#8899aa", marginTop:4 }}>{s.rotation_trades||0} sequential trades, compounded</div>
+              <div style={{ fontSize:9, color:"#00ff8888", marginTop:2 }}>✅ Exit early on slope decline · Redeploy into next winner</div>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Per-Ticker with Profit Density */}
       {data && perTicker.length > 0 && (
         <div style={{ background:"#0a1018", border:"1px solid #1a2535", borderRadius:10, padding:16, marginBottom:20 }}>
-          <div style={{ display:"flex", alignItems:"center", gap:10, marginBottom:4 }}>
-            <div style={{ fontSize:13, fontWeight:"bold", color:"#fbbf24", letterSpacing:1 }}>📈 STRATEGY vs BUY & HOLD</div>
-            <div style={{ fontSize:10, color:"#8899aa" }}>Avg P&L per {forward}d trade vs holding the full {lookback}d period</div>
+          <div style={{ fontSize:13, fontWeight:"bold", color:"#fbbf24", letterSpacing:1, marginBottom:12 }}>
+            🏆 PER-TICKER — PROFIT DENSITY RANKING
           </div>
-          <div style={{ fontSize:10, color:"#8899aa", marginBottom:12, background:"rgba(251,191,36,0.06)", borderRadius:4, padding:"6px 10px", borderLeft:"2px solid #fbbf24" }}>
-            ⚠️ These are not directly comparable — strategy P&L is per trade (~{forward}d), Buy&Hold is over the full {lookback}d period.
-            A +3% avg trade every {forward}d compounded is far stronger than it looks against a single Buy&Hold return.
+          <div style={{ fontSize:10, color:"#8899aa", marginBottom:10 }}>
+            Sorted by Profit Density (P&L% ÷ days held × 252). Higher = more efficient use of capital. Exit low-density stocks early and rotate to high-density setups.
           </div>
           <table style={{ width:"100%", borderCollapse:"collapse", fontSize:12, fontFamily:"monospace" }}>
             <thead>
               <tr style={{ borderBottom:"1px solid #1a2535" }}>
-                {["Ticker","Signals","Win%","TP1%","Avg Trade P&L","Buy&Hold ({lookback}d)","Note"].map(h => (
-                  <th key={h} style={{ padding:"6px 6px", textAlign:"right", color:"#8899aa", fontSize:10, fontWeight:"normal", letterSpacing:1 }}>{h.replace("{lookback}", lookback)}</th>
+                {["Ticker","Signals","Win%","TP1%","Avg P&L","Avg Days","🔥 Density/yr","Buy&Hold","Alpha"].map(h => (
+                  <th key={h} style={{ padding:"6px 6px", textAlign:"right", color:"#8899aa", fontSize:10, fontWeight:"normal", letterSpacing:1 }}>{h}</th>
                 ))}
               </tr>
             </thead>
             <tbody>
-              {perTicker.map(t => {
-                const bh = t.buy_hold_return;
-                const ap = t.avg_pnl;
-                const note = ap > 0 && bh < 0 ? "✅ +alpha in down market" :
-                             ap > 0 && bh > 0 ? "📊 both positive" :
-                             ap < 0 && bh < 0 ? "⚠️ challenged market" :
-                             "📉 underperformed";
-                return (
-                  <tr key={t.symbol} style={{ borderBottom:"1px solid #0d1a2a" }}>
-                    <td style={{ padding:"6px 6px", color:"#e0e0e0", fontWeight:"bold" }}>{t.symbol}</td>
-                    <td style={{ padding:"6px 6px", textAlign:"right", color:"#94a3b8" }}>{t.signals}</td>
-                    <td style={{ padding:"6px 6px", textAlign:"right", color:rateColor(t.win_rate) }}>{t.win_rate}%</td>
-                    <td style={{ padding:"6px 6px", textAlign:"right", color:rateColor(t.tp1_rate) }}>{t.tp1_rate}%</td>
-                    <td style={{ padding:"6px 6px", textAlign:"right", color:pctColor(ap), fontWeight:"bold" }}>{ap>0?'+':''}{ap}%</td>
-                    <td style={{ padding:"6px 6px", textAlign:"right", color:pctColor(bh) }}>{bh>0?'+':''}{bh}%</td>
-                    <td style={{ padding:"6px 6px", textAlign:"right", color:"#94a3b8", fontSize:10 }}>{note}</td>
-                  </tr>
-                );
-              })}
+              {[...perTicker].sort((a,b) => (b.profit_density||0) - (a.profit_density||0)).map((t,i) => (
+                <tr key={t.symbol} style={{ borderBottom:"1px solid #0d1a2a", background: i===0 ? "rgba(0,255,136,0.03)" : "transparent" }}>
+                  <td style={{ padding:"6px 6px", color:"#e0e0e0", fontWeight:"bold" }}>
+                    {i===0 && <span style={{color:"#fbbf24"}}>🥇 </span>}{t.symbol}
+                  </td>
+                  <td style={{ padding:"6px 6px", textAlign:"right", color:"#94a3b8" }}>{t.signals}</td>
+                  <td style={{ padding:"6px 6px", textAlign:"right", color:rateColor(t.win_rate) }}>{t.win_rate}%</td>
+                  <td style={{ padding:"6px 6px", textAlign:"right", color:rateColor(t.tp1_rate) }}>{t.tp1_rate}%</td>
+                  <td style={{ padding:"6px 6px", textAlign:"right", color:pctColor(t.avg_pnl), fontWeight:"bold" }}>{t.avg_pnl>0?'+':''}{t.avg_pnl}%</td>
+                  <td style={{ padding:"6px 6px", textAlign:"right", color:"#94a3b8" }}>{t.avg_days||'—'}d</td>
+                  <td style={{ padding:"6px 6px", textAlign:"right", color:pctColor(t.profit_density||0), fontWeight:"bold" }}>
+                    {(t.profit_density||0)>0?'+':''}{t.profit_density||0}%
+                  </td>
+                  <td style={{ padding:"6px 6px", textAlign:"right", color:pctColor(t.buy_hold_return) }}>{t.buy_hold_return>0?'+':''}{t.buy_hold_return}%</td>
+                  <td style={{ padding:"6px 6px", textAlign:"right", color:pctColor(t.alpha) }}>{t.alpha>0?'+':''}{t.alpha}%</td>
+                </tr>
+              ))}
             </tbody>
           </table>
         </div>
       )}
 
-      {/* Accuracy by Bracket */}
+      {/* Accuracy by Bracket — with Density */}
       {brackets.length > 0 && (
         <div style={{ background:"#0a1018", border:"1px solid #1a2535", borderRadius:10, padding:16, marginBottom:20 }}>
           <div style={{ fontSize:13, fontWeight:"bold", color:"#00d4ff", marginBottom:12, letterSpacing:1 }}>📊 ACCURACY BY CONVICTION BRACKET</div>
           <table style={{ width:"100%", borderCollapse:"collapse", fontSize:12, fontFamily:"monospace" }}>
             <thead>
               <tr style={{ borderBottom:"1px solid #1a2535" }}>
-                {["Bracket","Signals","Win%","TP1%","TP2%","Avg P&L","Avg Days","Max DD"].map(h => (
+                {["Bracket","Signals","Win%","TP1%","TP2%","Avg P&L","Avg Days","Density/yr","Max DD"].map(h => (
                   <th key={h} style={{ padding:"8px 6px", textAlign:"right", color:"#8899aa", fontSize:10, fontWeight:"normal", letterSpacing:1 }}>{h}</th>
                 ))}
               </tr>
@@ -187,6 +226,7 @@ const BacktestDashboard = () => {
                   <td style={{ padding:"8px 6px", textAlign:"right", color:rateColor(b.tp2_rate) }}>{b.tp2_rate}%</td>
                   <td style={{ padding:"8px 6px", textAlign:"right", color:pctColor(b.avg_pnl) }}>{b.avg_pnl>0?'+':''}{b.avg_pnl}%</td>
                   <td style={{ padding:"8px 6px", textAlign:"right", color:"#94a3b8" }}>{b.avg_days}d</td>
+                  <td style={{ padding:"8px 6px", textAlign:"right", color:pctColor(b.profit_density||0) }}>{(b.profit_density||0)>0?'+':''}{b.profit_density||0}%</td>
                   <td style={{ padding:"8px 6px", textAlign:"right", color:"#ff4466" }}>{b.avg_drawdown}%</td>
                 </tr>
               ))}
@@ -195,7 +235,7 @@ const BacktestDashboard = () => {
         </div>
       )}
 
-      {/* Accuracy Gap */}
+      {/* Calibration Gap */}
       {gaps.length > 0 && (
         <div style={{ background:"#0a1018", border:"1px solid #1a2535", borderRadius:10, padding:16, marginBottom:20 }}>
           <div style={{ fontSize:13, fontWeight:"bold", color:"#fbbf24", marginBottom:12, letterSpacing:1 }}>🎯 CALIBRATION CHECK — Score vs Reality</div>

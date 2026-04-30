@@ -351,6 +351,34 @@ def run_backtest(symbols: List[str], lookback_days: int = 120, forward_days: int
     if not all_signals:
         return {"error": "No signals generated", "errors": errors}
 
+    # ── Profit Density per signal (P&L% / days held, annualized) ──
+    for s in all_signals:
+        days = max(s.get("exit_day", 1), 1)
+        s["profit_density"] = round(s["pnl_pct"] / days * 252, 2)  # annualized
+
+    # ── Flag EMA-aligned signals ──
+    for s in all_signals:
+        s["ema_aligned"] = s.get("trend", "") == "BULL"
+
+    # ── Rotation Strategy Benchmark ──
+    # Simulates rotating capital between top signals (exit → immediately redeploy)
+    from datetime import datetime as _dt, timedelta as _td
+    rotation_capital = 100.0
+    rotation_trades  = 0
+    last_exit_date   = ""
+    sorted_by_date   = sorted(all_signals, key=lambda x: x["date"])
+    for s in sorted_by_date:
+        if s["date"] >= last_exit_date and s["conviction"] >= 65:
+            rotation_capital *= (1 + s["pnl_pct"] / 100)
+            rotation_trades  += 1
+            try:
+                exit_dt = _dt.strptime(s["date"], "%Y-%m-%d") + _td(days=int(s.get("exit_day", forward_days) * 1.4))
+                last_exit_date = exit_dt.strftime("%Y-%m-%d")
+            except Exception:
+                pass
+    rotation_return  = round(rotation_capital - 100, 2)
+    rotation_density = round(rotation_return / max(lookback_days, 1) * 252, 2)
+
     # Aggregate by conviction bracket
     brackets = [
         {"label": "85-100%", "min": 85, "max": 100},
@@ -375,17 +403,19 @@ def run_backtest(symbols: List[str], lookback_days: int = 120, forward_days: int
         tp2s = [s for s in in_bracket if s["hit_tp2"]]
         pnls = [s["pnl_pct"] for s in in_bracket]
         days = [s["exit_day"] for s in in_bracket]
-        dds = [s["max_drawdown"] for s in in_bracket]
+        dds  = [s["max_drawdown"] for s in in_bracket]
+        densities = [s["profit_density"] for s in in_bracket]
 
         bracket_stats.append({
             **b, "count": len(in_bracket),
             "wins": len(wins),
-            "win_rate": round(len(wins) / len(in_bracket) * 100, 1),
-            "tp1_rate": round(len(tp1s) / len(in_bracket) * 100, 1),
-            "tp2_rate": round(len(tp2s) / len(in_bracket) * 100, 1),
-            "avg_pnl": round(sum(pnls) / len(pnls), 2),
-            "avg_days": round(sum(days) / len(days), 1),
-            "avg_drawdown": round(sum(dds) / len(dds), 2),
+            "win_rate":    round(len(wins) / len(in_bracket) * 100, 1),
+            "tp1_rate":    round(len(tp1s) / len(in_bracket) * 100, 1),
+            "tp2_rate":    round(len(tp2s) / len(in_bracket) * 100, 1),
+            "avg_pnl":     round(sum(pnls) / len(pnls), 2),
+            "avg_days":    round(sum(days) / len(days), 1),
+            "avg_drawdown":round(sum(dds) / len(dds), 2),
+            "profit_density": round(sum(densities) / len(densities), 2),
         })
 
     # Overall stats
@@ -412,6 +442,12 @@ def run_backtest(symbols: List[str], lookback_days: int = 120, forward_days: int
     bh_returns = [v["return_pct"] for v in buy_hold_returns.values()]
     avg_bh_return = round(sum(bh_returns) / len(bh_returns), 2) if bh_returns else 0
 
+    # Overall profit density
+    all_densities = [s["profit_density"] for s in all_signals]
+    avg_density = round(sum(all_densities) / len(all_densities), 2) if all_densities else 0
+    ema_aligned_signals = [s for s in all_signals if s.get("ema_aligned")]
+    ema_aligned_win_rate = round(sum(1 for s in ema_aligned_signals if s["win"]) / max(len(ema_aligned_signals), 1) * 100, 1)
+
     # Per-ticker stats: strategy avg pnl vs buy&hold
     per_ticker = []
     for sym in symbols:
@@ -420,15 +456,18 @@ def run_backtest(symbols: List[str], lookback_days: int = 120, forward_days: int
             continue
         sym_pnls = [s["pnl_pct"] for s in sym_signals]
         sym_tp1  = sum(1 for s in sym_signals if s["hit_tp1"])
+        sym_dens = [s["profit_density"] for s in sym_signals]
         bh = buy_hold_returns.get(sym, {})
         per_ticker.append({
-            "symbol": sym,
-            "signals": len(sym_signals),
-            "win_rate": round(sum(1 for s in sym_signals if s["win"]) / len(sym_signals) * 100, 1),
-            "tp1_rate": round(sym_tp1 / len(sym_signals) * 100, 1),
-            "avg_pnl": round(sum(sym_pnls) / len(sym_pnls), 2),
+            "symbol":          sym,
+            "signals":         len(sym_signals),
+            "win_rate":        round(sum(1 for s in sym_signals if s["win"]) / len(sym_signals) * 100, 1),
+            "tp1_rate":        round(sym_tp1 / len(sym_signals) * 100, 1),
+            "avg_pnl":         round(sum(sym_pnls) / len(sym_pnls), 2),
+            "avg_days":        round(sum(s["exit_day"] for s in sym_signals) / len(sym_signals), 1),
+            "profit_density":  round(sum(sym_dens) / len(sym_dens), 2),
             "buy_hold_return": bh.get("return_pct", 0),
-            "alpha": round(sum(sym_pnls) / len(sym_pnls) - bh.get("return_pct", 0) / max(lookback_days / forward_days, 1), 2),
+            "alpha":           round(sum(sym_pnls) / len(sym_pnls) - bh.get("return_pct", 0) / max(lookback_days / forward_days, 1), 2),
         })
     per_ticker.sort(key=lambda x: x["avg_pnl"], reverse=True)
 
@@ -447,17 +486,24 @@ def run_backtest(symbols: List[str], lookback_days: int = 120, forward_days: int
 
     report = {
         "summary": {
-            "total_signals": total,
-            "total_wins": total_wins,
-            "overall_win_rate": round(total_wins / total * 100, 1) if total else 0,
-            "overall_tp1_rate": round(total_tp1 / total * 100, 1) if total else 0,
-            "avg_pnl": round(sum(total_pnl) / len(total_pnl), 2) if total_pnl else 0,
-            "profit_factor": profit_factor,
-            "avg_win": avg_win,
-            "avg_loss": avg_loss,
-            "win_loss_ratio": round(avg_win / avg_loss, 2) if avg_loss > 0 else 999,
-            "avg_buy_hold_return": avg_bh_return,
-            "best_trade": {"symbol": best["symbol"], "date": best["date"], "pnl": best["pnl_pct"]},
+            "total_signals":        total,
+            "total_wins":           total_wins,
+            "overall_win_rate":     round(total_wins / total * 100, 1) if total else 0,
+            "overall_tp1_rate":     round(total_tp1 / total * 100, 1) if total else 0,
+            "avg_pnl":              round(sum(total_pnl) / len(total_pnl), 2) if total_pnl else 0,
+            "profit_factor":        profit_factor,
+            "avg_win":              avg_win,
+            "avg_loss":             avg_loss,
+            "win_loss_ratio":       round(avg_win / avg_loss, 2) if avg_loss > 0 else 999,
+            "avg_buy_hold_return":  avg_bh_return,
+            # NEW: Profit Density & Rotation
+            "avg_profit_density":   avg_density,
+            "ema_aligned_win_rate": ema_aligned_win_rate,
+            "ema_aligned_count":    len(ema_aligned_signals),
+            "rotation_return":      rotation_return,
+            "rotation_density":     rotation_density,
+            "rotation_trades":      rotation_trades,
+            "best_trade":  {"symbol": best["symbol"],  "date": best["date"],  "pnl": best["pnl_pct"]},
             "worst_trade": {"symbol": worst["symbol"], "date": worst["date"], "pnl": worst["pnl_pct"]},
             "symbols_tested": symbols,
             "lookback_days": lookback_days,
