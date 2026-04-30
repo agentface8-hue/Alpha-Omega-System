@@ -16,6 +16,35 @@ app.add_middleware(
     allow_headers=["*"],
 )
 
+# ── Health endpoint (keepalive target) ────────────────────────────────────────
+@app.get("/health")
+async def health():
+    return {"status": "online", "ts": __import__("datetime").datetime.utcnow().isoformat()}
+
+# ── Background services startup ───────────────────────────────────────────────
+@app.on_event("startup")
+async def startup_background_services():
+    import logging
+    log = logging.getLogger(__name__)
+    try:
+        from core.keepalive import start as start_keepalive
+        start_keepalive()
+        log.info("Keepalive started")
+    except Exception as e:
+        log.warning(f"Keepalive failed to start: {e}")
+    try:
+        from core.telegram_agent import start as start_agent
+        start_agent()
+        log.info("Telegram AI Agent started")
+    except Exception as e:
+        log.warning(f"Telegram agent failed to start: {e}")
+    try:
+        from core.learning_loop import start as start_learning
+        start_learning()
+        log.info("Learning loop started")
+    except Exception as e:
+        log.warning(f"Learning loop failed to start: {e}")
+
 # --- Demo Mode Data ---
 DEMO_SCENARIOS = {
     "bullish": {
@@ -1196,4 +1225,31 @@ async def printing_status_endpoint():
     from core.printing_store import supabase_ready
     return {"supabase": supabase_ready(),
             "storage": "supabase" if supabase_ready() else "json_fallback"}
+
+
+# ══════════════════════════════════════════════════════════════
+# AGENT / SYSTEM MANAGEMENT ENDPOINTS
+# ══════════════════════════════════════════════════════════════
+
+@app.post("/api/agent/learn")
+async def trigger_learning():
+    from core.learning_loop import run_once
+    return run_once()
+
+@app.post("/api/agent/ping")
+async def manual_ping():
+    from core.telegram_alerts import _send
+    _send("🔔 Manual ping from dashboard — system online")
+    return {"sent": True}
+
+@app.get("/api/agent/status")
+async def agent_status():
+    import threading
+    threads = {t.name: t.is_alive() for t in threading.enumerate()}
+    return {
+        "keepalive_running":  threads.get("keepalive", False),
+        "agent_running":      threads.get("telegram_agent", False),
+        "learning_running":   threads.get("learning_loop", False),
+        "active_threads":     list(threads.keys()),
+    }
 
