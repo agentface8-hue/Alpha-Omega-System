@@ -1,5 +1,5 @@
 import React, { useState } from 'react';
-import { Search, Activity, BarChart3, Brain } from 'lucide-react';
+import { Search, Activity, BarChart3, Brain, Briefcase } from 'lucide-react';
 import Terminal from './components/Terminal';
 import ResultCard from './components/ResultCard';
 import LiveTicker from './components/LiveTicker';
@@ -10,6 +10,7 @@ import SignalTracker from './components/SignalTracker';
 import ChartPanel from './components/ChartPanel';
 import AlphaMegaDashboard from './components/AlphaMegaDashboard';
 import Analytics from './components/Analytics';
+import PortfolioTab from './components/PortfolioTab';
 import LoginScreen from './components/LoginScreen';
 import { playThinkingSound, playSuccessSound, playErrorSound } from './utils/sounds';
 
@@ -154,6 +155,9 @@ const App = () => {
         <button onClick={() => setActiveTab('analytics')} style={{ background:activeTab==='analytics'?"#0d1a2a":"transparent", color:activeTab==='analytics'?"#00d4ff":"#4a6070", border:"none", borderBottom:activeTab==='analytics'?"2px solid #00d4ff":"2px solid transparent", padding:"10px 20px", fontSize:12, fontWeight:"bold", fontFamily:"sans-serif", cursor:"pointer", display:"flex", alignItems:"center", gap:6, letterSpacing:1 }}>
           <Brain size={14} /> ANALYTICS
         </button>
+        <button onClick={() => setActiveTab('portfolio')} style={{ background:activeTab==='portfolio'?"#0d1a2a":"transparent", color:activeTab==='portfolio'?"#00ff88":"#4a6070", border:"none", borderBottom:activeTab==='portfolio'?"2px solid #00ff88":"2px solid transparent", padding:"10px 20px", fontSize:12, fontWeight:"bold", fontFamily:"sans-serif", cursor:"pointer", display:"flex", alignItems:"center", gap:6, letterSpacing:1 }}>
+          <Briefcase size={14} /> PORTFOLIO
+        </button>
       </div>
 
       {/* Content */}
@@ -167,6 +171,8 @@ const App = () => {
         <AlphaMegaDashboard />
       ) : activeTab === 'analytics' ? (
         <Analytics />
+      ) : activeTab === 'portfolio' ? (
+        <PortfolioTab />
       ) : (
       <main className="main-container">
         {/* Search */}
