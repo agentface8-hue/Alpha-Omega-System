@@ -32,7 +32,7 @@ const SignalTracker = () => {
   const [tab, setTab] = useState('active');
   const [turboTicker, setTurboTicker] = useState('');
   const [turboLoading, setTurboLoading] = useState(false);
-  const [autoRefresh, setAutoRefresh] = useState(false);
+  const [autoRefresh, setAutoRefresh] = useState(true);
   const [countdown, setCountdown] = useState(30);
   const [autopilotLoading, setAutopilotLoading] = useState(false);
   const [autopilotResult, setAutopilotResult] = useState(null);

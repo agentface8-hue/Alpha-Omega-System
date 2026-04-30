@@ -342,7 +342,7 @@ export default function PrintingProfits() {
   const [regime, setRegime]         = useState(null);
   const [loading, setLoading]       = useState(false);
   const [checking, setChecking]     = useState(false);
-  const [autoRefresh, setAutoRefresh] = useState(false);
+  const [autoRefresh, setAutoRefresh] = useState(true);
   const [countdown, setCountdown]   = useState(30);
   const [error, setError]           = useState(null);
   const [ticker, setTicker]         = useState('');

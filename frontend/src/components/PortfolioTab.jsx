@@ -109,7 +109,7 @@ export default function PortfolioTab() {
   const [loading, setLoading]   = useState(false);
   const [checking, setChecking] = useState(false);
   const [openTicker, setOpenTicker] = useState('');
-  const [autoRefresh, setAutoRefresh] = useState(false);
+  const [autoRefresh, setAutoRefresh] = useState(true);
   const [countdown, setCountdown]    = useState(30);
   const [error, setError]       = useState(null);
   const [activeTab, setActiveTab] = useState('open');
