@@ -98,36 +98,66 @@ Return ONLY valid JSON. No markdown, no explanation."""
 
 
 def _parse_intent(text: str) -> Dict:
-    """Use Claude to parse user intent."""
-    try:
-        import anthropic
-        client = anthropic.Anthropic(
-            api_key=os.environ.get("ANTHROPIC_API_KEY", "")
-        )
-        msg = client.messages.create(
-            model="claude-sonnet-4-20250514",
-            max_tokens=200,
-            system=SYSTEM_PROMPT,
-            messages=[{"role": "user", "content": text}],
-        )
-        raw = msg.content[0].text.strip()
-        # Strip any markdown fences if present
-        raw = raw.replace("```json", "").replace("```", "").strip()
-        return json.loads(raw)
-    except Exception as e:
-        logger.error(f"[AGENT] Claude parse error: {e}")
-        # Fallback: keyword matching
-        t = text.lower()
-        if "scan" in t:       return {"action":"scan","ticker":None,"close_all":False,"reply":"Scanning..."}
-        if "portfolio" in t:  return {"action":"portfolio","ticker":None,"close_all":False,"reply":"Checking portfolio..."}
-        if "check" in t:      return {"action":"check","ticker":None,"close_all":False,"reply":"Checking prices..."}
-        if "status" in t:     return {"action":"status","ticker":None,"close_all":False,"reply":"Getting status..."}
-        if "autopilot" in t:  return {"action":"autopilot","ticker":None,"close_all":False,"reply":"Running autopilot..."}
-        if "regime" in t:     return {"action":"regime","ticker":None,"close_all":False,"reply":"Checking regime..."}
-        if "futures" in t:    return {"action":"futures","ticker":None,"close_all":False,"reply":"Fetching futures..."}
-        if "learn" in t:      return {"action":"learn","ticker":None,"close_all":False,"reply":"Running calibration..."}
-        if "help" in t:       return {"action":"help","ticker":None,"close_all":False,"reply":"Here are the commands..."}
-        return {"action":"unknown","ticker":None,"close_all":False,"reply":"I didn't understand that. Try /help"}
+    """Parse user intent — Claude if API key available, else robust keyword fallback."""
+    api_key = os.environ.get("ANTHROPIC_API_KEY", "").strip()
+    if api_key:
+        try:
+            import anthropic
+            client = anthropic.Anthropic(api_key=api_key)
+            msg = client.messages.create(
+                model="claude-sonnet-4-20250514",
+                max_tokens=200,
+                system=SYSTEM_PROMPT,
+                messages=[{"role": "user", "content": text}],
+            )
+            raw = msg.content[0].text.strip().replace("```json","").replace("```","").strip()
+            return json.loads(raw)
+        except Exception as e:
+            logger.warning(f"[AGENT] Claude parse failed, using fallback: {e}")
+
+    # ── Robust keyword fallback (works with no API key) ──────────────────────
+    t = text.lower().strip().lstrip("/")
+
+    # Extract ticker — any ALL-CAPS word 1-5 chars that's not a command word
+    import re
+    COMMANDS = {"status","scan","portfolio","check","open","short","close",
+                "autopilot","regime","futures","learn","help","start","hi","hello"}
+    tickers = [w for w in re.findall(r'\b[A-Z]{1,5}\b', text)
+               if w not in COMMANDS and len(w) >= 1]
+    ticker = tickers[0] if tickers else None
+
+    close_all = "all" in t
+
+    if any(x in t for x in ["help","command","what can","what do"]):
+        return {"action":"help","ticker":None,"close_all":False,"reply":"Here are all commands:"}
+    if any(x in t for x in ["status","overview","summary","how is"]):
+        return {"action":"status","ticker":None,"close_all":False,"reply":"Getting full system status..."}
+    if any(x in t for x in ["scan","find signal","look for","search"]):
+        return {"action":"scan","ticker":None,"close_all":False,"reply":"Running dual scan now..."}
+    if any(x in t for x in ["portfolio","my positions","positions","pnl","p&l","money","profit"]):
+        return {"action":"portfolio","ticker":None,"close_all":False,"reply":"Checking portfolio..."}
+    if any(x in t for x in ["check price","refresh","update price","check now"]):
+        return {"action":"check","ticker":None,"close_all":False,"reply":"Refreshing prices..."}
+    if any(x in t for x in ["open long","buy","go long","long "]) or t.startswith("open"):
+        return {"action":"open_long","ticker":ticker,"close_all":False,"reply":f"Opening long on {ticker or '?'}..."}
+    if any(x in t for x in ["short","sell short","go short"]):
+        return {"action":"open_short","ticker":ticker,"close_all":False,"reply":f"Opening short on {ticker or '?'}..."}
+    if any(x in t for x in ["close","exit","sell"]):
+        return {"action":"close","ticker":ticker,"close_all":close_all,
+                "reply":"Closing all..." if close_all else f"Closing {ticker or 'position'}..."}
+    if any(x in t for x in ["autopilot","auto pilot","auto fill","autofill","auto-fill"]):
+        return {"action":"autopilot","ticker":None,"close_all":False,"reply":"Running autopilot..."}
+    if any(x in t for x in ["regime","market","vix","condition","environment"]):
+        return {"action":"regime","ticker":None,"close_all":False,"reply":"Checking market regime..."}
+    if any(x in t for x in ["future","es ","nq ","crude","gold","silver","futures"]):
+        return {"action":"futures","ticker":None,"close_all":False,"reply":"Fetching futures..."}
+    if any(x in t for x in ["learn","calibrat","train","improve","self"]):
+        return {"action":"learn","ticker":None,"close_all":False,"reply":"Running self-calibration..."}
+    if any(x in t for x in ["hi","hello","hey","start","ping","test","alive","online"]):
+        return {"action":"status","ticker":None,"close_all":False,"reply":"Hey! I'm online and monitoring. Here's the current status:"}
+
+    return {"action":"unknown","ticker":None,"close_all":False,
+            "reply":"I didn't understand that. Type /help for all commands."}
 
 
 # ── Action executor ───────────────────────────────────────────────────────────
