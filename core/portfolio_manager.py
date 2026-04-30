@@ -264,6 +264,14 @@ def check_portfolio() -> Dict:
         updates.append({"ticker": ticker, "price": price, "action": action,
                         "pnl": pos["unrealized_pnl"], "status": pos["status"]})
 
+        # ── Trade log: record any fully closed position ──
+        if pos["status"] == "closed":
+            try:
+                from core.trade_log import log_closed_position
+                log_closed_position(pos)
+            except Exception as _tl_err:
+                print(f"  [TradeLog] warning: {_tl_err}")
+
     # Recalculate total portfolio value
     open_after = store.load_positions("open")
     positions_value = sum(
@@ -311,6 +319,14 @@ def close_position(position_id: str, reason: str = "MANUAL") -> Dict:
     positions_value = sum(p["shares_remaining"] * p.get("current_price", p["entry_price"]) for p in open_after)
     state["total_value"] = round(state["cash"] + positions_value, 2)
     store.save_state(state)
+
+    # ── Trade log ──
+    try:
+        from core.trade_log import log_closed_position
+        log_closed_position(pos)
+    except Exception as _tl_err:
+        print(f"  [TradeLog] warning: {_tl_err}")
+
     return {"closed": True, "ticker": pos["ticker"], "pnl": pos["realized_pnl"]}
 
 

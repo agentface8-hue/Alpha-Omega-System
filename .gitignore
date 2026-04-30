@@ -60,3 +60,8 @@ logs/
 # Operating System
 .DS_Store
 Thumbs.db
+
+# Secrets & local-only setup scripts
+_gh_*.py
+data/sheets_token.json
+credentials.json

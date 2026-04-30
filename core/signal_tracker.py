@@ -766,6 +766,13 @@ def check_signals() -> Dict[str, Any]:
             # ── Generate case report ──
             _save_case_report(s)
 
+            # ── Trade log ──
+            try:
+                from core.trade_log import log_closed_signal
+                log_closed_signal(s)
+            except Exception as _tl_err:
+                print(f"  [TradeLog] warning: {_tl_err}")
+
             newly_closed.append(s)
         else:
             still_active.append(s)
@@ -962,6 +969,14 @@ def close_signal(signal_id: str, reason: str = "manual") -> Optional[Dict]:
 
     store.save_active(remaining)
     store.save_closed(closed)
+
+    # ── Trade log ──
+    if target:
+        try:
+            from core.trade_log import log_closed_signal
+            log_closed_signal(target)
+        except Exception as _tl_err:
+            print(f"  [TradeLog] warning: {_tl_err}")
 
     # ── Telegram alert: manual close ──
     if target:
