@@ -41,6 +41,8 @@ def score_ticker(data: Dict[str, Any], regime: Dict[str, Any], skip_calibration:
     coil_data = data.get("coil_data", {})
     near_confluence = data.get("near_confluence", False)
     expanded_confluence = data.get("expanded_confluence", [])
+    double_bottom = data.get("double_bottom", {})
+    lr_slope = lr_channel.get("slope_pct", 0)
 
     hard_fail = False
     hard_fail_reason = ""
@@ -138,6 +140,15 @@ def score_ticker(data: Dict[str, Any], regime: Dict[str, Any], skip_calibration:
         p1 = min(p1 + 4, 100)
         ta_notes.append(f"65m sustained {bull_candles} candles → P1 +4")
 
+    # Ascending channel bonus (LR channel slope > 0.03% per bar = clear uptrend)
+    if lr_slope > 0.03:
+        p1 = min(p1 + 8, 100)
+        ta_notes.append(f"Ascending channel (slope +{lr_slope:.3f}%/bar) → P1 +8")
+    elif lr_slope <= -0.03 and tas_num <= 2:
+        # Declining channel with weak TF alignment = no good trend, cap it
+        caps.append(58)
+        ta_notes.append(f"Declining channel (slope {lr_slope:.3f}%/bar) + weak TAS → cap 58%")
+
     # ══════════════════════════════════════════════════
     # P2 — Price Structure + Level Precision (25%)
     # ══════════════════════════════════════════════════
@@ -178,6 +189,11 @@ def score_ticker(data: Dict[str, Any], regime: Dict[str, Any], skip_calibration:
     if near_confluence:
         p2 += 15
         ta_notes.append(f"At expanded confluence ({len(expanded_confluence)} zones) → P2 +15")
+
+    # Double bottom breakout — strongest reversal signal
+    if double_bottom.get("confirmed"):
+        p2 = min(p2 + 20, 100)
+        ta_notes.append(f"Double bottom breakout (neckline ${double_bottom['neckline']}) → P2 +20")
 
     # Yellow Candle Exhaustion
     yellow_candle = (long_upper_wick and body_pct < 0.15 and vol_ratio > 1.8)

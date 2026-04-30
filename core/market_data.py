@@ -40,8 +40,10 @@ def fetch_ticker_data(symbol: str) -> Dict[str, Any]:
         last_date = daily.index[-1].strftime("%Y-%m-%d")
 
         # ── Core indicators ──
+        ema9  = daily["Close"].ewm(span=9).mean()
+        ema21 = daily["Close"].ewm(span=21).mean()
         ema10 = daily["Close"].ewm(span=10).mean()
-        ema20 = daily["Close"].ewm(span=20).mean()
+        ema20 = daily["Close"].ewm(span=20).mean()  # kept for legacy reference
         ma150 = daily["Close"].ewm(span=150).mean()
         atr14 = _atr(daily, 14)
 
@@ -61,35 +63,43 @@ def fetch_ticker_data(symbol: str) -> Dict[str, Any]:
         long_upper_wick = upwick > crange * 0.5 if crange > 0 else False
         is_doji = body_pct < 0.1
 
-        if vol_ratio >= 1.5 and bull_body and close > float(ema20.iloc[-1]):
+        if vol_ratio >= 1.5 and bull_body and close > float(ema9.iloc[-1]):
             vol_direction = "ACCUMULATION"
         elif vol_ratio >= 1.5 and (not bull_body or is_doji or long_upper_wick):
             vol_direction = "DISTRIBUTION"
         else:
             vol_direction = "NEUTRAL"
 
-        # ── MTF Trend Assessment ──
-        # Daily: close vs EMA20
-        tf_daily = "BULL" if close > float(ema20.iloc[-1]) else "BEAR"
+        # ── MTF Trend Assessment — EMA9/21 dual confirmation ──
+        # Daily: close > EMA9 AND EMA9 > EMA21 (fast trend + confirmation)
+        ema9_val  = float(ema9.iloc[-1])
+        ema21_val = float(ema21.iloc[-1])
+        tf_daily = "BULL" if close > ema9_val and ema9_val > ema21_val else "BEAR"
 
-        # Weekly: close vs weekly EMA20
-        if not weekly.empty and len(weekly) >= 20:
-            w_ema20 = weekly["Close"].ewm(span=20).mean()
-            tf_weekly = "BULL" if float(weekly["Close"].iloc[-1]) > float(w_ema20.iloc[-1]) else "BEAR"
+        # Weekly: close vs weekly EMA9/21
+        if not weekly.empty and len(weekly) >= 21:
+            w_ema9  = weekly["Close"].ewm(span=9).mean()
+            w_ema21 = weekly["Close"].ewm(span=21).mean()
+            w_close = float(weekly["Close"].iloc[-1])
+            tf_weekly = "BULL" if w_close > float(w_ema9.iloc[-1]) and float(w_ema9.iloc[-1]) > float(w_ema21.iloc[-1]) else "BEAR"
         else:
             tf_weekly = "MIXED"
 
-        # 4H approximation from hourly
+        # 4H approximation from hourly — EMA9/21
         tf_240m = "MIXED"
-        tf_65m = "MIXED"
-        if not hourly.empty and len(hourly) >= 20:
-            h_ema20 = hourly["Close"].ewm(span=20).mean()
-            tf_65m = "BULL" if float(hourly["Close"].iloc[-1]) > float(h_ema20.iloc[-1]) else "BEAR"
+        tf_65m  = "MIXED"
+        if not hourly.empty and len(hourly) >= 21:
+            h_ema9  = hourly["Close"].ewm(span=9).mean()
+            h_ema21 = hourly["Close"].ewm(span=21).mean()
+            h_close = float(hourly["Close"].iloc[-1])
+            tf_65m = "BULL" if h_close > float(h_ema9.iloc[-1]) and float(h_ema9.iloc[-1]) > float(h_ema21.iloc[-1]) else "BEAR"
             # 4H: resample hourly to 4H
             h4 = hourly["Close"].resample("4h").last().dropna()
-            if len(h4) >= 20:
-                h4_ema20 = h4.ewm(span=20).mean()
-                tf_240m = "BULL" if float(h4.iloc[-1]) > float(h4_ema20.iloc[-1]) else "BEAR"
+            if len(h4) >= 21:
+                h4_ema9  = h4.ewm(span=9).mean()
+                h4_ema21 = h4.ewm(span=21).mean()
+                h4_close = float(h4.iloc[-1])
+                tf_240m = "BULL" if h4_close > float(h4_ema9.iloc[-1]) and float(h4_ema9.iloc[-1]) > float(h4_ema21.iloc[-1]) else "BEAR"
 
         # TAS
         bull_count = sum(1 for t in [tf_65m, tf_240m, tf_daily, tf_weekly] if t == "BULL")
@@ -147,6 +157,9 @@ def fetch_ticker_data(symbol: str) -> Dict[str, Any]:
 
         # ── NEW: 65m Sustained Bull Check ──
         sustained_65m = _sustained_65m_check(hourly, 3)
+
+        # ── NEW: Double Bottom Pattern ──
+        double_bottom = _double_bottom_check(daily)
 
         # ── NEW: Expanded confluence (Fib + FVG + Channel -2σ + POC) ──
         all_support_levels = list(confluence_zones)
@@ -266,6 +279,7 @@ def fetch_ticker_data(symbol: str) -> Dict[str, Any]:
             "coil_data": coil_data,
             "expanded_confluence": expanded_confluence,
             "near_confluence": near_confluence,
+            "double_bottom": double_bottom,
         }
     except Exception as e:
         return {"error": str(e), "symbol": symbol}
@@ -348,9 +362,12 @@ def _linear_regression_channel(daily: pd.DataFrame, period: int = 100) -> Dict[s
         midline = float(fitted[-1])
         lower_2sd = round(midline - 2 * std, 2)
         upper_2sd = round(midline + 2 * std, 2)
+        # slope as % change per bar relative to starting price
+        slope_pct = round(slope / max(float(closes[0]), 0.01) * 100, 4)
         current = float(closes[-1])
         at_lower = current <= lower_2sd * 1.005  # within 0.5% of -2sd
-        return {"lower_2sd": lower_2sd, "upper_2sd": upper_2sd, "midline": round(midline, 2), "at_lower": at_lower}
+        return {"lower_2sd": lower_2sd, "upper_2sd": upper_2sd, "midline": round(midline, 2),
+                "slope_pct": slope_pct, "at_lower": at_lower}
     except Exception:
         return {"lower_2sd": 0, "upper_2sd": 0, "midline": 0, "at_lower": False}
 
@@ -412,16 +429,16 @@ def _volume_profile_poc(daily: pd.DataFrame, lookback: int = 50) -> Dict[str, An
 
 
 def _sustained_65m_check(hourly: pd.DataFrame, min_candles: int = 3) -> Dict[str, Any]:
-    """Check if 65m (hourly) BULL trend sustained for N consecutive candles."""
+    """Check if 65m (hourly) BULL trend sustained — uses EMA9 for faster response."""
     try:
-        if hourly.empty or len(hourly) < 20:
+        if hourly.empty or len(hourly) < 21:
             return {"sustained": False, "bull_candles": 0}
-        ema20 = hourly["Close"].ewm(span=20).mean()
-        # Check last N candles all above EMA20
+        ema9 = hourly["Close"].ewm(span=9).mean()
+        # Check last N candles all above EMA9
         count = 0
         for i in range(1, min(len(hourly), 10) + 1):
             idx = -i
-            if float(hourly["Close"].iloc[idx]) > float(ema20.iloc[idx]):
+            if float(hourly["Close"].iloc[idx]) > float(ema9.iloc[idx]):
                 count += 1
             else:
                 break
@@ -441,3 +458,62 @@ def _coiling_check(daily: pd.DataFrame) -> Dict[str, Any]:
         return {"coil3": coil3, "coil5": coil5, "tightest": "5-bar" if coil5 else "3-bar" if coil3 else "none"}
     except Exception:
         return {"coil3": False, "coil5": False, "tightest": "none"}
+
+
+def _double_bottom_check(daily: pd.DataFrame, lookback: int = 60) -> Dict[str, Any]:
+    """
+    Detect double bottom pattern:
+    - Two swing lows within 2% of each other
+    - A neckline (swing high between them) at least 3% above the lows
+    - Current price above neckline (confirmed breakout)
+    """
+    try:
+        data = daily.tail(lookback)
+        if len(data) < 20:
+            return {"confirmed": False}
+
+        lows  = data["Low"].values
+        highs = data["High"].values
+        closes = data["Close"].values
+        current = float(closes[-1])
+
+        # Find swing lows: lower than 2 bars on each side
+        swing_lows = []
+        for i in range(2, len(lows) - 2):
+            if (lows[i] < lows[i-1] and lows[i] < lows[i-2] and
+                    lows[i] < lows[i+1] and lows[i] < lows[i+2]):
+                swing_lows.append((i, float(lows[i])))
+
+        if len(swing_lows) < 2:
+            return {"confirmed": False}
+
+        # Test all pairs of swing lows
+        for a in range(len(swing_lows) - 1):
+            i, low1 = swing_lows[a]
+            for b in range(a + 1, len(swing_lows)):
+                j, low2 = swing_lows[b]
+                # Lows within 2% of each other
+                if abs(low1 - low2) / max(low1, 0.01) > 0.02:
+                    continue
+                # At least 5 bars between the two bottoms
+                if j - i < 5:
+                    continue
+                # Neckline = highest high between the two lows
+                neckline = float(np.max(highs[i:j + 1]))
+                avg_low = (low1 + low2) / 2
+                # Neckline must be at least 3% above lows
+                if neckline < avg_low * 1.03:
+                    continue
+                # Breakout confirmed: price above neckline
+                if current > neckline:
+                    return {
+                        "confirmed": True,
+                        "low1": round(low1, 2),
+                        "low2": round(low2, 2),
+                        "neckline": round(neckline, 2),
+                        "bars_between": j - i,
+                    }
+
+        return {"confirmed": False}
+    except Exception:
+        return {"confirmed": False}
