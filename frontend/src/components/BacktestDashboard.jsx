@@ -53,6 +53,7 @@ const BacktestDashboard = () => {
   const brackets = data?.brackets || [];
   const gaps = data?.accuracy_gap || [];
   const signals = data?.signals || [];
+  const perTicker = data?.per_ticker || [];
   const tp = calibData?.calibration?.tp_analysis || {};
   const recs = calibData?.recommendation || [];
   const preview = calibData?.preview || {};
@@ -112,9 +113,55 @@ const BacktestDashboard = () => {
           <Card title="SIGNALS" value={s.total_signals || 0} sub={`${(s.symbols_tested||[]).length} tickers`} />
           <Card title="WIN RATE" value={`${s.overall_win_rate||0}%`} color={rateColor(s.overall_win_rate||0)} sub={`${s.total_wins||0} wins`} />
           <Card title="TP1 HIT" value={`${s.overall_tp1_rate||0}%`} color={rateColor(s.overall_tp1_rate||0)} />
-          <Card title="AVG P&L" value={`${s.avg_pnl>0?'+':''}${s.avg_pnl||0}%`} color={pctColor(s.avg_pnl||0)} />
+          <Card title="AVG P&L" value={`${s.avg_pnl>0?'+':''}${s.avg_pnl||0}%`} color={pctColor(s.avg_pnl||0)} sub="per trade" />
+          <Card title="PROFIT FACTOR" value={s.profit_factor >= 999 ? '∞' : s.profit_factor || 0} color={s.profit_factor >= 1.5 ? "#00ff88" : s.profit_factor >= 1.0 ? "#fbbf24" : "#ff4466"} sub={`W:${s.avg_win||0}% L:${s.avg_loss||0}%`} />
+          <Card title="WIN/LOSS RATIO" value={s.win_loss_ratio >= 999 ? '∞' : `${s.win_loss_ratio||0}x`} color={s.win_loss_ratio >= 1.5 ? "#00ff88" : "#fbbf24"} />
           <Card title="BEST" value={`+${s.best_trade?.pnl||0}%`} color="#00ff88" sub={s.best_trade?.symbol} />
           <Card title="WORST" value={`${s.worst_trade?.pnl||0}%`} color="#ff4466" sub={s.worst_trade?.symbol} />
+        </div>
+      )}
+
+      {/* Buy & Hold vs Strategy Benchmark */}
+      {data && perTicker.length > 0 && (
+        <div style={{ background:"#0a1018", border:"1px solid #1a2535", borderRadius:10, padding:16, marginBottom:20 }}>
+          <div style={{ display:"flex", alignItems:"center", gap:10, marginBottom:4 }}>
+            <div style={{ fontSize:13, fontWeight:"bold", color:"#fbbf24", letterSpacing:1 }}>📈 STRATEGY vs BUY & HOLD</div>
+            <div style={{ fontSize:10, color:"#4a6070" }}>Avg P&L per {forward}d trade vs holding the full {lookback}d period</div>
+          </div>
+          <div style={{ fontSize:10, color:"#4a6070", marginBottom:12, background:"rgba(251,191,36,0.06)", borderRadius:4, padding:"6px 10px", borderLeft:"2px solid #fbbf24" }}>
+            ⚠️ These are not directly comparable — strategy P&L is per trade (~{forward}d), Buy&Hold is over the full {lookback}d period.
+            A +3% avg trade every {forward}d compounded is far stronger than it looks against a single Buy&Hold return.
+          </div>
+          <table style={{ width:"100%", borderCollapse:"collapse", fontSize:12, fontFamily:"monospace" }}>
+            <thead>
+              <tr style={{ borderBottom:"1px solid #1a2535" }}>
+                {["Ticker","Signals","Win%","TP1%","Avg Trade P&L","Buy&Hold ({lookback}d)","Note"].map(h => (
+                  <th key={h} style={{ padding:"6px 6px", textAlign:"right", color:"#4a6070", fontSize:10, fontWeight:"normal", letterSpacing:1 }}>{h.replace("{lookback}", lookback)}</th>
+                ))}
+              </tr>
+            </thead>
+            <tbody>
+              {perTicker.map(t => {
+                const bh = t.buy_hold_return;
+                const ap = t.avg_pnl;
+                const note = ap > 0 && bh < 0 ? "✅ +alpha in down market" :
+                             ap > 0 && bh > 0 ? "📊 both positive" :
+                             ap < 0 && bh < 0 ? "⚠️ challenged market" :
+                             "📉 underperformed";
+                return (
+                  <tr key={t.symbol} style={{ borderBottom:"1px solid #0d1a2a" }}>
+                    <td style={{ padding:"6px 6px", color:"#e0e0e0", fontWeight:"bold" }}>{t.symbol}</td>
+                    <td style={{ padding:"6px 6px", textAlign:"right", color:"#94a3b8" }}>{t.signals}</td>
+                    <td style={{ padding:"6px 6px", textAlign:"right", color:rateColor(t.win_rate) }}>{t.win_rate}%</td>
+                    <td style={{ padding:"6px 6px", textAlign:"right", color:rateColor(t.tp1_rate) }}>{t.tp1_rate}%</td>
+                    <td style={{ padding:"6px 6px", textAlign:"right", color:pctColor(ap), fontWeight:"bold" }}>{ap>0?'+':''}{ap}%</td>
+                    <td style={{ padding:"6px 6px", textAlign:"right", color:pctColor(bh) }}>{bh>0?'+':''}{bh}%</td>
+                    <td style={{ padding:"6px 6px", textAlign:"right", color:"#94a3b8", fontSize:10 }}>{note}</td>
+                  </tr>
+                );
+              })}
+            </tbody>
+          </table>
         </div>
       )}
 

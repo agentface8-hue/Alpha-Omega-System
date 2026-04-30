@@ -27,26 +27,35 @@ def _compute_indicators(daily: pd.DataFrame, idx: int) -> Dict[str, Any]:
     last = window.iloc[-1]
     close = float(last["Close"])
 
-    # EMAs
-    ema20 = window["Close"].ewm(span=20).mean()
+    # EMAs — EMA9/21 dual confirmation (matches live engine)
+    ema9  = window["Close"].ewm(span=9).mean()
+    ema21 = window["Close"].ewm(span=21).mean()
+    ema20 = window["Close"].ewm(span=20).mean()  # kept for vol_direction
     ma150 = window["Close"].ewm(span=150).mean()
 
-    # Trend
-    tf_daily = "BULL" if close > float(ema20.iloc[-1]) else "BEAR"
+    # Trend — EMA9/21 dual confirm
+    ema9_val  = float(ema9.iloc[-1])
+    ema21_val = float(ema21.iloc[-1])
+    tf_daily = "BULL" if close > ema9_val and ema9_val > ema21_val else "BEAR"
 
-    # Weekly approximation from daily (resample)
+    # Weekly approximation from daily (resample) — EMA9/21
     weekly = window["Close"].resample("W").last().dropna()
-    if len(weekly) >= 20:
-        w_ema20 = weekly.ewm(span=20).mean()
-        tf_weekly = "BULL" if float(weekly.iloc[-1]) > float(w_ema20.iloc[-1]) else "BEAR"
+    if len(weekly) >= 21:
+        w_ema9  = weekly.ewm(span=9).mean()
+        w_ema21 = weekly.ewm(span=21).mean()
+        w_close = float(weekly.iloc[-1])
+        tf_weekly = "BULL" if w_close > float(w_ema9.iloc[-1]) and float(w_ema9.iloc[-1]) > float(w_ema21.iloc[-1]) else "BEAR"
     else:
         tf_weekly = "MIXED"
 
-    # 4H/1H approximation — use 5-bar and 20-bar EMA on daily as proxy
+    # 4H/1H proxy — EMA9/21 on 5-bar and 9-bar daily windows
     ema5 = window["Close"].ewm(span=5).mean()
     ema8 = window["Close"].ewm(span=8).mean()
-    tf_65m = "BULL" if close > float(ema5.iloc[-1]) else "BEAR"
-    tf_240m = "BULL" if close > float(ema8.iloc[-1]) else "BEAR"
+    ema9_5bar  = window["Close"].ewm(span=9).mean()   # same as ema9
+    ema21_5bar = window["Close"].ewm(span=21).mean()  # same as ema21
+    # Use shorter spans as proxies for intraday TFs
+    tf_65m  = "BULL" if close > float(ema5.iloc[-1]) and float(ema5.iloc[-1]) > float(ema8.iloc[-1]) else "BEAR"
+    tf_240m = "BULL" if close > float(ema8.iloc[-1]) and float(ema8.iloc[-1]) > float(ema9.iloc[-1]) else "BEAR"
 
     bull_count = sum(1 for t in [tf_65m, tf_240m, tf_daily, tf_weekly] if t == "BULL")
     tas = f"{bull_count}/4"
@@ -67,7 +76,7 @@ def _compute_indicators(daily: pd.DataFrame, idx: int) -> Dict[str, Any]:
     long_upper_wick = upwick > crange * 0.5 if crange > 0 else False
     is_doji = body_pct < 0.1
 
-    if vol_ratio >= 1.5 and bull_body and close > float(ema20.iloc[-1]):
+    if vol_ratio >= 1.5 and bull_body and close > float(ema9.iloc[-1]):
         vol_dir = "ACCUMULATION"
     elif vol_ratio >= 1.5 and (not bull_body or is_doji or long_upper_wick):
         vol_dir = "DISTRIBUTION"
@@ -147,6 +156,7 @@ def _compute_indicators(daily: pd.DataFrame, idx: int) -> Dict[str, Any]:
     residuals = lr_close - fitted
     std_dev = np.std(residuals)
     lr_lower = fitted[-1] - 2 * std_dev
+    lr_slope_pct = round(slope / max(float(lr_close[0]), 0.01) * 100, 4)
     at_lower_channel = close <= lr_lower * 1.005
 
     # POC
@@ -181,10 +191,13 @@ def _compute_indicators(daily: pd.DataFrame, idx: int) -> Dict[str, Any]:
         "long_upper_wick": long_upper_wick, "bull_body": bull_body,
         "entry_low": round(close * 0.99, 2), "entry_high": round(close * 1.005, 2),
         "sustained_65m": {"sustained": sustained, "bull_candles": bull_candles},
-        "lr_channel": {"at_lower": at_lower_channel, "lower_2sd": round(lr_lower, 2)},
+        "lr_channel": {"at_lower": at_lower_channel, "lower_2sd": round(lr_lower, 2), "slope_pct": lr_slope_pct},
         "fvg_zones": fvg_zones[:5], "in_fvg": in_fvg,
         "vol_profile": {"poc": poc}, "near_poc": near_poc,
         "mkt_cap_b": 0,
+        "double_bottom": {"confirmed": False},   # skip costly pattern scan in backtest
+        "coil_data": {"coil3": False, "coil5": False},
+        "expanded_confluence": [], "near_confluence": False,
     }
 
 
@@ -268,6 +281,7 @@ def run_backtest(symbols: List[str], lookback_days: int = 120, forward_days: int
     regime = fetch_market_regime()
     all_signals = []
     errors = []
+    buy_hold_returns = {}
 
     for sym in symbols:
         print(f"[BACKTEST] Processing {sym}...")
@@ -281,6 +295,18 @@ def run_backtest(symbols: List[str], lookback_days: int = 120, forward_days: int
             total_bars = len(daily)
             start_idx = max(160, total_bars - lookback_days - forward_days)
             end_idx = total_bars - forward_days  # leave room for forward check
+
+            # ── Buy & Hold benchmark for this ticker ──
+            bh_start_price = float(daily["Close"].iloc[start_idx])
+            bh_end_price   = float(daily["Close"].iloc[end_idx - 1])
+            bh_return = round((bh_end_price - bh_start_price) / bh_start_price * 100, 2)
+            buy_hold_returns[sym] = {
+                "return_pct": bh_return,
+                "start_price": round(bh_start_price, 2),
+                "end_price": round(bh_end_price, 2),
+                "start_date": daily.index[start_idx].strftime("%Y-%m-%d"),
+                "end_date": daily.index[end_idx - 1].strftime("%Y-%m-%d"),
+            }
 
             signals_for_sym = 0
             for idx in range(start_idx, end_idx, sample_every):
@@ -372,6 +398,40 @@ def run_backtest(symbols: List[str], lookback_days: int = 120, forward_days: int
     best = max(all_signals, key=lambda x: x["pnl_pct"])
     worst = min(all_signals, key=lambda x: x["pnl_pct"])
 
+    # Profit Factor = gross wins / abs(gross losses)
+    gross_wins   = sum(s["pnl_pct"] for s in all_signals if s["pnl_pct"] > 0)
+    gross_losses = sum(abs(s["pnl_pct"]) for s in all_signals if s["pnl_pct"] < 0)
+    profit_factor = round(gross_wins / gross_losses, 2) if gross_losses > 0 else 999
+
+    win_pnls  = [s["pnl_pct"] for s in all_signals if s["pnl_pct"] > 0]
+    loss_pnls = [abs(s["pnl_pct"]) for s in all_signals if s["pnl_pct"] < 0]
+    avg_win  = round(sum(win_pnls) / len(win_pnls), 2) if win_pnls else 0
+    avg_loss = round(sum(loss_pnls) / len(loss_pnls), 2) if loss_pnls else 0
+
+    # Benchmark: avg buy-and-hold return across all tested tickers
+    bh_returns = [v["return_pct"] for v in buy_hold_returns.values()]
+    avg_bh_return = round(sum(bh_returns) / len(bh_returns), 2) if bh_returns else 0
+
+    # Per-ticker stats: strategy avg pnl vs buy&hold
+    per_ticker = []
+    for sym in symbols:
+        sym_signals = [s for s in all_signals if s["symbol"] == sym]
+        if not sym_signals:
+            continue
+        sym_pnls = [s["pnl_pct"] for s in sym_signals]
+        sym_tp1  = sum(1 for s in sym_signals if s["hit_tp1"])
+        bh = buy_hold_returns.get(sym, {})
+        per_ticker.append({
+            "symbol": sym,
+            "signals": len(sym_signals),
+            "win_rate": round(sum(1 for s in sym_signals if s["win"]) / len(sym_signals) * 100, 1),
+            "tp1_rate": round(sym_tp1 / len(sym_signals) * 100, 1),
+            "avg_pnl": round(sum(sym_pnls) / len(sym_pnls), 2),
+            "buy_hold_return": bh.get("return_pct", 0),
+            "alpha": round(sum(sym_pnls) / len(sym_pnls) - bh.get("return_pct", 0) / max(lookback_days / forward_days, 1), 2),
+        })
+    per_ticker.sort(key=lambda x: x["avg_pnl"], reverse=True)
+
     # Accuracy gap analysis
     accuracy_gap = []
     for bs in bracket_stats:
@@ -392,6 +452,11 @@ def run_backtest(symbols: List[str], lookback_days: int = 120, forward_days: int
             "overall_win_rate": round(total_wins / total * 100, 1) if total else 0,
             "overall_tp1_rate": round(total_tp1 / total * 100, 1) if total else 0,
             "avg_pnl": round(sum(total_pnl) / len(total_pnl), 2) if total_pnl else 0,
+            "profit_factor": profit_factor,
+            "avg_win": avg_win,
+            "avg_loss": avg_loss,
+            "win_loss_ratio": round(avg_win / avg_loss, 2) if avg_loss > 0 else 999,
+            "avg_buy_hold_return": avg_bh_return,
             "best_trade": {"symbol": best["symbol"], "date": best["date"], "pnl": best["pnl_pct"]},
             "worst_trade": {"symbol": worst["symbol"], "date": worst["date"], "pnl": worst["pnl_pct"]},
             "symbols_tested": symbols,
@@ -400,6 +465,8 @@ def run_backtest(symbols: List[str], lookback_days: int = 120, forward_days: int
         },
         "brackets": bracket_stats,
         "accuracy_gap": accuracy_gap,
+        "per_ticker": per_ticker,
+        "buy_hold_returns": buy_hold_returns,
         "signals": all_signals,
         "errors": errors,
     }
