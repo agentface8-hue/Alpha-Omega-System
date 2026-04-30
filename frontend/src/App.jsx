@@ -1,5 +1,5 @@
 import React, { useState } from 'react';
-import { Search, Activity, BarChart3, Brain, Briefcase } from 'lucide-react';
+import { Search, Activity, BarChart3, Brain, Briefcase, DollarSign } from 'lucide-react';
 import Terminal from './components/Terminal';
 import ResultCard from './components/ResultCard';
 import LiveTicker from './components/LiveTicker';
@@ -11,6 +11,7 @@ import ChartPanel from './components/ChartPanel';
 import AlphaMegaDashboard from './components/AlphaMegaDashboard';
 import Analytics from './components/Analytics';
 import PortfolioTab from './components/PortfolioTab';
+import PrintingProfits from './components/PrintingProfits';
 import LoginScreen from './components/LoginScreen';
 import { playThinkingSound, playSuccessSound, playErrorSound } from './utils/sounds';
 
@@ -158,6 +159,9 @@ const App = () => {
         <button onClick={() => setActiveTab('portfolio')} style={{ background:activeTab==='portfolio'?"#0d1a2a":"transparent", color:activeTab==='portfolio'?"#00ff88":"#4a6070", border:"none", borderBottom:activeTab==='portfolio'?"2px solid #00ff88":"2px solid transparent", padding:"10px 20px", fontSize:12, fontWeight:"bold", fontFamily:"sans-serif", cursor:"pointer", display:"flex", alignItems:"center", gap:6, letterSpacing:1 }}>
           <Briefcase size={14} /> PORTFOLIO
         </button>
+        <button onClick={() => setActiveTab('printing')} style={{ background:activeTab==='printing'?"#0d1a2a":"transparent", color:activeTab==='printing'?"#fbbf24":"#4a6070", border:"none", borderBottom:activeTab==='printing'?"2px solid #fbbf24":"2px solid transparent", padding:"10px 20px", fontSize:12, fontWeight:"bold", fontFamily:"sans-serif", cursor:"pointer", display:"flex", alignItems:"center", gap:6, letterSpacing:1 }}>
+          <DollarSign size={14} /> PRINTING PROFITS
+        </button>
       </div>
 
       {/* Content */}
@@ -173,6 +177,8 @@ const App = () => {
         <Analytics />
       ) : activeTab === 'portfolio' ? (
         <PortfolioTab />
+      ) : activeTab === 'printing' ? (
+        <PrintingProfits />
       ) : (
       <main className="main-container">
         {/* Search */}
