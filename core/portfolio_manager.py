@@ -347,7 +347,10 @@ def autopilot_fill(watchlist_name: str = "full_scan") -> Dict:
         return {"message": "Portfolio full", "opened": []}
 
     existing_tickers = {p["ticker"] for p in open_pos}
-    symbols = [s for s in get_watchlist(watchlist_name) if s not in existing_tickers]
+    # get_watchlist returns {"label": ..., "tickers": [...]}
+    wl_data = get_watchlist(watchlist_name)
+    all_symbols = wl_data.get("tickers", []) if isinstance(wl_data, dict) else list(wl_data)
+    symbols = [s for s in all_symbols if s not in existing_tickers]
 
     if not symbols:
         return {"message": "No new symbols to scan", "opened": []}
@@ -357,6 +360,12 @@ def autopilot_fill(watchlist_name: str = "full_scan") -> Dict:
                   if not r.get("hard_fail") and r.get("conviction_pct", 0) >= 65
                   and r["ticker"] not in existing_tickers]
     candidates = candidates[:slots]
+
+    if not candidates:
+        top_scores = [(r["ticker"], r.get("conviction_pct", 0), r.get("hard_fail_reason", "no fail")[:40])
+                      for r in scan_result.get("results", [])[:8] if not r.get("hard_fail")]
+        return {"message": "No qualifying signals (need conviction >= 65%)",
+                "opened": [], "top_scores": top_scores}
 
     opened = []
     for c in candidates:
