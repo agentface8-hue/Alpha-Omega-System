@@ -37,7 +37,7 @@ const MTFBlock = ({ mtf }) => {
         const Icon = isBull ? TrendingUp : isBear ? TrendingDown : Minus;
         return (
           <div key={key} style={{ display:'flex', alignItems:'center', gap:5, marginBottom:4 }}>
-            <span style={{ color:'#4a6070', fontSize:9, width:22, fontFamily:'sans-serif' }}>{label}</span>
+            <span style={{ color:'#8899aa', fontSize:9, width:22, fontFamily:'sans-serif' }}>{label}</span>
             <Icon size={9} color={c} />
             <span style={{ color:c, fontSize:10, fontWeight:'bold', fontFamily:'sans-serif' }}>{val}</span>
           </div>
@@ -83,13 +83,13 @@ const PnLBlock = ({ candles, signals }) => {
       <div style={{ color:'#2a4a5a', fontSize:8, letterSpacing:1.5, fontFamily:'sans-serif', marginBottom:8 }}>P&L BENCHMARK</div>
       <div style={{ display:'flex', flexDirection:'column', gap:5 }}>
         <div>
-          <div style={{ color:'#4a6070', fontSize:8, fontFamily:'sans-serif', marginBottom:2 }}>Buy & Hold</div>
+          <div style={{ color:'#8899aa', fontSize:8, fontFamily:'sans-serif', marginBottom:2 }}>Buy & Hold</div>
           <span style={{ color: bnhPos ? '#00ff88' : '#ff4466', fontSize:13, fontWeight:'bold', fontFamily:'monospace' }}>
             {bnhPos ? '+' : ''}{bnh}%
           </span>
         </div>
         <div>
-          <div style={{ color:'#4a6070', fontSize:8, fontFamily:'sans-serif', marginBottom:2 }}>
+          <div style={{ color:'#8899aa', fontSize:8, fontFamily:'sans-serif', marginBottom:2 }}>
             Buy/Sell {trades > 0 ? `(${trades} trades)` : '(no pairs)'}
           </div>
           <span style={{ color: bsPos ? '#00ff88' : '#ff4466', fontSize:13, fontWeight:'bold', fontFamily:'monospace' }}>
@@ -147,7 +147,7 @@ const ChartPanel = ({ symbol, tradeParams }) => {
 
   const btnStyle = (active, color = '#00d4ff') => ({
     background: active ? '#1a2535' : 'transparent',
-    color: active ? color : '#4a6070',
+    color: active ? color : '#8899aa',
     border: `1px solid ${active ? '#1e3040' : '#0d1420'}`,
     borderRadius: 4, padding: '3px 8px', fontSize: 10,
     fontWeight: 'bold', cursor: 'pointer', fontFamily: 'sans-serif', transition: 'all 0.15s'
@@ -381,7 +381,7 @@ const ChartPanel = ({ symbol, tradeParams }) => {
           <div style={{ width:1, height:14, background:'#1a2535', margin:'0 2px' }} />
           <button style={btnStyle(chartType === 'candle')} onClick={() => setType('candle')}>Candles</button>
           <button style={btnStyle(chartType === 'line')}   onClick={() => setType('line')}>Line</button>
-          <button onClick={fetchChart} style={{ background:'transparent', border:'none', color:'#4a6070', cursor:'pointer', padding:'2px 4px' }}>
+          <button onClick={fetchChart} style={{ background:'transparent', border:'none', color:'#8899aa', cursor:'pointer', padding:'2px 4px' }}>
             <RefreshCw size={12} />
           </button>
         </div>
@@ -392,7 +392,7 @@ const ChartPanel = ({ symbol, tradeParams }) => {
 
         {/* Chart SVG */}
         <div style={{ flex:1, padding:'8px 4px 4px', minWidth:0 }}>
-          {loading && <div style={{ color:'#4a6070', fontSize:11, padding:40, textAlign:'center', fontFamily:'sans-serif' }}>Loading chart...</div>}
+          {loading && <div style={{ color:'#8899aa', fontSize:11, padding:40, textAlign:'center', fontFamily:'sans-serif' }}>Loading chart...</div>}
           {error   && <div style={{ color:'#ff4466', fontSize:11, padding:40, textAlign:'center', fontFamily:'sans-serif' }}>⚠ {error}</div>}
           {!loading && !error && renderSVG()}
         </div>
@@ -412,11 +412,11 @@ const ChartPanel = ({ symbol, tradeParams }) => {
         {[['🟢 BUY','#00ff88'],['🔴 SELL','#ff4466'],['Channel','#7c3aed'],['S/R','#94a3b8']].map(([lbl, c]) => (
           <div key={lbl} style={{ display:'flex', alignItems:'center', gap:4 }}>
             <div style={{ width:14, height:2, background:c, borderRadius:1 }} />
-            <span style={{ color:'#4a6070', fontSize:9, fontFamily:'sans-serif' }}>{lbl}</span>
+            <span style={{ color:'#8899aa', fontSize:9, fontFamily:'sans-serif' }}>{lbl}</span>
           </div>
         ))}
         {data?.signals?.length > 0 && (
-          <span style={{ color:'#4a6070', fontSize:9, fontFamily:'sans-serif', marginLeft:'auto' }}>
+          <span style={{ color:'#8899aa', fontSize:9, fontFamily:'sans-serif', marginLeft:'auto' }}>
             {data.signals.filter(s => s.type === 'BUY').length} buys · {data.signals.filter(s => s.type === 'SELL').length} sells
           </span>
         )}

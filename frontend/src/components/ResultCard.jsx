@@ -4,7 +4,7 @@ import { useState, useEffect } from 'react';
 
 const DecisionRow = ({ label, value, suffix, color }) => (
   <div style={{ display:'flex', alignItems:'center', gap:8, padding:'3px 0' }}>
-    <span style={{ color:'#4a6070', fontSize:10, width:60, fontFamily:'sans-serif', flexShrink:0 }}>{label}:</span>
+    <span style={{ color:'#8899aa', fontSize:10, width:60, fontFamily:'sans-serif', flexShrink:0 }}>{label}:</span>
     <span style={{ color:color||'#c9d8e8', fontWeight:'bold', fontSize:13, fontFamily:"'Courier New',monospace" }}>{value}</span>
     {suffix && <span style={{ color:'#94a3b8', fontSize:11, fontFamily:'sans-serif' }}>({suffix})</span>}
   </div>
@@ -17,7 +17,7 @@ const MTFRow = ({ label, val }) => {
   const Icon = isBull ? TrendingUp : isBear ? TrendingDown : Minus;
   return (
     <div style={{ display:'flex', alignItems:'center', gap:8, padding:'2px 0' }}>
-      <span style={{ color:'#4a6070', fontSize:10, width:30, fontFamily:'sans-serif', flexShrink:0 }}>{label}</span>
+      <span style={{ color:'#8899aa', fontSize:10, width:30, fontFamily:'sans-serif', flexShrink:0 }}>{label}</span>
       <span style={{ background:`${c}14`, color:c, border:`1px solid ${c}33`, fontSize:10,
         fontWeight:'bold', padding:'1px 9px', borderRadius:3, fontFamily:'sans-serif', letterSpacing:1 }}>
         {val || '—'}
@@ -64,7 +64,7 @@ const ResultCard = ({ result }) => {
         <div style={{ display:'flex', alignItems:'center', gap:8, color:decisionColor, fontSize:11, fontWeight:'bold', letterSpacing:2 }}>
           <Icon size={14} /> FINAL DECISION
         </div>
-        <div style={{ color:'#4a6070', fontSize:10, fontFamily:'sans-serif', letterSpacing:1 }}>
+        <div style={{ color:'#8899aa', fontSize:10, fontFamily:'sans-serif', letterSpacing:1 }}>
           CONFIDENCE: <span style={{ color:decisionColor, fontWeight:'bold' }}>{convPct}%</span>
         </div>
       </div>
@@ -141,7 +141,7 @@ const ResultCard = ({ result }) => {
         {[['HISTORIAN', full_report?.historian], ['NEWSROOM', full_report?.newsroom], ['MACRO', full_report?.macro]].map(([lbl, d]) => (
           <div key={lbl} style={{ background:'#0a0f18', border:'1px solid #1a2535', borderRadius:4, padding:'4px 10px' }}>
             <div style={{ color:'#2a4a5a', fontSize:8, letterSpacing:1, fontFamily:'sans-serif' }}>{lbl}</div>
-            <div style={{ color:d ? '#00ff88' : '#4a6070', fontSize:9, fontFamily:'sans-serif' }}>{d ? 'Complete' : 'Pending'}</div>
+            <div style={{ color:d ? '#00ff88' : '#8899aa', fontSize:9, fontFamily:'sans-serif' }}>{d ? 'Complete' : 'Pending'}</div>
           </div>
         ))}
       </div>

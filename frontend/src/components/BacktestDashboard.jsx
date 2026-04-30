@@ -9,9 +9,9 @@ const verdictColor = v => v === "CALIBRATED" ? "#00ff88" : v === "UNDER-RATED" ?
 
 const Card = ({ title, value, sub, color }) => (
   <div style={{ background:"#0d1a2a", border:"1px solid #1a2535", borderRadius:8, padding:"14px 18px", minWidth:120, textAlign:"center" }}>
-    <div style={{ fontSize:10, color:"#4a6070", letterSpacing:1, marginBottom:6, fontFamily:"monospace" }}>{title}</div>
+    <div style={{ fontSize:10, color:"#8899aa", letterSpacing:1, marginBottom:6, fontFamily:"monospace" }}>{title}</div>
     <div style={{ fontSize:22, fontWeight:"bold", color: color || "#00d4ff", fontFamily:"monospace" }}>{value}</div>
-    {sub && <div style={{ fontSize:10, color:"#4a6070", marginTop:4 }}>{sub}</div>}
+    {sub && <div style={{ fontSize:10, color:"#8899aa", marginTop:4 }}>{sub}</div>}
   </div>
 );
 
@@ -67,7 +67,7 @@ const BacktestDashboard = () => {
         </div>
         <div>
           <div style={{ fontSize:18, fontWeight:"bold", color:"#fff", letterSpacing:1 }}>WALK-FORWARD BACKTESTER</div>
-          <div style={{ fontSize:11, color:"#4a6070" }}>Score historical data • Check if TP1 was hit • Measure real accuracy</div>
+          <div style={{ fontSize:11, color:"#8899aa" }}>Score historical data • Check if TP1 was hit • Measure real accuracy</div>
         </div>
       </div>
 
@@ -75,17 +75,17 @@ const BacktestDashboard = () => {
       <div style={{ background:"#0a1018", border:"1px solid #1a2535", borderRadius:10, padding:16, marginBottom:20 }}>
         <div style={{ display:"flex", gap:12, alignItems:"end", flexWrap:"wrap" }}>
           <div style={{ flex:1, minWidth:250 }}>
-            <label style={{ fontSize:10, color:"#4a6070", letterSpacing:1, display:"block", marginBottom:4 }}>TICKERS</label>
+            <label style={{ fontSize:10, color:"#8899aa", letterSpacing:1, display:"block", marginBottom:4 }}>TICKERS</label>
             <input value={tickers} onChange={e => setTickers(e.target.value.toUpperCase())} style={{ width:"100%", background:"#0d1a2a", border:"1px solid #1a2535", borderRadius:6, padding:"8px 12px", color:"#e0e0e0", fontSize:13, fontFamily:"monospace" }} />
           </div>
           <div>
-            <label style={{ fontSize:10, color:"#4a6070", letterSpacing:1, display:"block", marginBottom:4 }}>LOOKBACK</label>
+            <label style={{ fontSize:10, color:"#8899aa", letterSpacing:1, display:"block", marginBottom:4 }}>LOOKBACK</label>
             <select value={lookback} onChange={e => setLookback(+e.target.value)} style={{ background:"#0d1a2a", border:"1px solid #1a2535", borderRadius:6, padding:"8px 10px", color:"#e0e0e0", fontSize:12 }}>
               <option value={60}>60 days</option><option value={120}>120 days</option><option value={180}>180 days</option><option value={365}>1 year</option>
             </select>
           </div>
           <div>
-            <label style={{ fontSize:10, color:"#4a6070", letterSpacing:1, display:"block", marginBottom:4 }}>FORWARD</label>
+            <label style={{ fontSize:10, color:"#8899aa", letterSpacing:1, display:"block", marginBottom:4 }}>FORWARD</label>
             <select value={forward} onChange={e => setForward(+e.target.value)} style={{ background:"#0d1a2a", border:"1px solid #1a2535", borderRadius:6, padding:"8px 10px", color:"#e0e0e0", fontSize:12 }}>
               <option value={5}>5 days</option><option value={10}>10 days</option><option value={15}>15 days</option><option value={20}>20 days</option>
             </select>
@@ -126,9 +126,9 @@ const BacktestDashboard = () => {
         <div style={{ background:"#0a1018", border:"1px solid #1a2535", borderRadius:10, padding:16, marginBottom:20 }}>
           <div style={{ display:"flex", alignItems:"center", gap:10, marginBottom:4 }}>
             <div style={{ fontSize:13, fontWeight:"bold", color:"#fbbf24", letterSpacing:1 }}>📈 STRATEGY vs BUY & HOLD</div>
-            <div style={{ fontSize:10, color:"#4a6070" }}>Avg P&L per {forward}d trade vs holding the full {lookback}d period</div>
+            <div style={{ fontSize:10, color:"#8899aa" }}>Avg P&L per {forward}d trade vs holding the full {lookback}d period</div>
           </div>
-          <div style={{ fontSize:10, color:"#4a6070", marginBottom:12, background:"rgba(251,191,36,0.06)", borderRadius:4, padding:"6px 10px", borderLeft:"2px solid #fbbf24" }}>
+          <div style={{ fontSize:10, color:"#8899aa", marginBottom:12, background:"rgba(251,191,36,0.06)", borderRadius:4, padding:"6px 10px", borderLeft:"2px solid #fbbf24" }}>
             ⚠️ These are not directly comparable — strategy P&L is per trade (~{forward}d), Buy&Hold is over the full {lookback}d period.
             A +3% avg trade every {forward}d compounded is far stronger than it looks against a single Buy&Hold return.
           </div>
@@ -136,7 +136,7 @@ const BacktestDashboard = () => {
             <thead>
               <tr style={{ borderBottom:"1px solid #1a2535" }}>
                 {["Ticker","Signals","Win%","TP1%","Avg Trade P&L","Buy&Hold ({lookback}d)","Note"].map(h => (
-                  <th key={h} style={{ padding:"6px 6px", textAlign:"right", color:"#4a6070", fontSize:10, fontWeight:"normal", letterSpacing:1 }}>{h.replace("{lookback}", lookback)}</th>
+                  <th key={h} style={{ padding:"6px 6px", textAlign:"right", color:"#8899aa", fontSize:10, fontWeight:"normal", letterSpacing:1 }}>{h.replace("{lookback}", lookback)}</th>
                 ))}
               </tr>
             </thead>
@@ -173,7 +173,7 @@ const BacktestDashboard = () => {
             <thead>
               <tr style={{ borderBottom:"1px solid #1a2535" }}>
                 {["Bracket","Signals","Win%","TP1%","TP2%","Avg P&L","Avg Days","Max DD"].map(h => (
-                  <th key={h} style={{ padding:"8px 6px", textAlign:"right", color:"#4a6070", fontSize:10, fontWeight:"normal", letterSpacing:1 }}>{h}</th>
+                  <th key={h} style={{ padding:"8px 6px", textAlign:"right", color:"#8899aa", fontSize:10, fontWeight:"normal", letterSpacing:1 }}>{h}</th>
                 ))}
               </tr>
             </thead>
@@ -233,7 +233,7 @@ const BacktestDashboard = () => {
                 }}>
                   <div style={{ fontSize:15, fontWeight:"bold", color: is85 ? "#00ff88" : "#e0e0e0", fontFamily:"monospace" }}>+{t.tp_pct}%</div>
                   <div style={{ fontSize:18, fontWeight:"bold", color: rateColor(t.hit_rate), marginTop:4 }}>{t.hit_rate}%</div>
-                  <div style={{ fontSize:9, color:"#4a6070", marginTop:2 }}>{t.hits} hits</div>
+                  <div style={{ fontSize:9, color:"#8899aa", marginTop:2 }}>{t.hits} hits</div>
                   {is85 && <div style={{ fontSize:9, color:"#00ff88", marginTop:4, fontWeight:"bold" }}>← 85% TARGET</div>}
                 </div>
               );
@@ -263,7 +263,7 @@ const BacktestDashboard = () => {
               <thead>
                 <tr style={{ borderBottom:"1px solid #1a2535", position:"sticky", top:0, background:"#0a1018" }}>
                   {["Symbol","Date","Entry","Conv","TAS","SL","TP1","R:R","Outcome","P&L","Days"].map(h => (
-                    <th key={h} style={{ padding:"6px 4px", textAlign:"right", color:"#4a6070", fontSize:9, fontWeight:"normal", letterSpacing:1 }}>{h}</th>
+                    <th key={h} style={{ padding:"6px 4px", textAlign:"right", color:"#8899aa", fontSize:9, fontWeight:"normal", letterSpacing:1 }}>{h}</th>
                   ))}
                 </tr>
               </thead>
@@ -271,7 +271,7 @@ const BacktestDashboard = () => {
                 {signals.slice(0, 100).map((s, i) => (
                   <tr key={i} style={{ borderBottom:"1px solid #0d1a2a" }}>
                     <td style={{ padding:"5px 4px", color:"#e0e0e0", fontWeight:"bold" }}>{s.symbol}</td>
-                    <td style={{ padding:"5px 4px", textAlign:"right", color:"#4a6070", fontSize:10 }}>{s.date}</td>
+                    <td style={{ padding:"5px 4px", textAlign:"right", color:"#8899aa", fontSize:10 }}>{s.date}</td>
                     <td style={{ padding:"5px 4px", textAlign:"right", color:"#94a3b8" }}>${s.entry_price}</td>
                     <td style={{ padding:"5px 4px", textAlign:"right", color: s.conviction>=75?"#00ff88":s.conviction>=60?"#fbbf24":"#94a3b8" }}>{s.conviction}%</td>
                     <td style={{ padding:"5px 4px", textAlign:"right", color:"#7ee8ff" }}>{s.tas}</td>
@@ -282,13 +282,13 @@ const BacktestDashboard = () => {
                       {s.outcome === "TP2_HIT" ? "🎯 TP2" : s.outcome === "TP1_HIT" ? "✅ TP1" : s.outcome === "SL_HIT" ? "❌ SL" : "⏳ TIME"}
                     </td>
                     <td style={{ padding:"5px 4px", textAlign:"right", color: pctColor(s.pnl_pct), fontWeight:"bold" }}>{s.pnl_pct>0?'+':''}{s.pnl_pct}%</td>
-                    <td style={{ padding:"5px 4px", textAlign:"right", color:"#4a6070" }}>{s.exit_day}d</td>
+                    <td style={{ padding:"5px 4px", textAlign:"right", color:"#8899aa" }}>{s.exit_day}d</td>
                   </tr>
                 ))}
               </tbody>
             </table>
           </div>
-          {signals.length > 100 && <div style={{ textAlign:"center", color:"#4a6070", fontSize:10, marginTop:8 }}>Showing first 100 of {signals.length} signals</div>}
+          {signals.length > 100 && <div style={{ textAlign:"center", color:"#8899aa", fontSize:10, marginTop:8 }}>Showing first 100 of {signals.length} signals</div>}
         </div>
       )}
     </div>

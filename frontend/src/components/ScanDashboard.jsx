@@ -41,7 +41,7 @@ const PillarBar = ({ scores }) => {
           <div style={{ width:18, height:32, background:"rgba(255,255,255,0.05)", borderRadius:2, position:"relative", overflow:"hidden" }}>
             <div style={{ position:"absolute", bottom:0, left:0, right:0, height:`${scores[key]||0}%`, background:color, opacity:0.75, transition:"height 0.8s ease" }} />
           </div>
-          <span style={{ fontSize:8, color:"#4a6070", fontFamily:"monospace" }}>{label}</span>
+          <span style={{ fontSize:8, color:"#8899aa", fontFamily:"monospace" }}>{label}</span>
         </div>
       ))}
     </div>
@@ -137,9 +137,9 @@ const ScanDashboard = () => {
         {data?.market_regime && (
           <div style={{ display:"flex", gap:10, alignItems:"center" }}>
             <div style={{ background:"rgba(0,0,0,0.4)", border:`1px solid ${regimeColor(data.market_regime)}33`, borderRadius:6, padding:"5px 12px", fontFamily:"sans-serif" }}>
-              <span style={{ color:"#4a6070", fontSize:9, letterSpacing:1.5 }}>REGIME </span>
+              <span style={{ color:"#8899aa", fontSize:9, letterSpacing:1.5 }}>REGIME </span>
               <span style={{ color:regimeColor(data.market_regime), fontSize:11, fontWeight:"bold" }}>{data.market_regime}</span>
-              {data.vix_estimate > 0 && <span style={{ color:"#4a6070", fontSize:9, marginLeft:8 }}>VIX {data.vix_estimate}</span>}
+              {data.vix_estimate > 0 && <span style={{ color:"#8899aa", fontSize:9, marginLeft:8 }}>VIX {data.vix_estimate}</span>}
             </div>
           </div>
         )}
@@ -168,7 +168,7 @@ const ScanDashboard = () => {
         ].map(([key, label]) => {
           const heat = sectorHeat?.find(s => s.key === key);
           const isActive = activeSector === key;
-          const heatC = heat ? (heat.heat === "HOT" ? "#00ff88" : heat.heat === "WARM" ? "#fbbf24" : "#ff4466") : "#4a6070";
+          const heatC = heat ? (heat.heat === "HOT" ? "#00ff88" : heat.heat === "WARM" ? "#fbbf24" : "#ff4466") : "#8899aa";
           return (
             <button key={key} onClick={() => loadSector(key)}
               style={{ background: isActive ? "#1a2535" : "#080c14", border:`1px solid ${isActive ? heatC : "#1a2535"}`,
@@ -189,7 +189,7 @@ const ScanDashboard = () => {
                 <div key={s.key} onClick={() => loadSector(s.key)}
                   style={{ background:`${c}10`, border:`1px solid ${c}33`, borderRadius:5, padding:"4px 10px",
                     cursor:"pointer", display:"flex", alignItems:"center", gap:6 }}>
-                  <span style={{ color:"#4a6070", fontSize:8, fontFamily:"sans-serif" }}>#{i+1}</span>
+                  <span style={{ color:"#8899aa", fontSize:8, fontFamily:"sans-serif" }}>#{i+1}</span>
                   <span style={{ color:"#c9d8e8", fontSize:10, fontFamily:"sans-serif" }}>{s.etf}</span>
                   <span style={{ color:c, fontWeight:"bold", fontSize:11 }}>{s.score}%</span>
                 </div>
@@ -267,7 +267,7 @@ const ScanDashboard = () => {
                         </div>
                       </td>
                       <td style={td}><div style={{ fontWeight:"bold", fontSize:13 }}>{r.last_close ? `$${r.last_close}` : "—"}</div><div style={{ fontSize:9, color:"#2a4a5a", fontFamily:"sans-serif" }}>{r.last_date}</div></td>
-                      <td style={{...td, fontFamily:"sans-serif", fontSize:11, color:"#4a6070"}}>{r.mkt_cap_b ? `$${r.mkt_cap_b}B` : "—"}</td>
+                      <td style={{...td, fontFamily:"sans-serif", fontSize:11, color:"#8899aa"}}>{r.mkt_cap_b ? `$${r.mkt_cap_b}B` : "—"}</td>
                       <td style={td}>{isHF ? <div><span style={{ color:"#ff4466", fontSize:11, fontWeight:"bold" }}>HARD FAIL</span><div style={{ color:"#ff4466", fontSize:9, fontFamily:"sans-serif", maxWidth:130, whiteSpace:"normal", lineHeight:1.4 }}>{r.hard_fail_reason}</div></div> : <div><span style={{ color:convColor(r.conviction_pct), fontWeight:"bold", fontSize:15 }}>{convIcon(r.conviction_pct)} {r.conviction_pct}%</span><PillarBar scores={r.pillar_scores} /></div>}</td>
                       <td style={td}><span style={{ background:hc.bg, color:hc.fg, border:`1px solid ${hc.border}`, fontSize:10, fontWeight:"bold", padding:"3px 8px", borderRadius:3, fontFamily:"sans-serif" }}>{r.heat}</span></td>
                       <td style={td}><div style={{ fontWeight:"bold", fontSize:13, color:tasColor(r.tas) }}>{r.tas||"—"}</div><TFBadges tf={r.tf_breakdown} /></td>
@@ -280,8 +280,8 @@ const ScanDashboard = () => {
                       <td style={{...td, color:"#00d4ff", fontSize:12}}>{r.tp2 ? `$${r.tp2}` : "—"}</td>
                       <td style={{...td, color:"#c084fc", fontWeight:"bold", fontSize:13}}>{r.qty || "—"}</td>
                       <td style={{...td, color:r.vol_ratio>2?"#fbbf24":r.vol_ratio>1.5?"#00ff88":"#94a3b8", fontFamily:"sans-serif", fontSize:12}}>{r.vol_ratio ? `×${r.vol_ratio}` : "—"}</td>
-                      <td style={{...td, color:r.earnings_warning?.includes("⚠")?"#ff4466":"#4a6070", fontFamily:"sans-serif", fontSize:10}}>{r.earnings_warning}</td>
-                      <td style={{...td, fontSize:10, color:"#4a6070", maxWidth:200, whiteSpace:"normal", fontFamily:"sans-serif", lineHeight:1.5}}>{r.ta_note}</td>
+                      <td style={{...td, color:r.earnings_warning?.includes("⚠")?"#ff4466":"#8899aa", fontFamily:"sans-serif", fontSize:10}}>{r.earnings_warning}</td>
+                      <td style={{...td, fontSize:10, color:"#8899aa", maxWidth:200, whiteSpace:"normal", fontFamily:"sans-serif", lineHeight:1.5}}>{r.ta_note}</td>
                     </tr>
                     {isExp && r.plan && (
                       <tr>
@@ -291,7 +291,7 @@ const ScanDashboard = () => {
                           </div>
                           {r.confluence_zones?.length > 0 && (
                             <div style={{ marginTop:8, display:"flex", gap:8, flexWrap:"wrap" }}>
-                              <span style={{ color:"#4a6070", fontSize:11, fontFamily:"sans-serif" }}>Confluence:</span>
+                              <span style={{ color:"#8899aa", fontSize:11, fontFamily:"sans-serif" }}>Confluence:</span>
                               {r.confluence_zones.map((z,i) => <span key={i} style={{ background:"rgba(0,212,255,0.1)", color:"#00d4ff", fontSize:11, padding:"1px 7px", borderRadius:3, fontFamily:"sans-serif" }}>${z}</span>)}
                             </div>
                           )}

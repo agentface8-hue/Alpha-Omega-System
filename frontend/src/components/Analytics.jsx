@@ -7,7 +7,7 @@ const StatBox = ({ label, value, color, sub }) => (
   <div style={{ background:'#0a0f18', border:'1px solid #1a2535', borderRadius:8, padding:'12px 16px', flex:1, minWidth:120 }}>
     <div style={{ color:'#3a5060', fontSize:9, letterSpacing:1.5, fontFamily:'sans-serif', marginBottom:4 }}>{label}</div>
     <div style={{ color:color||'#c9d8e8', fontSize:22, fontWeight:'bold', fontFamily:'monospace' }}>{value}</div>
-    {sub && <div style={{ color:'#4a6070', fontSize:9, fontFamily:'sans-serif', marginTop:2 }}>{sub}</div>}
+    {sub && <div style={{ color:'#8899aa', fontSize:9, fontFamily:'sans-serif', marginTop:2 }}>{sub}</div>}
   </div>
 );
 
@@ -16,7 +16,7 @@ const BarRow = ({ label, pct, count, color }) => (
     <div style={{ display:'flex', justifyContent:'space-between', marginBottom:3 }}>
       <span style={{ color:'#94a3b8', fontSize:10, fontFamily:'sans-serif' }}>{label}</span>
       <span style={{ color:color||'#c9d8e8', fontSize:10, fontFamily:'monospace', fontWeight:'bold' }}>
-        {pct}% <span style={{ color:'#4a6070', fontWeight:'normal' }}>({count} trades)</span>
+        {pct}% <span style={{ color:'#8899aa', fontWeight:'normal' }}>({count} trades)</span>
       </span>
     </div>
     <div style={{ background:'#1a2535', borderRadius:3, height:6, overflow:'hidden' }}>
@@ -71,7 +71,7 @@ const Analytics = () => {
         )}
       </div>
 
-      {loading && <div style={{ color:'#4a6070', textAlign:'center', padding:40, fontFamily:'sans-serif' }}>Loading analytics...</div>}
+      {loading && <div style={{ color:'#8899aa', textAlign:'center', padding:40, fontFamily:'sans-serif' }}>Loading analytics...</div>}
 
       {!loading && (
         <div style={{ display:'flex', flexDirection:'column', gap:20 }}>
@@ -159,7 +159,7 @@ const Analytics = () => {
           ) : (
             <div style={{ background:'#080c14', border:'1px solid #1a2535', borderRadius:10, padding:32, textAlign:'center' }}>
               <BarChart3 size={32} color="#1a2535" style={{ margin:'0 auto 12px' }} />
-              <div style={{ color:'#4a6070', fontSize:12, fontFamily:'sans-serif' }}>No closed signals yet</div>
+              <div style={{ color:'#8899aa', fontSize:12, fontFamily:'sans-serif' }}>No closed signals yet</div>
               <div style={{ color:'#2a4a5a', fontSize:10, fontFamily:'sans-serif', marginTop:6 }}>
                 Run Auto-Pilot to generate signals. The learning loop activates once signals close.
               </div>

@@ -15,9 +15,9 @@ const dirBorder = d => d === 'long' ? '#1a3525' : '#351a1a';
 const Stat = ({ label, value, sub, color, small }) => (
   <div style={{ background:'#0d1a2a', border:'1px solid #1a2535', borderRadius:8,
     padding:'10px 14px', textAlign:'center', minWidth:90 }}>
-    <div style={{ fontSize:9, color:'#4a6070', letterSpacing:1, marginBottom:4, fontFamily:'monospace' }}>{label}</div>
+    <div style={{ fontSize:9, color:'#8899aa', letterSpacing:1, marginBottom:4, fontFamily:'monospace' }}>{label}</div>
     <div style={{ fontSize:small?15:19, fontWeight:'bold', color:color||'#00d4ff', fontFamily:'monospace' }}>{value}</div>
-    {sub && <div style={{ fontSize:9, color:'#4a6070', marginTop:3 }}>{sub}</div>}
+    {sub && <div style={{ fontSize:9, color:'#8899aa', marginTop:3 }}>{sub}</div>}
   </div>
 );
 
@@ -40,7 +40,7 @@ const SignalCard = ({ r, onOpen }) => {
             {r.conviction_pct}%
           </span>
           <span style={{ fontSize:9, color:'#7ee8ff', fontFamily:'monospace' }}>{r.tas}</span>
-          <span style={{ fontSize:9, color:'#4a6070' }}>{r.heat}</span>
+          <span style={{ fontSize:9, color:'#8899aa' }}>{r.heat}</span>
         </div>
         <div style={{ display:'flex', alignItems:'center', gap:8 }}>
           {r.kelly_label && (
@@ -54,7 +54,7 @@ const SignalCard = ({ r, onOpen }) => {
             OPEN
           </button>
           <button onClick={() => setExp(!exp)} style={{ background:'transparent', border:'none',
-            color:'#4a6070', cursor:'pointer', padding:2 }}>
+            color:'#8899aa', cursor:'pointer', padding:2 }}>
             {exp ? <ChevronUp size={14}/> : <ChevronDown size={14}/>}
           </button>
         </div>
@@ -69,7 +69,7 @@ const SignalCard = ({ r, onOpen }) => {
           { l:'RISK',  v:`$${r.kelly_risk_usd||0}`, c:'#a855f7' },
         ].map(x => (
           <div key={x.l} style={{ textAlign:'center' }}>
-            <div style={{ color:'#4a6070', fontSize:8, marginBottom:2 }}>{x.l}</div>
+            <div style={{ color:'#8899aa', fontSize:8, marginBottom:2 }}>{x.l}</div>
             <div style={{ color:x.c, fontWeight:'bold' }}>{x.v}</div>
           </div>
         ))}
@@ -101,7 +101,7 @@ const FuturesCard = ({ f }) => {
       <div style={{ display:'flex', justifyContent:'space-between', alignItems:'center', marginBottom:8 }}>
         <div>
           <div style={{ fontSize:13, fontWeight:'bold', color:'#e0e0e0', fontFamily:'monospace' }}>{f.symbol}</div>
-          <div style={{ fontSize:9, color:'#4a6070' }}>{f.name}</div>
+          <div style={{ fontSize:9, color:'#8899aa' }}>{f.name}</div>
         </div>
         <div style={{ textAlign:'right' }}>
           <div style={{ fontSize:16, fontWeight:'bold', color:'#e0e0e0', fontFamily:'monospace' }}>
@@ -194,17 +194,17 @@ const PositionCard = ({ pos, onClose }) => {
           { l:'ENTRY', v:`$${fmt(entry,2)}`, c:'#94a3b8' },
           { l:'PRICE', v:`$${fmt(curr,2)}`,  c:clr(pnl) },
           { l:'SL',    v:`$${fmt(pos.sl,2)}`, c:'#ff4466' },
-          { l:'TP1',   v:`$${fmt(pos.tp1,2)}`, c:pos.tp1_hit?'#00ff88':'#4a6070' },
-          { l:'TP2',   v:`$${fmt(pos.tp2,2)}`, c:pos.tp2_hit?'#00ff88':'#4a6070' },
-          { l:'TP3',   v:`$${fmt(pos.tp3,2)}`, c:'#4a6070' },
+          { l:'TP1',   v:`$${fmt(pos.tp1,2)}`, c:pos.tp1_hit?'#00ff88':'#8899aa' },
+          { l:'TP2',   v:`$${fmt(pos.tp2,2)}`, c:pos.tp2_hit?'#00ff88':'#8899aa' },
+          { l:'TP3',   v:`$${fmt(pos.tp3,2)}`, c:'#8899aa' },
         ].map(x => (
           <div key={x.l} style={{ textAlign:'center' }}>
-            <div style={{ color:'#4a6070', fontSize:8, marginBottom:2 }}>{x.l}</div>
+            <div style={{ color:'#8899aa', fontSize:8, marginBottom:2 }}>{x.l}</div>
             <div style={{ color:x.c, fontWeight:'bold' }}>{x.v}</div>
           </div>
         ))}
       </div>
-      <div style={{ fontSize:9, color:'#4a6070', fontFamily:'monospace', marginTop:6, display:'flex', gap:10 }}>
+      <div style={{ fontSize:9, color:'#8899aa', fontFamily:'monospace', marginTop:6, display:'flex', gap:10 }}>
         <span>{pos.shares_remaining}/{pos.shares} sh</span>
         <span>Size: ${fmt(pos.position_size,0)}</span>
         <span>Risk: ${fmt(pos.risk_usd,0)}</span>
@@ -236,13 +236,13 @@ const TPTTracker = ({ portfolioStats }) => {
         <Shield size={20} color="#fbbf24" />
         <div>
           <div style={{ fontSize:14, fontWeight:'bold', color:'#fff', letterSpacing:1 }}>TAKEPROFITTRADER EVALUATION TRACKER</div>
-          <div style={{ fontSize:10, color:'#4a6070' }}>Track your progress toward a funded account — trade their $50K-$150K, keep 80%</div>
+          <div style={{ fontSize:10, color:'#8899aa' }}>Track your progress toward a funded account — trade their $50K-$150K, keep 80%</div>
         </div>
       </div>
 
       {/* Account selector */}
       <div style={{ background:'#0a1018', border:'1px solid #1a2535', borderRadius:8, padding:14, marginBottom:16 }}>
-        <div style={{ fontSize:10, color:'#4a6070', marginBottom:8, letterSpacing:1 }}>SELECT EVALUATION ACCOUNT SIZE</div>
+        <div style={{ fontSize:10, color:'#8899aa', marginBottom:8, letterSpacing:1 }}>SELECT EVALUATION ACCOUNT SIZE</div>
         <div style={{ display:'flex', gap:8, flexWrap:'wrap' }}>
           {Object.keys(TARGETS).map(sz => (
             <button key={sz} onClick={() => setAcctSize(+sz)} style={{
@@ -264,7 +264,7 @@ const TPTTracker = ({ portfolioStats }) => {
           <div style={{ fontSize:13, fontWeight:'bold', color: passed?'#00ff88':'#fff', letterSpacing:1 }}>
             {passed ? '🎉 EVALUATION PASSED — GET FUNDED' : '📊 EVALUATION IN PROGRESS'}
           </div>
-          <div style={{ fontSize:12, color:'#4a6070', fontFamily:'monospace' }}>
+          <div style={{ fontSize:12, color:'#8899aa', fontFamily:'monospace' }}>
             ${fmt(realized,0)} / ${(target/1000).toFixed(0)}K target
           </div>
         </div>
@@ -281,7 +281,7 @@ const TPTTracker = ({ portfolioStats }) => {
         <div style={{ marginTop:8 }}>
           <input type="range" min={0} max={30} value={days} onChange={e => setDays(+e.target.value)}
             style={{ width:'100%', accentColor:'#fbbf24' }} />
-          <div style={{ fontSize:9, color:'#4a6070', textAlign:'center' }}>{days} trading days elapsed (drag to update)</div>
+          <div style={{ fontSize:9, color:'#8899aa', textAlign:'center' }}>{days} trading days elapsed (drag to update)</div>
         </div>
       </div>
 
@@ -325,7 +325,7 @@ const TPTTracker = ({ portfolioStats }) => {
             </div>
           </div>
         ))}
-        <div style={{ marginTop:10, fontSize:9, color:'#4a6070', lineHeight:1.6 }}>
+        <div style={{ marginTop:10, fontSize:9, color:'#8899aa', lineHeight:1.6 }}>
           Evaluation fee: $75–$150/month · Activation: $130 one-time · Algo trading: permitted · Daily withdrawals
         </div>
       </div>
@@ -474,7 +474,7 @@ export default function PrintingProfits() {
               textShadow:'0 0 20px rgba(251,191,36,0.4)' }}>
               PRINTING PROFITS
             </div>
-            <div style={{ fontSize:10, color:'#4a6070' }}>
+            <div style={{ fontSize:10, color:'#8899aa' }}>
               Dual Long/Short · Futures · Kelly Sizing · TakeProfitTrader Path
             </div>
           </div>
@@ -494,7 +494,7 @@ export default function PrintingProfits() {
               <button onClick={() => { setAutoRefresh(a=>!a); setCountdown(30); }}
                 style={{ background: autoRefresh?'rgba(251,191,36,0.15)':'transparent',
                   border:`1px solid ${autoRefresh?'#fbbf24':'#1a2535'}`,
-                  borderRadius:6, padding:'6px 12px', color:autoRefresh?'#fbbf24':'#4a6070',
+                  borderRadius:6, padding:'6px 12px', color:autoRefresh?'#fbbf24':'#8899aa',
                   fontSize:11, cursor:'pointer' }}>
                 {autoRefresh ? `AUTO ${countdown}s` : 'AUTO OFF'}
               </button>
@@ -541,7 +541,7 @@ export default function PrintingProfits() {
             if (t.id === 'futures' && !futuresData) loadFutures();
           }} style={{
             background: subTab===t.id ? '#0d1a2a' : 'transparent',
-            color: subTab===t.id ? '#fbbf24' : '#4a6070',
+            color: subTab===t.id ? '#fbbf24' : '#8899aa',
             border: 'none',
             borderBottom: subTab===t.id ? '2px solid #fbbf24' : '2px solid transparent',
             padding:'10px 18px', fontSize:11, fontWeight:'bold', cursor:'pointer',
@@ -560,14 +560,14 @@ export default function PrintingProfits() {
               <div style={{ fontSize:13, fontWeight:'bold', color:'#fbbf24', letterSpacing:1 }}>
                 DUAL DIRECTION SCANNER
               </div>
-              <div style={{ fontSize:10, color:'#4a6070' }}>
+              <div style={{ fontSize:10, color:'#8899aa' }}>
                 Long signals (green) + Short signals (red) — same data, two engines
               </div>
             </div>
             <button onClick={runScan} disabled={loading}
               style={{ background: loading?'#1a2535':'linear-gradient(135deg,#fbbf24,#f97316)',
                 border:'none', borderRadius:6, padding:'8px 20px',
-                color: loading?'#4a6070':'#000', fontSize:12, fontWeight:'bold',
+                color: loading?'#8899aa':'#000', fontSize:12, fontWeight:'bold',
                 cursor: loading?'wait':'pointer', display:'flex', alignItems:'center', gap:6 }}>
               <Zap size={14}/> {loading?'SCANNING...':'RUN DUAL SCAN'}
             </button>
@@ -589,7 +589,7 @@ export default function PrintingProfits() {
                     </span>
                   </div>
                   {scanData.longs.length === 0
-                    ? <div style={{ color:'#4a6070', fontSize:11, padding:12 }}>No qualifying long signals</div>
+                    ? <div style={{ color:'#8899aa', fontSize:11, padding:12 }}>No qualifying long signals</div>
                     : scanData.longs.map(r => <SignalCard key={r.ticker+'L'} r={{...r,direction:'long'}} onOpen={openSignal}/>)}
                 </div>
                 {/* Shorts */}
@@ -601,14 +601,14 @@ export default function PrintingProfits() {
                     </span>
                   </div>
                   {scanData.shorts.length === 0
-                    ? <div style={{ color:'#4a6070', fontSize:11, padding:12 }}>No qualifying short signals</div>
+                    ? <div style={{ color:'#8899aa', fontSize:11, padding:12 }}>No qualifying short signals</div>
                     : scanData.shorts.map(r => <SignalCard key={r.ticker+'S'} r={r} onOpen={openSignal}/>)}
                 </div>
               </div>
             </>
           )}
           {!scanData && !loading && (
-            <div style={{ textAlign:'center', padding:'60px 20px', color:'#4a6070' }}>
+            <div style={{ textAlign:'center', padding:'60px 20px', color:'#8899aa' }}>
               <Zap size={40} color="#fbbf24" style={{ marginBottom:12 }}/>
               <div style={{ fontSize:14 }}>Click RUN DUAL SCAN to find long + short opportunities</div>
               <div style={{ fontSize:11, marginTop:6 }}>
@@ -625,14 +625,14 @@ export default function PrintingProfits() {
           <div style={{ display:'flex', justifyContent:'space-between', alignItems:'center', marginBottom:16 }}>
             <div>
               <div style={{ fontSize:13, fontWeight:'bold', color:'#fbbf24', letterSpacing:1 }}>FUTURES INTELLIGENCE</div>
-              <div style={{ fontSize:10, color:'#4a6070' }}>ES · NQ · RTY · CL · GC · SI — real-time levels, VWAP, ATR entry zones</div>
+              <div style={{ fontSize:10, color:'#8899aa' }}>ES · NQ · RTY · CL · GC · SI — real-time levels, VWAP, ATR entry zones</div>
             </div>
             <div style={{ display:'flex', gap:8, alignItems:'center' }}>
               {futuresData?.session && (
                 <div style={{ background:`${futuresData.session.prime?'rgba(0,255,136,0.08)':'rgba(74,96,112,0.08)'}`,
                   border:`1px solid ${futuresData.session.prime?'#00ff88':'#1a2535'}`,
                   borderRadius:6, padding:'5px 10px', fontSize:10,
-                  color: futuresData.session.prime?'#00ff88':'#4a6070', fontFamily:'monospace' }}>
+                  color: futuresData.session.prime?'#00ff88':'#8899aa', fontFamily:'monospace' }}>
                   {futuresData.session.prime ? '🟢' : '⚫'} {futuresData.session.label} · {futuresData.session.et_time}
                 </div>
               )}
@@ -649,7 +649,7 @@ export default function PrintingProfits() {
               {Object.values(futuresData.futures).map(f => <FuturesCard key={f.symbol} f={f}/>)}
             </div>
           ) : (
-            <div style={{ textAlign:'center', padding:'60px 20px', color:'#4a6070' }}>
+            <div style={{ textAlign:'center', padding:'60px 20px', color:'#8899aa' }}>
               <BarChart2 size={40} color="#fbbf24" style={{ marginBottom:12 }}/>
               <div>Loading futures data...</div>
             </div>
@@ -676,14 +676,14 @@ export default function PrintingProfits() {
                 <button onClick={autopilot} disabled={loading||slots===0}
                   style={{ background: slots===0?'#1a2535':'linear-gradient(135deg,#fbbf24,#f97316)',
                     border:'none', borderRadius:6, padding:'6px 14px',
-                    color: slots===0?'#4a6070':'#000', fontSize:11, fontWeight:'bold',
+                    color: slots===0?'#8899aa':'#000', fontSize:11, fontWeight:'bold',
                     cursor: slots===0?'not-allowed':'pointer', display:'flex', alignItems:'center', gap:5 }}>
                   <Zap size={12}/> AUTO-FILL {slots} SLOTS
                 </button>
               </div>
             </div>
             {openPos.length === 0 && !loading && (
-              <div style={{ textAlign:'center', padding:'20px', color:'#4a6070', fontSize:11 }}>
+              <div style={{ textAlign:'center', padding:'20px', color:'#8899aa', fontSize:11 }}>
                 No open positions. Run Scanner and click OPEN, or use AUTO-FILL.
               </div>
             )}
@@ -707,7 +707,7 @@ export default function PrintingProfits() {
                     <tr style={{ borderBottom:'1px solid #1a2535' }}>
                       {['Ticker','Dir','Entry','Exit','P&L $','P&L %','Exit'].map(h => (
                         <th key={h} style={{ padding:'5px 6px', textAlign:'right',
-                          color:'#4a6070', fontSize:9, fontWeight:'normal' }}>{h}</th>
+                          color:'#8899aa', fontSize:9, fontWeight:'normal' }}>{h}</th>
                       ))}
                     </tr>
                   </thead>

@@ -77,7 +77,7 @@ const AlphaMegaDashboard = () => {
         {[30,90,180,360].map(d => (
           <button key={d} onClick={() => changeLookback(d)}
             style={{ background:lookback===d?"#1a2535":"#080c14", border:`1px solid ${lookback===d?"#c084fc":"#1a2535"}`,
-              color:lookback===d?"#c084fc":"#4a6070", fontSize:10, fontWeight:"bold",
+              color:lookback===d?"#c084fc":"#8899aa", fontSize:10, fontWeight:"bold",
               padding:"4px 12px", borderRadius:5, cursor:"pointer", fontFamily:"sans-serif" }}>
             {d}D
           </button>
@@ -99,7 +99,7 @@ const AlphaMegaDashboard = () => {
               return (
                 <div key={t} style={{ background:"rgba(192,132,252,0.08)", border:"1px solid rgba(192,132,252,0.3)",
                   borderRadius:6, padding:"6px 14px", display:"flex", alignItems:"center", gap:8 }}>
-                  <span style={{ color:"#4a6070", fontSize:10, fontFamily:"sans-serif" }}>#{i+1}</span>
+                  <span style={{ color:"#8899aa", fontSize:10, fontFamily:"sans-serif" }}>#{i+1}</span>
                   <span style={{ color:"#c084fc", fontWeight:"bold", fontSize:14 }}>{t}</span>
                   {stock && <>
                     <span style={{ color:convC(stock.alpha_score), fontSize:11, fontFamily:"sans-serif" }}>{stock.alpha_score}%</span>
@@ -140,13 +140,13 @@ const AlphaMegaDashboard = () => {
                     onMouseOver={e => e.currentTarget.style.background = "rgba(255,255,255,0.02)"}
                     onMouseOut={e => e.currentTarget.style.background = "transparent"}>
                     <td style={td}>
-                      <span style={{ color: isPortfolio ? "#c084fc" : "#4a6070", fontSize:11, fontFamily:"sans-serif" }}>
+                      <span style={{ color: isPortfolio ? "#c084fc" : "#8899aa", fontSize:11, fontFamily:"sans-serif" }}>
                         {isPortfolio ? "★" : i+1}
                       </span>
                     </td>
                     <td style={td}>
                       <div style={{ color:"#00d4ff", fontWeight:"bold", fontSize:14 }}>{r.ticker}</div>
-                      <div style={{ color:"#4a6070", fontSize:9, fontFamily:"sans-serif" }}>
+                      <div style={{ color:"#8899aa", fontSize:9, fontFamily:"sans-serif" }}>
                         ${r.last_close}
                       </div>
                     </td>
@@ -206,7 +206,7 @@ const AlphaMegaDashboard = () => {
             <div style={{ display:"flex", justifyContent:"space-between", alignItems:"center", marginBottom:8 }}>
               <span style={{ color:"#c084fc", fontWeight:"bold", fontSize:14 }}>{chartTicker}</span>
               <button onClick={() => setChartTicker(null)}
-                style={{ background:"transparent", border:"none", color:"#4a6070", cursor:"pointer" }}>
+                style={{ background:"transparent", border:"none", color:"#8899aa", cursor:"pointer" }}>
                 <X size={18} />
               </button>
             </div>

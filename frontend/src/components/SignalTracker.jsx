@@ -124,7 +124,7 @@ const SignalTracker = () => {
             <div style={{ background:`${sessionColor(mktStatus.session)}10`, border:`1px solid ${sessionColor(mktStatus.session)}33`, borderRadius:6, padding:"4px 10px", display:"flex", alignItems:"center", gap:5 }}>
               <div style={{ width:6, height:6, borderRadius:3, background:sessionColor(mktStatus.session), animation:mktStatus.market_open?"pulse 2s infinite":"none" }} />
               <span style={{ fontSize:10, fontWeight:"bold", color:sessionColor(mktStatus.session), fontFamily:"sans-serif", textTransform:"uppercase" }}>{mktStatus.session || "?"}</span>
-              {mktStatus.et_time && <span style={{ fontSize:9, color:"#4a6070", fontFamily:"sans-serif" }}>{mktStatus.et_time}</span>}
+              {mktStatus.et_time && <span style={{ fontSize:9, color:"#8899aa", fontFamily:"sans-serif" }}>{mktStatus.et_time}</span>}
             </div>
           )}
           <button onClick={() => fetchSignals(true)} disabled={refreshing}
@@ -155,7 +155,7 @@ const SignalTracker = () => {
           </button>
         </div>
         <div style={{ display:"flex", alignItems:"center", gap:8, background:"#0a0f18", border:"1px solid #1a2535", borderRadius:8, padding:"8px 12px" }}>
-          <span style={{ fontSize:10, color:"#4a6070", fontFamily:"sans-serif" }}>AUTO-REFRESH</span>
+          <span style={{ fontSize:10, color:"#8899aa", fontFamily:"sans-serif" }}>AUTO-REFRESH</span>
           <button onClick={() => setAutoRefresh(!autoRefresh)}
             style={{ width:40, height:22, borderRadius:11, border:"none", background:autoRefresh?"#00ff88":"#1a2535", cursor:"pointer", position:"relative", transition:"background 0.2s" }}>
             <div style={{ width:18, height:18, borderRadius:9, background:"#fff", position:"absolute", top:2, left:autoRefresh?20:2, transition:"left 0.2s" }} />
@@ -169,7 +169,7 @@ const SignalTracker = () => {
         <div style={{ display:"flex", alignItems:"center", justifyContent:"space-between", flexWrap:"wrap", gap:10 }}>
           <div>
             <div style={{ fontSize:14, fontWeight:"bold", color:"#e0e0e0", fontFamily:"sans-serif" }}>🤖 AUTO-PILOT</div>
-            <div style={{ fontSize:10, color:"#4a6070", fontFamily:"sans-serif", marginTop:2 }}>Scan → Rank → Launch ATR-based turbo signals with full audit trail</div>
+            <div style={{ fontSize:10, color:"#8899aa", fontFamily:"sans-serif", marginTop:2 }}>Scan → Rank → Launch ATR-based turbo signals with full audit trail</div>
           </div>
           <div style={{ display:"flex", gap:10, flexWrap:"wrap" }}>
             <button onClick={runAutopilot} disabled={autopilotLoading}
@@ -185,17 +185,17 @@ const SignalTracker = () => {
         {autopilotResult && (
           <div style={{ marginTop:14, background:"#0a0f18", borderRadius:8, padding:12 }}>
             <div style={{ display:"flex", gap:16, flexWrap:"wrap", marginBottom:10 }}>
-              <span style={{ fontSize:11, color:"#4a6070", fontFamily:"sans-serif" }}>Scanned: <b style={{color:"#e0e0e0"}}>{autopilotResult.scanned}</b></span>
-              <span style={{ fontSize:11, color:"#4a6070", fontFamily:"sans-serif" }}>Passed: <b style={{color:"#00ff88"}}>{autopilotResult.passed_filter}</b></span>
-              <span style={{ fontSize:11, color:"#4a6070", fontFamily:"sans-serif" }}>Launched: <b style={{color:"#c084fc"}}>{autopilotResult.launched?.length || 0}</b></span>
-              <span style={{ fontSize:11, color:"#4a6070", fontFamily:"sans-serif" }}>Regime: <b style={{color:"#fbbf24"}}>{autopilotResult.market_regime}</b></span>
+              <span style={{ fontSize:11, color:"#8899aa", fontFamily:"sans-serif" }}>Scanned: <b style={{color:"#e0e0e0"}}>{autopilotResult.scanned}</b></span>
+              <span style={{ fontSize:11, color:"#8899aa", fontFamily:"sans-serif" }}>Passed: <b style={{color:"#00ff88"}}>{autopilotResult.passed_filter}</b></span>
+              <span style={{ fontSize:11, color:"#8899aa", fontFamily:"sans-serif" }}>Launched: <b style={{color:"#c084fc"}}>{autopilotResult.launched?.length || 0}</b></span>
+              <span style={{ fontSize:11, color:"#8899aa", fontFamily:"sans-serif" }}>Regime: <b style={{color:"#fbbf24"}}>{autopilotResult.market_regime}</b></span>
             </div>
             {autopilotResult.launched?.length > 0 && (
               <div style={{ display:"flex", gap:6, flexWrap:"wrap" }}>
                 {autopilotResult.launched.map(l => (
                   <div key={l.ticker} style={{ background:"rgba(0,255,136,0.08)", border:"1px solid #00ff8833", borderRadius:6, padding:"6px 10px", textAlign:"center" }}>
                     <div style={{ fontSize:12, fontWeight:"bold", color:"#00ff88" }}>{l.ticker}</div>
-                    <div style={{ fontSize:9, color:"#4a6070" }}>{l.conviction}% · ${l.entry} · {l.target_method || "atr"}</div>
+                    <div style={{ fontSize:9, color:"#8899aa" }}>{l.conviction}% · ${l.entry} · {l.target_method || "atr"}</div>
                   </div>
                 ))}
               </div>
@@ -252,7 +252,7 @@ const SignalTracker = () => {
       {/* Tabs */}
       <div style={{ display:"flex", gap:0, marginBottom:14, borderBottom:"1px solid #1a2535" }}>
         {['active','closed'].map(t => (
-          <button key={t} onClick={() => setTab(t)} style={{ background:tab===t?"#0d1a2a":"transparent", color:tab===t?"#c084fc":"#4a6070", border:"none", borderBottom:tab===t?"2px solid #c084fc":"2px solid transparent", padding:"8px 20px", fontSize:11, fontWeight:"bold", fontFamily:"sans-serif", cursor:"pointer", textTransform:"uppercase" }}>
+          <button key={t} onClick={() => setTab(t)} style={{ background:tab===t?"#0d1a2a":"transparent", color:tab===t?"#c084fc":"#8899aa", border:"none", borderBottom:tab===t?"2px solid #c084fc":"2px solid transparent", padding:"8px 20px", fontSize:11, fontWeight:"bold", fontFamily:"sans-serif", cursor:"pointer", textTransform:"uppercase" }}>
             {t} ({t==='active'?active.length:closed.length})
           </button>
         ))}
@@ -298,7 +298,7 @@ const SignalTracker = () => {
                     <span style={{ color:"#2a4a5a" }}>→</span>
                     <span style={{ fontSize:13, fontWeight:"bold", color:pnlColor(s.pnl_pct) }}>${s.current_price || s.close_price}</span>
                     <span style={{ fontSize:9, color:"#ff4466", fontFamily:"sans-serif" }}>SL ${s.sl}</span>
-                    <span style={{ fontSize:9, color:s.tp1_hit?"#00ff88":"#4a6070", fontWeight:s.tp1_hit?"bold":"normal", fontFamily:"sans-serif" }}>TP1 ${s.tp1}{s.tp1_hit?" ✓":""}</span>
+                    <span style={{ fontSize:9, color:s.tp1_hit?"#00ff88":"#8899aa", fontWeight:s.tp1_hit?"bold":"normal", fontFamily:"sans-serif" }}>TP1 ${s.tp1}{s.tp1_hit?" ✓":""}</span>
                   </div>
                   {/* P&L */}
                   <div style={{ textAlign:"right" }}>
@@ -389,7 +389,7 @@ const SignalTracker = () => {
                         {s.entry_snapshot && Object.keys(s.entry_snapshot).length > 0 && !s.entry_snapshot.error && (
                           <>
                             <div style={{ fontSize:9, fontWeight:"bold", color:"#c084fc", fontFamily:"sans-serif", marginBottom:6, marginTop:s.close_reason?10:0, letterSpacing:1 }}>INDICATORS AT ENTRY</div>
-                            <div style={{ fontSize:9, color:"#4a6070", fontFamily:"monospace", lineHeight:1.6, maxHeight:80, overflow:"auto" }}>
+                            <div style={{ fontSize:9, color:"#8899aa", fontFamily:"monospace", lineHeight:1.6, maxHeight:80, overflow:"auto" }}>
                               {Object.entries(s.entry_snapshot).filter(([k]) => !['price_data','error'].includes(k)).map(([k,v]) => (
                                 <div key={k}>{k}: {typeof v === 'object' ? JSON.stringify(v) : String(v)}</div>
                               ))}
@@ -401,7 +401,7 @@ const SignalTracker = () => {
 
                     {/* TA Note */}
                     {s.ta_note && (
-                      <div style={{ marginTop:10, fontSize:9, color:"#4a6070", fontFamily:"sans-serif", background:"#0d1520", borderRadius:4, padding:"6px 10px" }}>
+                      <div style={{ marginTop:10, fontSize:9, color:"#8899aa", fontFamily:"sans-serif", background:"#0d1520", borderRadius:4, padding:"6px 10px" }}>
                         📝 {s.ta_note}
                       </div>
                     )}

@@ -10,9 +10,9 @@ const heatClr = c => c >= 75 ? '#00ff88' : c >= 60 ? '#fbbf24' : '#94a3b8';
 
 const StatCard = ({ label, value, sub, color, small }) => (
   <div style={{ background:'#0d1a2a', border:'1px solid #1a2535', borderRadius:8, padding:'12px 16px', minWidth:100, textAlign:'center' }}>
-    <div style={{ fontSize:9, color:'#4a6070', letterSpacing:1, marginBottom:5, fontFamily:'monospace' }}>{label}</div>
+    <div style={{ fontSize:9, color:'#8899aa', letterSpacing:1, marginBottom:5, fontFamily:'monospace' }}>{label}</div>
     <div style={{ fontSize: small ? 16 : 20, fontWeight:'bold', color: color || '#00d4ff', fontFamily:'monospace' }}>{value}</div>
-    {sub && <div style={{ fontSize:9, color:'#4a6070', marginTop:3 }}>{sub}</div>}
+    {sub && <div style={{ fontSize:9, color:'#8899aa', marginTop:3 }}>{sub}</div>}
   </div>
 );
 
@@ -62,19 +62,19 @@ const PositionCard = ({ pos, onClose, onRefresh }) => {
           { label:'ENTRY', val:`$${fmt(entry,2)}`, color:'#94a3b8' },
           { label:'PRICE', val:`$${fmt(curr,2)}`, color:clr(pnl) },
           { label:'SL', val:`$${fmt(sl,2)}`, color:'#ff4466' },
-          { label:'TP1', val:`$${fmt(tp1,2)}`, color: pos.tp1_hit ? '#00ff88' : '#4a6070' },
-          { label:'TP2', val:`$${fmt(tp2,2)}`, color: pos.tp2_hit ? '#00ff88' : '#4a6070' },
-          { label:'TP3', val:`$${fmt(tp3,2)}`, color:'#4a6070' },
+          { label:'TP1', val:`$${fmt(tp1,2)}`, color: pos.tp1_hit ? '#00ff88' : '#8899aa' },
+          { label:'TP2', val:`$${fmt(tp2,2)}`, color: pos.tp2_hit ? '#00ff88' : '#8899aa' },
+          { label:'TP3', val:`$${fmt(tp3,2)}`, color:'#8899aa' },
         ].map(l => (
           <div key={l.label} style={{ textAlign:'center' }}>
-            <div style={{ color:'#4a6070', fontSize:8, marginBottom:2 }}>{l.label}</div>
+            <div style={{ color:'#8899aa', fontSize:8, marginBottom:2 }}>{l.label}</div>
             <div style={{ color:l.color, fontWeight:'bold' }}>{l.val}</div>
           </div>
         ))}
       </div>
 
       {/* Shares + position size */}
-      <div style={{ display:'flex', gap:12, marginTop:8, fontSize:10, color:'#4a6070', fontFamily:'monospace' }}>
+      <div style={{ display:'flex', gap:12, marginTop:8, fontSize:10, color:'#8899aa', fontFamily:'monospace' }}>
         <span>{pos.shares_remaining}/{pos.shares} shares</span>
         <span>Size: ${fmt(pos.position_size, 0)}</span>
         <span>Risk: ${fmt(pos.risk_actual, 0)}</span>
@@ -92,7 +92,7 @@ const ClosedRow = ({ pos }) => {
   return (
     <tr style={{ borderBottom:'1px solid #0d1a2a' }}>
       <td style={{ padding:'5px 6px', color:'#e0e0e0', fontWeight:'bold', fontFamily:'monospace' }}>{pos.ticker}</td>
-      <td style={{ padding:'5px 6px', textAlign:'right', color:'#4a6070', fontSize:10 }}>{(pos.entry_date||'').slice(0,10)}</td>
+      <td style={{ padding:'5px 6px', textAlign:'right', color:'#8899aa', fontSize:10 }}>{(pos.entry_date||'').slice(0,10)}</td>
       <td style={{ padding:'5px 6px', textAlign:'right', color:'#94a3b8' }}>${fmt(pos.entry_price,2)}</td>
       <td style={{ padding:'5px 6px', textAlign:'right', color:'#94a3b8' }}>${fmt(lastTrade.price,2)}</td>
       <td style={{ padding:'5px 6px', textAlign:'right', color:clr(pnl), fontWeight:'bold' }}>{pnl>=0?'+':''}{fmt(pnl,0)}</td>
@@ -228,12 +228,12 @@ export default function PortfolioTab() {
           </div>
           <div>
             <div style={{ fontSize:18, fontWeight:'bold', color:'#fff', letterSpacing:1 }}>ACTIVE PORTFOLIO</div>
-            <div style={{ fontSize:11, color:'#4a6070' }}>Paper trading · $25K starting capital · Max 5 positions · $500 risk/trade</div>
+            <div style={{ fontSize:11, color:'#8899aa' }}>Paper trading · $25K starting capital · Max 5 positions · $500 risk/trade</div>
           </div>
         </div>
         <div style={{ display:'flex', gap:8, alignItems:'center' }}>
           <button onClick={() => { setAutoRefresh(a => !a); setCountdown(30); }}
-            style={{ background: autoRefresh ? 'rgba(0,212,255,0.15)' : 'transparent', border:`1px solid ${autoRefresh?'#00d4ff':'#1a2535'}`, borderRadius:6, padding:'6px 12px', color: autoRefresh?'#00d4ff':'#4a6070', fontSize:11, cursor:'pointer' }}>
+            style={{ background: autoRefresh ? 'rgba(0,212,255,0.15)' : 'transparent', border:`1px solid ${autoRefresh?'#00d4ff':'#1a2535'}`, borderRadius:6, padding:'6px 12px', color: autoRefresh?'#00d4ff':'#8899aa', fontSize:11, cursor:'pointer' }}>
             {autoRefresh ? `AUTO ${countdown}s` : 'AUTO OFF'}
           </button>
           <button onClick={checkPrices} disabled={checking}
@@ -284,7 +284,7 @@ export default function PortfolioTab() {
         {loading && <div style={{ padding:10, color:'#fbbf24', fontSize:11, fontFamily:'monospace' }}>⏳ Processing...</div>}
 
         {openPositions.length === 0 && !loading && (
-          <div style={{ textAlign:'center', padding:'30px 20px', color:'#4a6070', fontSize:12 }}>
+          <div style={{ textAlign:'center', padding:'30px 20px', color:'#8899aa', fontSize:12 }}>
             No open positions. Enter a ticker or click AUTO-FILL to start.
           </div>
         )}
@@ -312,7 +312,7 @@ export default function PortfolioTab() {
               <thead>
                 <tr style={{ borderBottom:'1px solid #1a2535' }}>
                   {['Ticker','Date','Entry','Exit','P&L $','P&L %','Result'].map(h => (
-                    <th key={h} style={{ padding:'6px 6px', textAlign:'right', color:'#4a6070', fontSize:9, fontWeight:'normal', letterSpacing:1 }}>{h}</th>
+                    <th key={h} style={{ padding:'6px 6px', textAlign:'right', color:'#8899aa', fontSize:9, fontWeight:'normal', letterSpacing:1 }}>{h}</th>
                   ))}
                 </tr>
               </thead>

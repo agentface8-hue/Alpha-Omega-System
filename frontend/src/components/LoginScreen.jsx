@@ -54,7 +54,7 @@ const LoginScreen = ({ onLogin }) => {
       <form onSubmit={handle} style={{ background:'#080c14', border:'1px solid #1a2535', borderRadius:12,
         padding:'32px 36px', width:340, display:'flex', flexDirection:'column', gap:20 }}>
 
-        <div style={{ display:'flex', alignItems:'center', gap:8, color:'#4a6070', fontSize:11,
+        <div style={{ display:'flex', alignItems:'center', gap:8, color:'#8899aa', fontSize:11,
           letterSpacing:2, fontFamily:'sans-serif', marginBottom:4 }}>
           <Lock size={12} /> SECURE ACCESS
         </div>
@@ -64,7 +64,7 @@ const LoginScreen = ({ onLogin }) => {
           <div style={{ color:'#2a4a5a', fontSize:9, letterSpacing:1.5, fontFamily:'sans-serif', marginBottom:6 }}>USERNAME</div>
           <div style={{ display:'flex', alignItems:'center', background:'#050810', border:'1px solid #1a2535',
             borderRadius:6, padding:'10px 12px', gap:8 }}>
-            <User size={14} color="#4a6070" />
+            <User size={14} color="#8899aa" />
             <input value={user} onChange={e => setUser(e.target.value)}
               placeholder="Enter username"
               style={{ background:'transparent', border:'none', outline:'none', color:'#c9d8e8',
@@ -77,14 +77,14 @@ const LoginScreen = ({ onLogin }) => {
           <div style={{ color:'#2a4a5a', fontSize:9, letterSpacing:1.5, fontFamily:'sans-serif', marginBottom:6 }}>PASSWORD</div>
           <div style={{ display:'flex', alignItems:'center', background:'#050810', border:'1px solid #1a2535',
             borderRadius:6, padding:'10px 12px', gap:8 }}>
-            <Lock size={14} color="#4a6070" />
+            <Lock size={14} color="#8899aa" />
             <input value={pass} onChange={e => setPass(e.target.value)}
               type={showPass ? 'text' : 'password'} placeholder="Enter password"
               style={{ background:'transparent', border:'none', outline:'none', color:'#c9d8e8',
                 fontFamily:"'Courier New',monospace", fontSize:13, flex:1 }} />
             <button type="button" onClick={() => setShowPass(p => !p)}
               style={{ background:'transparent', border:'none', cursor:'pointer', padding:0, display:'flex' }}>
-              {showPass ? <EyeOff size={14} color="#4a6070" /> : <Eye size={14} color="#4a6070" />}
+              {showPass ? <EyeOff size={14} color="#8899aa" /> : <Eye size={14} color="#8899aa" />}
             </button>
           </div>
         </div>
