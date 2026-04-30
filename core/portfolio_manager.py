@@ -10,8 +10,8 @@ from core import portfolio_store as store
 # ── Constants ──────────────────────────────────────────────────
 MAX_POSITIONS   = 5
 STARTING_CASH   = 25_000.0
-MAX_POS_SIZE    = 10_000.0
-MIN_POS_SIZE    = 5_000.0
+MAX_POS_SIZE    = 5_000.0   # 20% of $25K — ensures all 5 slots always fillable
+MIN_POS_SIZE    = 3_000.0   # floor for small-cap or high-priced names
 MAX_RISK        = 500.0     # $500 = 2% of $25K
 SPLIT_TP1_PCT   = 0.50
 SPLIT_TP2_PCT   = 0.30
@@ -82,8 +82,23 @@ def open_position(ticker: str, entry_price: float, sl: float,
         return {"error": f"Max {MAX_POSITIONS} positions reached"}
 
     sizing = _size_position(entry_price, sl)
+
+    # If position doesn't fit at full size, try at minimum viable size
     if sizing["position_size"] > state["cash"]:
-        return {"error": f"Insufficient cash (need ${sizing['position_size']}, have ${state['cash']:.0f})"}
+        min_shares = max(1, math.ceil(MIN_POS_SIZE / entry_price))
+        min_size   = round(min_shares * entry_price, 2)
+        if min_size <= state["cash"]:
+            # Rebuild sizing with min shares
+            tp1_sh = max(1, round(min_shares * SPLIT_TP1_PCT))
+            tp2_sh = max(1, round(min_shares * SPLIT_TP2_PCT))
+            tp3_sh = max(0, min_shares - tp1_sh - tp2_sh)
+            sizing = {
+                "shares": min_shares, "position_size": min_size,
+                "risk_actual": round(min_shares * max(entry_price - sl, 0.01), 2),
+                "tp1_shares": tp1_sh, "tp2_shares": tp2_sh, "tp3_shares": tp3_sh,
+            }
+        else:
+            return {"error": f"Insufficient cash (need ${min_size:.2f}, have ${state['cash']:.0f})"}
 
     now = datetime.datetime.utcnow().isoformat()
     pos = {
