@@ -1,5 +1,6 @@
 langgraph
 langchain
+langchain-ollama
 langchain-google-genai
 langchain-openai
 langchain-anthropic

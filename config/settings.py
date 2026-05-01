@@ -43,6 +43,10 @@ class Settings(BaseSettings):
     DATA_DIR: str = os.path.join(BASE_DIR, "data")
     LOGS_DIR: str = os.path.join(BASE_DIR, "logs")
 
+    # Ollama (local dev only — not used in production)
+    OLLAMA_BASE_URL: str = Field(default="http://localhost:11434", description="Ollama server URL (local dev only)")
+    OLLAMA_MODEL: str = Field(default="llama3.2", description="Ollama model name (local dev only)")
+
     # Model Configuration
     DEFAULT_LLM_MODEL: str = "gemini-pro"
     FAST_LLM_MODEL: str = "gemini-pro"

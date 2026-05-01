@@ -132,7 +132,14 @@ class BaseAgent(ABC):
 
     def _initialize_llm(self):
         """Initialize the LLM based on backend choice."""
-        if self.llm_backend == "openai":
+        if self.llm_backend == "ollama":
+            from langchain_ollama import ChatOllama
+            return ChatOllama(
+                model=self.model_name,
+                temperature=0.7,
+                base_url=settings.OLLAMA_BASE_URL,
+            )
+        elif self.llm_backend == "openai":
             from langchain_openai import ChatOpenAI
             return ChatOpenAI(
                 model=self.model_name,
