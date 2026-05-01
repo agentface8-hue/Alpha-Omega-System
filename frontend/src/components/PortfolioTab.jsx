@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useCallback } from 'react';
-import { TrendingUp, TrendingDown, RefreshCw, X, Zap, RotateCcw, DollarSign, Target, BarChart2 } from 'lucide-react';
+import { TrendingUp, TrendingDown, RefreshCw, X, Zap, RotateCcw, DollarSign, Target, BarChart2, Clock } from 'lucide-react';
 
 const API = () => import.meta.env.VITE_API_URL || 'http://127.0.0.1:8000';
 const fmt  = (n, d=2) => (n == null ? '—' : Number(n).toFixed(d));
@@ -7,6 +7,26 @@ const pct  = n => `${n > 0 ? '+' : ''}${fmt(n)}%`;
 const usd  = n => `$${fmt(n, 0).replace(/\B(?=(\d{3})+(?!\d))/g, ',')}`;
 const clr  = n => n > 0 ? '#00ff88' : n < 0 ? '#ff4466' : '#94a3b8';
 const heatClr = c => c >= 75 ? '#00ff88' : c >= 60 ? '#fbbf24' : '#94a3b8';
+
+const MAX_SLOTS = 10;
+
+// Format duration between two ISO timestamps
+const formatDuration = (startIso, endIso = null) => {
+  if (!startIso) return '—';
+  try {
+    const start = new Date(startIso);
+    const end   = endIso ? new Date(endIso) : new Date();
+    const mins  = Math.floor((end - start) / 60000);
+    if (mins < 1)  return '<1m';
+    if (mins < 60) return `${mins}m`;
+    const hrs    = Math.floor(mins / 60);
+    const remMin = mins % 60;
+    if (hrs < 24)  return `${hrs}h ${remMin}m`;
+    const days   = Math.floor(hrs / 24);
+    const remHrs = hrs % 24;
+    return `${days}d ${remHrs}h`;
+  } catch { return '—'; }
+};
 
 const StatCard = ({ label, value, sub, color, small }) => (
   <div style={{ background:'#0d1a2a', border:'1px solid #1a2535', borderRadius:8, padding:'12px 16px', minWidth:100, textAlign:'center' }}>
@@ -16,7 +36,7 @@ const StatCard = ({ label, value, sub, color, small }) => (
   </div>
 );
 
-const PositionCard = ({ pos, onClose, onRefresh }) => {
+const PositionCard = ({ pos, onClose }) => {
   const pnl    = pos.unrealized_pnl || 0;
   const pnlPct = pos.unrealized_pnl_pct || 0;
   const entry  = pos.entry_price;
@@ -26,15 +46,14 @@ const PositionCard = ({ pos, onClose, onRefresh }) => {
   const tp2    = pos.tp2;
   const tp3    = pos.tp3;
   const isPartial = pos.status === 'partial';
+  const duration  = formatDuration(pos.entry_date);
 
-  // Progress: how far from entry to TP1
-  const range = tp1 - sl;
+  const range    = tp1 - sl;
   const progress = range > 0 ? Math.min(100, Math.max(0, (curr - sl) / range * 100)) : 0;
   const barColor = pnl >= 0 ? '#00ff88' : '#ff4466';
 
   return (
     <div style={{ background:'#0a1018', border:`1px solid ${pnl >= 0 ? '#1a3525' : '#351a1a'}`, borderRadius:10, padding:14, marginBottom:10 }}>
-      {/* Header */}
       <div style={{ display:'flex', justifyContent:'space-between', alignItems:'center', marginBottom:10 }}>
         <div style={{ display:'flex', alignItems:'center', gap:8 }}>
           <span style={{ fontSize:16, fontWeight:'bold', color:'#e0e0e0', fontFamily:'monospace' }}>{pos.ticker}</span>
@@ -42,6 +61,10 @@ const PositionCard = ({ pos, onClose, onRefresh }) => {
           {pos.tp1_hit && <span style={{ fontSize:9, background:'rgba(0,255,136,0.1)', color:'#00ff88', borderRadius:4, padding:'2px 6px' }}>TP1✓</span>}
           {pos.tp2_hit && <span style={{ fontSize:9, background:'rgba(0,255,136,0.15)', color:'#00ff88', borderRadius:4, padding:'2px 6px' }}>TP2✓</span>}
           {pos.conviction > 0 && <span style={{ fontSize:9, color:heatClr(pos.conviction), fontFamily:'monospace' }}>{pos.conviction}%</span>}
+          {/* Live duration badge */}
+          <span style={{ fontSize:9, color:'#00d4ff', display:'flex', alignItems:'center', gap:3, background:'rgba(0,212,255,0.08)', borderRadius:4, padding:'2px 6px' }}>
+            <Clock size={9} /> {duration}
+          </span>
         </div>
         <div style={{ display:'flex', alignItems:'center', gap:6 }}>
           <span style={{ fontSize:18, fontWeight:'bold', color:clr(pnl), fontFamily:'monospace' }}>
@@ -51,12 +74,10 @@ const PositionCard = ({ pos, onClose, onRefresh }) => {
         </div>
       </div>
 
-      {/* Price progress bar */}
       <div style={{ position:'relative', height:6, background:'#1a2535', borderRadius:3, marginBottom:10, overflow:'hidden' }}>
         <div style={{ position:'absolute', left:0, top:0, height:'100%', width:`${progress}%`, background:barColor, borderRadius:3, transition:'width 0.5s' }} />
       </div>
 
-      {/* Levels grid */}
       <div style={{ display:'grid', gridTemplateColumns:'repeat(6,1fr)', gap:6, fontSize:10, fontFamily:'monospace' }}>
         {[
           { label:'ENTRY', val:`$${fmt(entry,2)}`, color:'#94a3b8' },
@@ -73,7 +94,6 @@ const PositionCard = ({ pos, onClose, onRefresh }) => {
         ))}
       </div>
 
-      {/* Shares + position size */}
       <div style={{ display:'flex', gap:12, marginTop:8, fontSize:10, color:'#8899aa', fontFamily:'monospace' }}>
         <span>{pos.shares_remaining}/{pos.shares} shares</span>
         <span>Size: ${fmt(pos.position_size, 0)}</span>
@@ -86,33 +106,42 @@ const PositionCard = ({ pos, onClose, onRefresh }) => {
 };
 
 const ClosedRow = ({ pos }) => {
-  const pnl = pos.realized_pnl || 0;
-  const pnlPct = pos.entry_price > 0 ? (pnl / pos.position_size * 100) : 0;
+  const pnl      = pos.realized_pnl || 0;
+  const pnlPct   = pos.position_size > 0 ? (pnl / pos.position_size * 100) : 0;
   const lastTrade = (pos.trades || []).slice(-1)[0] || {};
+  const duration  = formatDuration(pos.entry_date, pos.closed_at);
+  const reason    = pos.close_reason || lastTrade.tp_level || '—';
+
   return (
     <tr style={{ borderBottom:'1px solid #0d1a2a' }}>
-      <td style={{ padding:'5px 6px', color:'#e0e0e0', fontWeight:'bold', fontFamily:'monospace' }}>{pos.ticker}</td>
-      <td style={{ padding:'5px 6px', textAlign:'right', color:'#8899aa', fontSize:10 }}>{(pos.entry_date||'').slice(0,10)}</td>
-      <td style={{ padding:'5px 6px', textAlign:'right', color:'#94a3b8' }}>${fmt(pos.entry_price,2)}</td>
-      <td style={{ padding:'5px 6px', textAlign:'right', color:'#94a3b8' }}>${fmt(lastTrade.price,2)}</td>
-      <td style={{ padding:'5px 6px', textAlign:'right', color:clr(pnl), fontWeight:'bold' }}>{pnl>=0?'+':''}{fmt(pnl,0)}</td>
-      <td style={{ padding:'5px 6px', textAlign:'right', color:clr(pnlPct) }}>{pct(pnlPct)}</td>
-      <td style={{ padding:'5px 6px', textAlign:'right', color: lastTrade.tp_level?.includes('TP')? '#00ff88': lastTrade.tp_level==='SL'?'#ff4466':'#94a3b8', fontSize:10 }}>
-        {lastTrade.tp_level || '—'}
+      <td style={{ padding:'6px 6px', color:'#e0e0e0', fontWeight:'bold', fontFamily:'monospace' }}>{pos.ticker}</td>
+      <td style={{ padding:'6px 6px', textAlign:'right', color:'#8899aa', fontSize:10 }}>{(pos.entry_date||'').slice(0,10)}</td>
+      <td style={{ padding:'6px 6px', textAlign:'right', color:'#94a3b8' }}>${fmt(pos.entry_price,2)}</td>
+      <td style={{ padding:'6px 6px', textAlign:'right', color:'#94a3b8' }}>${fmt(lastTrade.price,2)}</td>
+      <td style={{ padding:'6px 6px', textAlign:'right', color:clr(pnl), fontWeight:'bold' }}>{pnl>=0?'+':''}{fmt(pnl,0)}</td>
+      <td style={{ padding:'6px 6px', textAlign:'right', color:clr(pnlPct) }}>{pct(pnlPct)}</td>
+      {/* Duration */}
+      <td style={{ padding:'6px 6px', textAlign:'right', color:'#8899aa', fontSize:10 }}>
+        <span style={{ display:'inline-flex', alignItems:'center', gap:3 }}>
+          <Clock size={9} color="#2a4a5a" /> {duration}
+        </span>
+      </td>
+      {/* Close reason */}
+      <td style={{ padding:'6px 6px', textAlign:'left', color: reason.includes('TP') ? '#00ff88' : reason.toLowerCase().includes('stop') || reason === 'SL' ? '#ff4466' : '#94a3b8', fontSize:10, maxWidth:180 }}>
+        {reason}
       </td>
     </tr>
   );
 };
 
 export default function PortfolioTab() {
-  const [data, setData]         = useState(null);
-  const [loading, setLoading]   = useState(false);
-  const [checking, setChecking] = useState(false);
+  const [data, setData]             = useState(null);
+  const [loading, setLoading]       = useState(false);
+  const [checking, setChecking]     = useState(false);
   const [openTicker, setOpenTicker] = useState('');
   const [autoRefresh, setAutoRefresh] = useState(true);
-  const [countdown, setCountdown]    = useState(30);
-  const [error, setError]       = useState(null);
-  const [activeTab, setActiveTab] = useState('open');
+  const [countdown, setCountdown]   = useState(30);
+  const [error, setError]           = useState(null);
 
   const load = useCallback(async (silent = false) => {
     if (!silent) setLoading(true);
@@ -141,7 +170,6 @@ export default function PortfolioTab() {
     if (!openTicker.trim()) return;
     setLoading(true);
     try {
-      // First get scan data for the ticker
       const scanRes = await fetch(`${API()}/api/scan`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
@@ -150,7 +178,7 @@ export default function PortfolioTab() {
       const scanData = await scanRes.json();
       const best = (scanData.results || [])[0];
       if (!best || best.hard_fail) {
-        setError(`${openTicker}: No valid signal (hard fail or no data)`);
+        setError(`${openTicker}: No valid signal`);
         setLoading(false);
         return;
       }
@@ -198,7 +226,6 @@ export default function PortfolioTab() {
 
   useEffect(() => { load(); }, [load]);
 
-  // Auto-refresh
   useEffect(() => {
     if (!autoRefresh) return;
     const timer = setInterval(() => {
@@ -210,11 +237,11 @@ export default function PortfolioTab() {
     return () => clearInterval(timer);
   }, [autoRefresh]);
 
-  const s     = data?.stats || {};
-  const state = data?.state || {};
-  const openPositions  = data?.open_positions  || [];
+  const s               = data?.stats || {};
+  const openPositions   = data?.open_positions  || [];
   const closedPositions = (data?.closed_positions || []).slice().reverse();
-  const slots = Math.max(0, 5 - openPositions.length);
+  // Use slots_available from API if available, else compute from MAX_SLOTS
+  const slots    = s.slots_available != null ? s.slots_available : Math.max(0, MAX_SLOTS - openPositions.length);
   const totalPnl = s.total_pnl || 0;
 
   return (
@@ -228,7 +255,7 @@ export default function PortfolioTab() {
           </div>
           <div>
             <div style={{ fontSize:18, fontWeight:'bold', color:'#fff', letterSpacing:1 }}>ACTIVE PORTFOLIO</div>
-            <div style={{ fontSize:11, color:'#8899aa' }}>Paper trading · $25K starting capital · Max 5 positions · $500 risk/trade</div>
+            <div style={{ fontSize:11, color:'#8899aa' }}>Paper trading · $25K starting capital · Max {MAX_SLOTS} positions · $5,000/trade · $500 risk/trade</div>
           </div>
         </div>
         <div style={{ display:'flex', gap:8, alignItems:'center' }}>
@@ -246,7 +273,11 @@ export default function PortfolioTab() {
         </div>
       </div>
 
-      {error && <div style={{ background:'rgba(255,68,102,0.1)', border:'1px solid #ff4466', borderRadius:8, padding:10, marginBottom:14, color:'#ff4466', fontSize:12 }}>{error} <span style={{ cursor:'pointer', float:'right' }} onClick={() => setError(null)}>✕</span></div>}
+      {error && (
+        <div style={{ background:'rgba(255,68,102,0.1)', border:'1px solid #ff4466', borderRadius:8, padding:10, marginBottom:14, color:'#ff4466', fontSize:12 }}>
+          {error} <span style={{ cursor:'pointer', float:'right' }} onClick={() => setError(null)}>✕</span>
+        </div>
+      )}
 
       {/* Stats row */}
       <div style={{ display:'flex', gap:10, marginBottom:20, flexWrap:'wrap' }}>
@@ -263,7 +294,7 @@ export default function PortfolioTab() {
       <div style={{ background:'#0a1018', border:'1px solid #1a2535', borderRadius:10, padding:16, marginBottom:20 }}>
         <div style={{ display:'flex', justifyContent:'space-between', alignItems:'center', marginBottom:12 }}>
           <div style={{ fontSize:13, fontWeight:'bold', color:'#00d4ff', letterSpacing:1 }}>
-            POSITIONS — {openPositions.length}/5 SLOTS USED
+            POSITIONS — {openPositions.length}/{MAX_SLOTS} SLOTS USED
           </div>
           <div style={{ display:'flex', gap:8 }}>
             <input value={openTicker} onChange={e => setOpenTicker(e.target.value.toUpperCase())}
@@ -311,8 +342,8 @@ export default function PortfolioTab() {
             <table style={{ width:'100%', borderCollapse:'collapse', fontSize:11, fontFamily:'monospace' }}>
               <thead>
                 <tr style={{ borderBottom:'1px solid #1a2535' }}>
-                  {['Ticker','Date','Entry','Exit','P&L $','P&L %','Result'].map(h => (
-                    <th key={h} style={{ padding:'6px 6px', textAlign:'right', color:'#8899aa', fontSize:9, fontWeight:'normal', letterSpacing:1 }}>{h}</th>
+                  {['Ticker','Date','Entry','Exit','P&L $','P&L %','Duration','Close Reason'].map(h => (
+                    <th key={h} style={{ padding:'6px 6px', textAlign: h==='Close Reason' ? 'left' : 'right', color:'#8899aa', fontSize:9, fontWeight:'normal', letterSpacing:1 }}>{h}</th>
                   ))}
                 </tr>
               </thead>
