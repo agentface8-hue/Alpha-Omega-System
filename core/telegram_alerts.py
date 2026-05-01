@@ -1,6 +1,6 @@
 """
 telegram_alerts.py — Push trading alerts to Telegram.
-Sends to both personal chat and group simultaneously.
+Sends to the alphaomega group chat only.
 """
 import os
 import urllib.request
@@ -13,9 +13,9 @@ from typing import Optional
 logger = logging.getLogger(__name__)
 
 TELEGRAM_TOKEN   = "8691159247:AAEfGEBQgXBqXvA9RCO67cFCwwtDaFrNRH4"
-PERSONAL_CHAT_ID = "5812682751"
+PERSONAL_CHAT_ID = "5812682751"   # kept for reference / ALLOWED_CHAT_IDS
 GROUP_CHAT_ID    = "-5228475615"
-CHAT_IDS         = [PERSONAL_CHAT_ID, GROUP_CHAT_ID]
+CHAT_IDS         = [GROUP_CHAT_ID]  # alerts → group only
 
 
 def _send(text: str, parse_mode: str = "HTML") -> bool:
@@ -142,7 +142,6 @@ def test_alert():
     text = (
         f"🧪 <b>Alpha-Omega Alert Test</b>\n"
         f"━━━━━━━━━━━━━━━━━━\n"
-        f"✅ Personal chat: working\n"
         f"✅ Group chat: working\n"
         f"🕐 {datetime.utcnow().strftime('%H:%M UTC')}"
     )

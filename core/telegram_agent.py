@@ -1,22 +1,22 @@
-"""
-telegram_agent.py — AI-powered Telegram bot for Alpha-Omega.
-You message it → Claude interprets → system executes → you get results.
+﻿"""
+telegram_agent.py â€” AI-powered Telegram bot for Alpha-Omega.
+You message it â†’ Claude interprets â†’ system executes â†’ you get results.
 
 Commands (natural language or slash):
-  /status        — portfolio + signal tracker summary
-  /scan          — run dual-direction scan
-  /portfolio     — portfolio P&L snapshot
-  /check         — refresh all prices now
-  /open AAPL     — open long position on AAPL
-  /short TSLA    — open short position on TSLA
-  /close all     — close all open positions
-  /close AAPL    — close specific position
-  /signals       — active signals summary
-  /autopilot     — run autopilot on all systems
-  /regime        — current market regime + strategy mode
-  /futures       — futures snapshot
-  /learn         — run self-calibration now
-  /help          — show all commands
+  /status        â€” portfolio + signal tracker summary
+  /scan          â€” run dual-direction scan
+  /portfolio     â€” portfolio P&L snapshot
+  /check         â€” refresh all prices now
+  /open AAPL     â€” open long position on AAPL
+  /short TSLA    â€” open short position on TSLA
+  /close all     â€” close all open positions
+  /close AAPL    â€” close specific position
+  /signals       â€” active signals summary
+  /autopilot     â€” run autopilot on all systems
+  /regime        â€” current market regime + strategy mode
+  /futures       â€” futures snapshot
+  /learn         â€” run self-calibration now
+  /help          â€” show all commands
 
 Architecture:
   - Polls Telegram for new messages every 5s
@@ -41,7 +41,7 @@ ALLOWED_CHAT_IDS = {PERSONAL_ID, GROUP_ID}
 _last_update_id = 0
 
 
-# ── Telegram helpers ──────────────────────────────────────────────────────────
+# â”€â”€ Telegram helpers â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 
 def _tg_request(method: str, data: dict) -> Optional[dict]:
     try:
@@ -74,7 +74,7 @@ def _get_updates(offset: int) -> list:
     return []
 
 
-# ── Claude intent parser ──────────────────────────────────────────────────────
+# â”€â”€ Claude intent parser â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 
 SYSTEM_PROMPT = """You are the AI agent for Alpha-Omega, an AI trading system.
 Parse user messages and return ONLY a JSON object with:
@@ -86,39 +86,37 @@ Parse user messages and return ONLY a JSON object with:
 }
 
 Examples:
-"scan now" → {"action":"scan","ticker":null,"close_all":false,"reply":"Running dual scan now..."}
-"open NVDA" → {"action":"open_long","ticker":"NVDA","close_all":false,"reply":"Opening NVDA long position..."}
-"short TSLA" → {"action":"open_short","ticker":"TSLA","close_all":false,"reply":"Opening TSLA short..."}
-"close all" → {"action":"close","ticker":null,"close_all":true,"reply":"Closing all positions..."}
-"close AAPL" → {"action":"close","ticker":"AAPL","close_all":false,"reply":"Closing AAPL..."}
-"how is the portfolio" → {"action":"portfolio","ticker":null,"close_all":false,"reply":"Checking portfolio..."}
-"what's the market doing" → {"action":"regime","ticker":null,"close_all":false,"reply":"Checking regime..."}
-"run autopilot" → {"action":"autopilot","ticker":null,"close_all":false,"reply":"Running autopilot..."}
+"scan now" â†’ {"action":"scan","ticker":null,"close_all":false,"reply":"Running dual scan now..."}
+"open NVDA" â†’ {"action":"open_long","ticker":"NVDA","close_all":false,"reply":"Opening NVDA long position..."}
+"short TSLA" â†’ {"action":"open_short","ticker":"TSLA","close_all":false,"reply":"Opening TSLA short..."}
+"close all" â†’ {"action":"close","ticker":null,"close_all":true,"reply":"Closing all positions..."}
+"close AAPL" â†’ {"action":"close","ticker":"AAPL","close_all":false,"reply":"Closing AAPL..."}
+"how is the portfolio" â†’ {"action":"portfolio","ticker":null,"close_all":false,"reply":"Checking portfolio..."}
+"what's the market doing" â†’ {"action":"regime","ticker":null,"close_all":false,"reply":"Checking regime..."}
+"run autopilot" â†’ {"action":"autopilot","ticker":null,"close_all":false,"reply":"Running autopilot..."}
 Return ONLY valid JSON. No markdown, no explanation."""
 
 
 def _parse_intent(text: str) -> Dict:
-    """Parse user intent — Claude if API key available, else robust keyword fallback."""
-    api_key = os.environ.get("ANTHROPIC_API_KEY", "").strip()
+    """Parse user intent â€” Claude if API key available, else robust keyword fallback."""
+    api_key = os.environ.get("GOOGLE_API_KEY", "").strip()
     if api_key:
         try:
-            import anthropic
-            client = anthropic.Anthropic(api_key=api_key)
-            msg = client.messages.create(
-                model="claude-sonnet-4-20250514",
-                max_tokens=200,
-                system=SYSTEM_PROMPT,
-                messages=[{"role": "user", "content": text}],
-            )
-            raw = msg.content[0].text.strip().replace("```json","").replace("```","").strip()
+            import urllib.request as _ur
+            url = f"https://generativelanguage.googleapis.com/v1beta/models/gemini-2.0-flash:generateContent?key={api_key}"
+            body = json.dumps({"contents": [{"parts": [{"text": SYSTEM_PROMPT + chr(10) + "User: " + text}]}], "generationConfig": {"maxOutputTokens": 200}}).encode()
+            req = _ur.Request(url, data=body, headers={"Content-Type": "application/json"})
+            with _ur.urlopen(req, timeout=15) as r:
+                resp = json.loads(r.read().decode())
+            raw = resp["candidates"][0]["content"]["parts"][0]["text"].strip().replace("```json","").replace("```","").strip()
             return json.loads(raw)
         except Exception as e:
-            logger.warning(f"[AGENT] Claude parse failed, using fallback: {e}")
+            logger.warning(f"[AGENT] Gemini parse failed, using fallback: {e}")
 
-    # ── Robust keyword fallback (works with no API key) ──────────────────────
+    # â”€â”€ Robust keyword fallback (works with no API key) â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
     t = text.lower().strip().lstrip("/")
 
-    # Extract ticker — any ALL-CAPS word 1-5 chars that's not a command word
+    # Extract ticker â€” any ALL-CAPS word 1-5 chars that's not a command word
     import re
     COMMANDS = {"status","scan","portfolio","check","open","short","close",
                 "autopilot","regime","futures","learn","help","start","hi","hello"}
@@ -160,7 +158,7 @@ def _parse_intent(text: str) -> Dict:
             "reply":"I didn't understand that. Type /help for all commands."}
 
 
-# ── Action executor ───────────────────────────────────────────────────────────
+# â”€â”€ Action executor â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 
 def _execute(action: str, ticker: Optional[str], close_all: bool) -> str:
     """Execute the parsed action and return a formatted response string."""
@@ -174,8 +172,8 @@ def _execute(action: str, ticker: Optional[str], close_all: bool) -> str:
             stats   = sigs.get("stats", {})
             pf_stat = pf.get("stats", {})
             return (
-                f"📊 <b>System Status</b>\n"
-                f"━━━━━━━━━━━━━━━━━━\n"
+                f"ðŸ“Š <b>System Status</b>\n"
+                f"â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”\n"
                 f"<b>Signal Tracker</b>\n"
                 f"  Active: {stats.get('active_count',0)} signals\n"
                 f"  Win rate: {stats.get('win_rate',0)}%\n"
@@ -186,7 +184,7 @@ def _execute(action: str, ticker: Optional[str], close_all: bool) -> str:
                 f"  P&L: {'+' if pf_stat.get('total_pnl',0)>=0 else ''}"
                 f"${pf_stat.get('total_pnl',0):,.0f} ({pf_stat.get('total_pnl_pct',0):+.2f}%)\n"
                 f"  Open: {pf_stat.get('open_count',0)} positions\n"
-                f"🕐 {datetime.utcnow().strftime('%H:%M UTC')}"
+                f"ðŸ• {datetime.utcnow().strftime('%H:%M UTC')}"
             )
 
         elif action == "scan":
@@ -195,18 +193,18 @@ def _execute(action: str, ticker: Optional[str], close_all: bool) -> str:
             longs  = scan.get("longs", [])[:3]
             shorts = scan.get("shorts", [])[:3]
             mode   = scan.get("mode", {})
-            lines  = [f"🔍 <b>Dual Scan Complete</b> — {mode.get('label','')}\n━━━━━━━━━━━━━━━━━━"]
+            lines  = [f"ðŸ” <b>Dual Scan Complete</b> â€” {mode.get('label','')}\nâ”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”"]
             if longs:
-                lines.append("📈 <b>TOP LONGS</b>")
+                lines.append("ðŸ“ˆ <b>TOP LONGS</b>")
                 for r in longs:
                     lines.append(f"  {r['ticker']} {r['conviction_pct']}% | TP1 ${r['tp1']:.2f} | SL ${r['sl']:.2f}")
             if shorts:
-                lines.append("📉 <b>TOP SHORTS</b>")
+                lines.append("ðŸ“‰ <b>TOP SHORTS</b>")
                 for r in shorts:
                     lines.append(f"  {r['ticker']} {r['conviction_pct']}% | TP1 ${r['tp1']:.2f} | SL ${r['sl']:.2f}")
             if not longs and not shorts:
                 lines.append("No qualifying signals right now.")
-            lines.append(f"🕐 {datetime.utcnow().strftime('%H:%M UTC')}")
+            lines.append(f"ðŸ• {datetime.utcnow().strftime('%H:%M UTC')}")
             return "\n".join(lines)
 
         elif action == "portfolio":
@@ -216,7 +214,7 @@ def _execute(action: str, ticker: Optional[str], close_all: bool) -> str:
             st   = pf.get("state", {})
             open_pos = pf.get("open_positions", [])
             lines = [
-                f"💼 <b>Portfolio</b>\n━━━━━━━━━━━━━━━━━━",
+                f"ðŸ’¼ <b>Portfolio</b>\nâ”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”",
                 f"Value: <b>${stat.get('total_value',0):,.2f}</b>",
                 f"P&L: <b>{'+' if stat.get('total_pnl',0)>=0 else ''}${stat.get('total_pnl',0):,.2f}</b> ({stat.get('total_pnl_pct',0):+.2f}%)",
                 f"Cash: ${stat.get('cash',0):,.2f}",
@@ -227,11 +225,11 @@ def _execute(action: str, ticker: Optional[str], close_all: bool) -> str:
                 for p in open_pos:
                     upnl = p.get("unrealized_pnl", 0)
                     lines.append(
-                        f"  {p['ticker']} @ ${p['entry_price']} → "
+                        f"  {p['ticker']} @ ${p['entry_price']} â†’ "
                         f"{'+' if upnl>=0 else ''}${upnl:.0f} "
                         f"({p.get('unrealized_pnl_pct',0):+.2f}%)"
                     )
-            lines.append(f"🕐 {datetime.utcnow().strftime('%H:%M UTC')}")
+            lines.append(f"ðŸ• {datetime.utcnow().strftime('%H:%M UTC')}")
             return "\n".join(lines)
 
         elif action == "check":
@@ -240,7 +238,7 @@ def _execute(action: str, ticker: Optional[str], close_all: bool) -> str:
             stat   = result.get("portfolio", {}).get("stats", {})
             exits  = [u for u in result.get("updates", []) if u.get("action")]
             lines  = [
-                f"🔄 <b>Prices Refreshed</b>\n━━━━━━━━━━━━━━━━━━",
+                f"ðŸ”„ <b>Prices Refreshed</b>\nâ”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”",
                 f"Total P&L: {'+' if stat.get('total_pnl',0)>=0 else ''}${stat.get('total_pnl',0):,.0f}",
             ]
             if exits:
@@ -249,7 +247,7 @@ def _execute(action: str, ticker: Optional[str], close_all: bool) -> str:
                     lines.append(f"  {ex['ticker']}: {ex['action']}")
             else:
                 lines.append("No exits triggered.")
-            lines.append(f"🕐 {datetime.utcnow().strftime('%H:%M UTC')}")
+            lines.append(f"ðŸ• {datetime.utcnow().strftime('%H:%M UTC')}")
             return "\n".join(lines)
 
         elif action == "open_long" and ticker:
@@ -260,7 +258,7 @@ def _execute(action: str, ticker: Optional[str], close_all: bool) -> str:
             regime  = fetch_market_regime()
             scored  = score_ticker(data, regime)
             if scored.get("hard_fail"):
-                return f"⚠️ <b>{ticker.upper()}</b> hard fail: {scored.get('hard_fail_reason','')}"
+                return f"âš ï¸ <b>{ticker.upper()}</b> hard fail: {scored.get('hard_fail_reason','')}"
             result = open_position(
                 ticker=ticker.upper(),
                 entry_price=scored.get("entry_high", scored["last_close"]),
@@ -268,9 +266,9 @@ def _execute(action: str, ticker: Optional[str], close_all: bool) -> str:
                 conviction=scored["conviction_pct"],
             )
             if "error" in result:
-                return f"❌ Cannot open {ticker.upper()}: {result['error']}"
+                return f"âŒ Cannot open {ticker.upper()}: {result['error']}"
             return (
-                f"✅ <b>LONG OPENED — {ticker.upper()}</b>\n"
+                f"âœ… <b>LONG OPENED â€” {ticker.upper()}</b>\n"
                 f"Entry: ${result['entry_price']:.2f}\n"
                 f"SL: ${result['sl']:.2f} | TP1: ${result['tp1']:.2f}\n"
                 f"Shares: {result['shares']} | Risk: ${result['risk_actual']:.0f}\n"
@@ -285,7 +283,7 @@ def _execute(action: str, ticker: Optional[str], close_all: bool) -> str:
             regime = fetch_market_regime()
             scored = score_short(data, regime)
             if scored.get("hard_fail"):
-                return f"⚠️ <b>{ticker.upper()}</b> short fail: {scored.get('hard_fail_reason','')}"
+                return f"âš ï¸ <b>{ticker.upper()}</b> short fail: {scored.get('hard_fail_reason','')}"
             result = open_print_pos(
                 ticker=ticker.upper(), direction="short",
                 entry_price=scored["entry"],
@@ -295,9 +293,9 @@ def _execute(action: str, ticker: Optional[str], close_all: bool) -> str:
                 conviction=scored["conviction_pct"],
             )
             if "error" in result:
-                return f"❌ Cannot short {ticker.upper()}: {result['error']}"
+                return f"âŒ Cannot short {ticker.upper()}: {result['error']}"
             return (
-                f"📉 <b>SHORT OPENED — {ticker.upper()}</b>\n"
+                f"ðŸ“‰ <b>SHORT OPENED â€” {ticker.upper()}</b>\n"
                 f"Entry: ${result['entry_price']:.2f}\n"
                 f"SL: ${result['sl']:.2f} | TP1: ${result['tp1']:.2f}\n"
                 f"Shares: {result['shares']} | Risk: ${result['risk_usd']:.0f}\n"
@@ -309,29 +307,29 @@ def _execute(action: str, ticker: Optional[str], close_all: bool) -> str:
             pf = get_portfolio()
             positions = pf.get("open_positions", [])
             if not positions:
-                return "📭 No open positions to close."
+                return "ðŸ“­ No open positions to close."
             if close_all:
                 results = [close_position(p["id"]) for p in positions]
                 total_pnl = sum(r.get("pnl", 0) for r in results if "pnl" in r)
                 return (
-                    f"🔒 <b>All positions closed</b>\n"
+                    f"ðŸ”’ <b>All positions closed</b>\n"
                     f"Closed: {len(results)} positions\n"
                     f"Total P&L: {'+' if total_pnl>=0 else ''}${total_pnl:.0f}"
                 )
             elif ticker:
                 pos = next((p for p in positions if p["ticker"] == ticker.upper()), None)
                 if not pos:
-                    return f"❌ No open position found for {ticker.upper()}"
+                    return f"âŒ No open position found for {ticker.upper()}"
                 r = close_position(pos["id"])
-                return f"🔒 <b>Closed {ticker.upper()}</b>\nP&L: {'+' if r.get('pnl',0)>=0 else ''}${r.get('pnl',0):.0f}"
+                return f"ðŸ”’ <b>Closed {ticker.upper()}</b>\nP&L: {'+' if r.get('pnl',0)>=0 else ''}${r.get('pnl',0):.0f}"
 
         elif action == "autopilot":
             from core.portfolio_manager import autopilot_fill
             result = autopilot_fill()
             opened = result.get("opened", [])
             if not opened:
-                return f"🤖 Autopilot: {result.get('message', 'No qualifying signals')}"
-            lines = [f"🤖 <b>Autopilot Filled {len(opened)} Slots</b>"]
+                return f"ðŸ¤– Autopilot: {result.get('message', 'No qualifying signals')}"
+            lines = [f"ðŸ¤– <b>Autopilot Filled {len(opened)} Slots</b>"]
             for o in opened:
                 lines.append(f"  {o['ticker']} @ ${o['entry']:.2f} ({o['conviction']}%)")
             return "\n".join(lines)
@@ -342,14 +340,14 @@ def _execute(action: str, ticker: Optional[str], close_all: bool) -> str:
             regime = fetch_market_regime()
             mode   = get_strategy_mode(regime)
             return (
-                f"🌡 <b>Market Regime</b>\n━━━━━━━━━━━━━━━━━━\n"
+                f"ðŸŒ¡ <b>Market Regime</b>\nâ”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”\n"
                 f"Regime: <b>{regime['regime']}</b>\n"
                 f"VIX: <b>{regime['vix']}</b>\n"
                 f"SPY: ${regime['spy_close']} ({regime['spy_change_pct']:+.2f}%)\n\n"
                 f"Strategy Mode: <b>{mode['label']}</b>\n"
                 f"{mode['description']}\n"
-                f"Longs: {'✅' if mode['long_enabled'] else '❌'}  "
-                f"Shorts: {'✅' if mode['short_enabled'] else '❌'}\n"
+                f"Longs: {'âœ…' if mode['long_enabled'] else 'âŒ'}  "
+                f"Shorts: {'âœ…' if mode['short_enabled'] else 'âŒ'}\n"
                 f"Edge: {mode['expected_edge']}"
             )
 
@@ -358,12 +356,12 @@ def _execute(action: str, ticker: Optional[str], close_all: bool) -> str:
             data = fetch_all_futures()
             session = data.get("session", {})
             lines = [
-                f"📊 <b>Futures</b> — {session.get('et_time','')}\n"
-                f"{session.get('label','')}\n━━━━━━━━━━━━━━━━━━"
+                f"ðŸ“Š <b>Futures</b> â€” {session.get('et_time','')}\n"
+                f"{session.get('label','')}\nâ”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”"
             ]
             for sym, f in data.get("futures", {}).items():
                 if f.get("error"): continue
-                trend_e = "🟢" if f["trend"]=="BULL" else "🔴"
+                trend_e = "ðŸŸ¢" if f["trend"]=="BULL" else "ðŸ”´"
                 lines.append(
                     f"{trend_e} <b>{sym}</b> ${f['price']:,.2f} "
                     f"({f['change_pct']:+.2f}%) {f['trend']}"
@@ -374,39 +372,39 @@ def _execute(action: str, ticker: Optional[str], close_all: bool) -> str:
             from core.learning_loop import run_once
             result = run_once()
             if result.get("status") == "insufficient_data":
-                return f"📚 {result['message']}"
+                return f"ðŸ“š {result['message']}"
             return (
-                f"🧠 <b>Calibration Complete</b>\n"
+                f"ðŸ§  <b>Calibration Complete</b>\n"
                 f"Signals analyzed: {result.get('signals_analyzed', 0)}"
             )
 
         elif action == "help":
             return (
-                "🤖 <b>Alpha-Omega AI Agent Commands</b>\n"
-                "━━━━━━━━━━━━━━━━━━\n"
-                "/status — full system summary\n"
-                "/scan — run long + short scan\n"
-                "/portfolio — portfolio P&L\n"
-                "/check — refresh all prices\n"
-                "/open AAPL — open long position\n"
-                "/short TSLA — open short position\n"
-                "/close AAPL — close position\n"
-                "/close all — close everything\n"
-                "/autopilot — auto-fill all slots\n"
-                "/regime — market regime + strategy\n"
-                "/futures — ES/NQ/CL/GC snapshot\n"
-                "/learn — run self-calibration\n\n"
-                "💬 Or just type naturally — I understand plain English."
+                "ðŸ¤– <b>Alpha-Omega AI Agent Commands</b>\n"
+                "â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”\n"
+                "/status â€” full system summary\n"
+                "/scan â€” run long + short scan\n"
+                "/portfolio â€” portfolio P&L\n"
+                "/check â€” refresh all prices\n"
+                "/open AAPL â€” open long position\n"
+                "/short TSLA â€” open short position\n"
+                "/close AAPL â€” close position\n"
+                "/close all â€” close everything\n"
+                "/autopilot â€” auto-fill all slots\n"
+                "/regime â€” market regime + strategy\n"
+                "/futures â€” ES/NQ/CL/GC snapshot\n"
+                "/learn â€” run self-calibration\n\n"
+                "ðŸ’¬ Or just type naturally â€” I understand plain English."
             )
 
-        return f"❓ Unknown action: {action}"
+        return f"â“ Unknown action: {action}"
 
     except Exception as e:
         logger.error(f"[AGENT] Execute error: {e}", exc_info=True)
-        return f"⚠️ Error executing {action}: {str(e)[:100]}"
+        return f"âš ï¸ Error executing {action}: {str(e)[:100]}"
 
 
-# ── Message handler ───────────────────────────────────────────────────────────
+# â”€â”€ Message handler â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 
 def _handle_message(update: dict):
     msg     = update.get("message", {})
@@ -426,17 +424,17 @@ def _handle_message(update: dict):
 
     # Send acknowledgement immediately
     ack = intent.get("reply", "Processing...")
-    _send(chat_id, f"⚙️ {ack}")
+    _send(chat_id, f"âš™ï¸ {ack}")
 
     # Execute and send result
     if action != "unknown":
         result = _execute(action, ticker, close_all)
         _send(chat_id, result)
     else:
-        _send(chat_id, "❓ I didn't understand that. Type /help for available commands.")
+        _send(chat_id, "â“ I didn't understand that. Type /help for available commands.")
 
 
-# ── Polling loop ──────────────────────────────────────────────────────────────
+# â”€â”€ Polling loop â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 
 def _poll_loop():
     global _last_update_id
@@ -456,14 +454,15 @@ def start():
     t = threading.Thread(target=_poll_loop, daemon=True, name="telegram_agent")
     t.start()
     logger.info("[AGENT] Telegram AI Agent started")
-    # Send startup notification
+    # Send startup notification to group only
     try:
-        _send(PERSONAL_ID,
-            "🤖 <b>Alpha-Omega AI Agent Online</b>\n"
-            "━━━━━━━━━━━━━━━━━━\n"
+        _send(GROUP_ID,
+            "ðŸ¤– <b>Alpha-Omega AI Agent Online</b>\n"
+            "â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”\n"
             "I'm monitoring the system 24/7.\n"
             "Type /help to see what I can do.\n"
-            f"🕐 {datetime.utcnow().strftime('%H:%M UTC')}"
+            f"ðŸ• {datetime.utcnow().strftime('%H:%M UTC')}"
         )
     except:
         pass
+
