@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useCallback } from 'react';
-import { TrendingUp, TrendingDown, RefreshCw, X, Zap, RotateCcw, DollarSign, Target, BarChart2, Clock, ChevronDown, ChevronRight } from 'lucide-react';
+import { RefreshCw, Zap, RotateCcw, Target, BarChart2, Clock, ChevronDown, ChevronRight, TrendingUp, TrendingDown, AlertTriangle } from 'lucide-react';
 
 const API = () => import.meta.env.VITE_API_URL || 'http://127.0.0.1:8000';
 const fmt  = (n, d=2) => (n == null ? '—' : Number(n).toFixed(d));
@@ -7,7 +7,6 @@ const pct  = n => `${n > 0 ? '+' : ''}${fmt(n)}%`;
 const usd  = n => `$${fmt(n, 0).replace(/\B(?=(\d{3})+(?!\d))/g, ',')}`;
 const clr  = n => n > 0 ? '#00ff88' : n < 0 ? '#ff4466' : '#94a3b8';
 const heatClr = c => c >= 75 ? '#00ff88' : c >= 60 ? '#fbbf24' : '#94a3b8';
-
 const MAX_SLOTS = 10;
 
 const formatDuration = (startIso, endIso = null) => {
@@ -27,45 +26,31 @@ const formatDuration = (startIso, endIso = null) => {
   } catch { return '—'; }
 };
 
-// Build a full close reason from whatever data the position has
 const buildCloseReason = (pos) => {
-  // If backend already stored a full reason, use it
   if (pos.close_reason && pos.close_reason.length > 5) return pos.close_reason;
-
-  const lastTrade  = (pos.trades || []).slice(-1)[0] || {};
-  const level      = lastTrade.tp_level || '';
-  const exitPrice  = lastTrade.price;
-  const entry      = pos.entry_price;
-  const pnl        = pos.realized_pnl || 0;
-  const absP       = Math.abs(pnl).toFixed(0);
-  const pnlSign    = pnl >= 0 ? '+' : '-';
-
-  if (level === 'SL' || level?.toLowerCase().includes('stop')) {
-    return `Stop-loss hit @ $${fmt(exitPrice, 2)} (entry $${fmt(entry, 2)}, loss $${absP})`;
-  }
-  if (level === 'TP3') {
-    return `TP3 hit @ $${fmt(exitPrice, 2)} — full target reached (${pnlSign}$${absP})`;
-  }
-  if (level === 'TP2') {
-    return `TP2 hit @ $${fmt(exitPrice, 2)} — 2nd target (${pnlSign}$${absP})`;
-  }
-  if (level === 'TP1') {
-    return `TP1 hit @ $${fmt(exitPrice, 2)} — 1st target (${pnlSign}$${absP})`;
-  }
-  if (level === 'MANUAL' || level?.toLowerCase().includes('manual')) {
-    return `Manual close @ $${fmt(exitPrice, 2)} — ${pnl >= 0 ? 'profit' : 'loss'} ${pnlSign}$${absP}`;
-  }
-  if (level === 'TIMEOUT') {
-    return `Timeout — closed @ $${fmt(exitPrice, 2)} after max hold period (${pnlSign}$${absP})`;
-  }
-  if (level) return `${level} @ $${fmt(exitPrice, 2)} (${pnlSign}$${absP})`;
-  return `Closed @ $${fmt(exitPrice, 2)} (${pnlSign}$${absP})`;
+  const lastTrade = (pos.trades || []).slice(-1)[0] || {};
+  const level     = lastTrade.tp_level || '';
+  const exitPrice = lastTrade.price;
+  const entry     = pos.entry_price;
+  const pnl       = pos.realized_pnl || 0;
+  const absP      = Math.abs(pnl).toFixed(0);
+  const sign      = pnl >= 0 ? '+' : '-';
+  if (level === 'SL' || level?.toLowerCase().includes('stop'))
+    return `Stop-loss hit @ $${fmt(exitPrice,2)} (entry $${fmt(entry,2)}, loss $${absP})`;
+  if (level === 'TP3') return `TP3 hit @ $${fmt(exitPrice,2)} — full target reached (${sign}$${absP})`;
+  if (level === 'TP2') return `TP2 hit @ $${fmt(exitPrice,2)} — 2nd target (${sign}$${absP})`;
+  if (level === 'TP1') return `TP1 hit @ $${fmt(exitPrice,2)} — 1st target (${sign}$${absP})`;
+  if (level === 'MANUAL' || level?.toLowerCase().includes('manual'))
+    return `Manual close @ $${fmt(exitPrice,2)} — ${pnl >= 0 ? 'profit' : 'loss'} ${sign}$${absP}`;
+  if (level === 'TIMEOUT')
+    return `Timeout — closed @ $${fmt(exitPrice,2)} after max hold period (${sign}$${absP})`;
+  if (level) return `${level} @ $${fmt(exitPrice,2)} (${sign}$${absP})`;
+  return `Closed @ $${fmt(exitPrice,2)} (${sign}$${absP})`;
 };
 
 const reasonColor = (pos) => {
   const pnl = pos.realized_pnl || 0;
-  const lastTrade = (pos.trades || []).slice(-1)[0] || {};
-  const level = lastTrade.tp_level || '';
+  const level = ((pos.trades || []).slice(-1)[0] || {}).tp_level || '';
   if (level === 'SL' || level?.toLowerCase().includes('stop')) return '#ff4466';
   if (level?.startsWith('TP')) return '#00ff88';
   return pnl >= 0 ? '#00ff88' : '#ff4466';
@@ -79,70 +64,190 @@ const StatCard = ({ label, value, sub, color, small }) => (
   </div>
 );
 
+// ── Open position card — clickable, expands full detail panel ──────────────
 const PositionCard = ({ pos, onClose }) => {
-  const pnl    = pos.unrealized_pnl || 0;
-  const pnlPct = pos.unrealized_pnl_pct || 0;
-  const entry  = pos.entry_price;
-  const curr   = pos.current_price || entry;
-  const sl     = pos.sl;
-  const tp1    = pos.tp1;
-  const tp2    = pos.tp2;
-  const tp3    = pos.tp3;
+  const [expanded, setExpanded] = useState(false);
+  const pnl       = pos.unrealized_pnl || 0;
+  const pnlPct    = pos.unrealized_pnl_pct || 0;
+  const entry     = pos.entry_price;
+  const curr      = pos.current_price || entry;
+  const sl        = pos.sl;
+  const tp1       = pos.tp1;
+  const tp2       = pos.tp2;
+  const tp3       = pos.tp3;
   const isPartial = pos.status === 'partial';
   const duration  = formatDuration(pos.entry_date);
-  const range    = tp1 - sl;
-  const progress = range > 0 ? Math.min(100, Math.max(0, (curr - sl) / range * 100)) : 0;
-  const barColor = pnl >= 0 ? '#00ff88' : '#ff4466';
+  const range     = tp1 - sl;
+  const progress  = range > 0 ? Math.min(100, Math.max(0, (curr - sl) / range * 100)) : 0;
+  const barColor  = pnl >= 0 ? '#00ff88' : '#ff4466';
+
+  // Distances to targets
+  const distToSL  = ((curr - sl) / curr * 100).toFixed(2);
+  const distToTP1 = ((tp1 - curr) / curr * 100).toFixed(2);
+  const distToTP2 = ((tp2 - curr) / curr * 100).toFixed(2);
+  const distToTP3 = ((tp3 - curr) / curr * 100).toFixed(2);
+  const rr        = range > 0 ? ((tp1 - entry) / (entry - sl)).toFixed(2) : '—';
+
+  // MAE/MFE as %
+  const maePct = entry > 0 ? (pos.mae / entry * 100).toFixed(2) : 0;
+  const mfePct = entry > 0 ? (pos.mfe / entry * 100).toFixed(2) : 0;
+
+  // Risk status
+  const atRisk = curr <= sl * 1.02;  // within 2% of SL
+  const nearTP1 = curr >= tp1 * 0.98;
 
   return (
-    <div style={{ background:'#0a1018', border:`1px solid ${pnl >= 0 ? '#1a3525' : '#351a1a'}`, borderRadius:10, padding:14, marginBottom:10 }}>
-      <div style={{ display:'flex', justifyContent:'space-between', alignItems:'center', marginBottom:10 }}>
-        <div style={{ display:'flex', alignItems:'center', gap:8 }}>
-          <span style={{ fontSize:16, fontWeight:'bold', color:'#e0e0e0', fontFamily:'monospace' }}>{pos.ticker}</span>
-          {isPartial && <span style={{ fontSize:9, background:'rgba(251,191,36,0.15)', color:'#fbbf24', borderRadius:4, padding:'2px 6px', border:'1px solid #fbbf24' }}>PARTIAL</span>}
-          {pos.tp1_hit && <span style={{ fontSize:9, background:'rgba(0,255,136,0.1)', color:'#00ff88', borderRadius:4, padding:'2px 6px' }}>TP1✓</span>}
-          {pos.tp2_hit && <span style={{ fontSize:9, background:'rgba(0,255,136,0.15)', color:'#00ff88', borderRadius:4, padding:'2px 6px' }}>TP2✓</span>}
-          {pos.conviction > 0 && <span style={{ fontSize:9, color:heatClr(pos.conviction), fontFamily:'monospace' }}>{pos.conviction}%</span>}
-          <span style={{ fontSize:9, color:'#00d4ff', display:'flex', alignItems:'center', gap:3, background:'rgba(0,212,255,0.08)', borderRadius:4, padding:'2px 6px' }}>
-            <Clock size={9} /> {duration}
-          </span>
-        </div>
-        <div style={{ display:'flex', alignItems:'center', gap:6 }}>
-          <span style={{ fontSize:18, fontWeight:'bold', color:clr(pnl), fontFamily:'monospace' }}>
-            {pnl >= 0 ? '+' : ''}{fmt(pnl, 0)} <span style={{ fontSize:12 }}>({pct(pnlPct)})</span>
-          </span>
-          <button onClick={() => onClose(pos.id)} style={{ background:'transparent', border:'1px solid #ff4466', borderRadius:4, padding:'3px 8px', color:'#ff4466', fontSize:10, cursor:'pointer' }}>✕ Close</button>
-        </div>
-      </div>
-      <div style={{ position:'relative', height:6, background:'#1a2535', borderRadius:3, marginBottom:10, overflow:'hidden' }}>
-        <div style={{ position:'absolute', left:0, top:0, height:'100%', width:`${progress}%`, background:barColor, borderRadius:3, transition:'width 0.5s' }} />
-      </div>
-      <div style={{ display:'grid', gridTemplateColumns:'repeat(6,1fr)', gap:6, fontSize:10, fontFamily:'monospace' }}>
-        {[
-          { label:'ENTRY', val:`$${fmt(entry,2)}`, color:'#94a3b8' },
-          { label:'PRICE', val:`$${fmt(curr,2)}`, color:clr(pnl) },
-          { label:'SL', val:`$${fmt(sl,2)}`, color:'#ff4466' },
-          { label:'TP1', val:`$${fmt(tp1,2)}`, color: pos.tp1_hit ? '#00ff88' : '#8899aa' },
-          { label:'TP2', val:`$${fmt(tp2,2)}`, color: pos.tp2_hit ? '#00ff88' : '#8899aa' },
-          { label:'TP3', val:`$${fmt(tp3,2)}`, color:'#8899aa' },
-        ].map(l => (
-          <div key={l.label} style={{ textAlign:'center' }}>
-            <div style={{ color:'#8899aa', fontSize:8, marginBottom:2 }}>{l.label}</div>
-            <div style={{ color:l.color, fontWeight:'bold' }}>{l.val}</div>
+    <div style={{
+      background: expanded ? '#0c1420' : '#0a1018',
+      border: `1px solid ${expanded ? '#c084fc44' : pnl >= 0 ? '#1a3525' : '#351a1a'}`,
+      borderRadius: 10, marginBottom: 10, overflow: 'hidden',
+      transition: 'border-color 0.2s',
+    }}>
+      {/* ── Main row — always visible ── */}
+      <div
+        onClick={() => setExpanded(e => !e)}
+        style={{ padding: 14, cursor: 'pointer' }}
+      >
+        <div style={{ display:'flex', justifyContent:'space-between', alignItems:'center', marginBottom:10 }}>
+          <div style={{ display:'flex', alignItems:'center', gap:8 }}>
+            {expanded
+              ? <ChevronDown size={13} color="#c084fc" />
+              : <ChevronRight size={13} color="#8899aa" />
+            }
+            <span style={{ fontSize:16, fontWeight:'bold', color:'#e0e0e0', fontFamily:'monospace' }}>{pos.ticker}</span>
+            {isPartial && <span style={{ fontSize:9, background:'rgba(251,191,36,0.15)', color:'#fbbf24', borderRadius:4, padding:'2px 6px', border:'1px solid #fbbf24' }}>PARTIAL</span>}
+            {pos.tp1_hit && <span style={{ fontSize:9, background:'rgba(0,255,136,0.1)', color:'#00ff88', borderRadius:4, padding:'2px 6px' }}>TP1✓</span>}
+            {pos.tp2_hit && <span style={{ fontSize:9, background:'rgba(0,255,136,0.15)', color:'#00ff88', borderRadius:4, padding:'2px 6px' }}>TP2✓</span>}
+            {pos.conviction > 0 && <span style={{ fontSize:9, color:heatClr(pos.conviction), fontFamily:'monospace' }}>{pos.conviction}%</span>}
+            <span style={{ fontSize:9, color:'#00d4ff', display:'flex', alignItems:'center', gap:3, background:'rgba(0,212,255,0.08)', borderRadius:4, padding:'2px 6px' }}>
+              <Clock size={9} /> {duration}
+            </span>
+            {atRisk && <span style={{ fontSize:9, background:'rgba(255,68,102,0.15)', color:'#ff4466', borderRadius:4, padding:'2px 6px' }}>⚠ NEAR SL</span>}
+            {nearTP1 && !pos.tp1_hit && <span style={{ fontSize:9, background:'rgba(0,255,136,0.15)', color:'#00ff88', borderRadius:4, padding:'2px 6px' }}>→ TP1</span>}
           </div>
-        ))}
+          <div style={{ display:'flex', alignItems:'center', gap:6 }}>
+            <span style={{ fontSize:18, fontWeight:'bold', color:clr(pnl), fontFamily:'monospace' }}>
+              {pnl >= 0 ? '+' : ''}{fmt(pnl, 0)} <span style={{ fontSize:12 }}>({pct(pnlPct)})</span>
+            </span>
+            <button
+              onClick={e => { e.stopPropagation(); onClose(pos.id); }}
+              style={{ background:'transparent', border:'1px solid #ff4466', borderRadius:4, padding:'3px 8px', color:'#ff4466', fontSize:10, cursor:'pointer' }}
+            >✕ Close</button>
+          </div>
+        </div>
+
+        {/* Progress bar */}
+        <div style={{ position:'relative', height:6, background:'#1a2535', borderRadius:3, marginBottom:10, overflow:'hidden' }}>
+          <div style={{ position:'absolute', left:0, top:0, height:'100%', width:`${progress}%`, background:barColor, borderRadius:3, transition:'width 0.5s' }} />
+        </div>
+
+        {/* Level grid */}
+        <div style={{ display:'grid', gridTemplateColumns:'repeat(6,1fr)', gap:6, fontSize:10, fontFamily:'monospace' }}>
+          {[
+            { label:'ENTRY', val:`$${fmt(entry,2)}`, color:'#94a3b8' },
+            { label:'PRICE', val:`$${fmt(curr,2)}`, color:clr(pnl) },
+            { label:'SL', val:`$${fmt(sl,2)}`, color:'#ff4466' },
+            { label:'TP1', val:`$${fmt(tp1,2)}`, color: pos.tp1_hit ? '#00ff88' : '#8899aa' },
+            { label:'TP2', val:`$${fmt(tp2,2)}`, color: pos.tp2_hit ? '#00ff88' : '#8899aa' },
+            { label:'TP3', val:`$${fmt(tp3,2)}`, color:'#8899aa' },
+          ].map(l => (
+            <div key={l.label} style={{ textAlign:'center' }}>
+              <div style={{ color:'#8899aa', fontSize:8, marginBottom:2 }}>{l.label}</div>
+              <div style={{ color:l.color, fontWeight:'bold' }}>{l.val}</div>
+            </div>
+          ))}
+        </div>
+
+        <div style={{ display:'flex', gap:12, marginTop:8, fontSize:10, color:'#8899aa', fontFamily:'monospace' }}>
+          <span>{pos.shares_remaining}/{pos.shares} shares</span>
+          <span>Size: ${fmt(pos.position_size, 0)}</span>
+          <span>Risk: ${fmt(pos.risk_actual, 0)}</span>
+          {pos.mae != null && <span style={{ color:'#ff4466' }}>MAE: {pct(pos.mae / entry * 100)}</span>}
+          {pos.mfe != null && <span style={{ color:'#00ff88' }}>MFE: {pct(pos.mfe / entry * 100)}</span>}
+        </div>
       </div>
-      <div style={{ display:'flex', gap:12, marginTop:8, fontSize:10, color:'#8899aa', fontFamily:'monospace' }}>
-        <span>{pos.shares_remaining}/{pos.shares} shares</span>
-        <span>Size: ${fmt(pos.position_size, 0)}</span>
-        <span>Risk: ${fmt(pos.risk_actual, 0)}</span>
-        {pos.mae != null && <span style={{ color:'#ff4466' }}>MAE: {pct(pos.mae / entry * 100)}</span>}
-        {pos.mfe != null && <span style={{ color:'#00ff88' }}>MFE: {pct(pos.mfe / entry * 100)}</span>}
-      </div>
+
+      {/* ── Expanded detail panel ── */}
+      {expanded && (
+        <div style={{ borderTop:'1px solid #1a2535', padding:'14px', background:'#080c14' }}>
+          <div style={{ display:'grid', gridTemplateColumns:'1fr 1fr 1fr', gap:14 }}>
+
+            {/* Panel 1 — Target distances */}
+            <div style={{ background:'#0d1520', border:'1px solid #1a2535', borderRadius:8, padding:'12px 14px' }}>
+              <div style={{ fontSize:8, color:'#c084fc', letterSpacing:1, marginBottom:10, fontFamily:'monospace', fontWeight:'bold' }}>TARGET DISTANCES</div>
+              <div style={{ fontSize:11, fontFamily:'monospace', lineHeight:2 }}>
+                <div style={{ display:'flex', justifyContent:'space-between' }}>
+                  <span style={{ color:'#ff4466' }}>SL</span>
+                  <span style={{ color:'#ff4466' }}>${fmt(sl,2)}</span>
+                  <span style={{ color: parseFloat(distToSL) < 2 ? '#ff4466' : '#8899aa' }}>{distToSL}% away</span>
+                </div>
+                <div style={{ display:'flex', justifyContent:'space-between' }}>
+                  <span style={{ color: pos.tp1_hit ? '#00ff88' : '#fbbf24' }}>TP1 {pos.tp1_hit ? '✓' : ''}</span>
+                  <span style={{ color:'#e0e0e0' }}>${fmt(tp1,2)}</span>
+                  <span style={{ color:'#8899aa' }}>{pos.tp1_hit ? 'hit' : `+${distToTP1}%`}</span>
+                </div>
+                <div style={{ display:'flex', justifyContent:'space-between' }}>
+                  <span style={{ color: pos.tp2_hit ? '#00ff88' : '#94a3b8' }}>TP2 {pos.tp2_hit ? '✓' : ''}</span>
+                  <span style={{ color:'#e0e0e0' }}>${fmt(tp2,2)}</span>
+                  <span style={{ color:'#8899aa' }}>{pos.tp2_hit ? 'hit' : `+${distToTP2}%`}</span>
+                </div>
+                <div style={{ display:'flex', justifyContent:'space-between' }}>
+                  <span style={{ color:'#94a3b8' }}>TP3</span>
+                  <span style={{ color:'#e0e0e0' }}>${fmt(tp3,2)}</span>
+                  <span style={{ color:'#8899aa' }}>+{distToTP3}%</span>
+                </div>
+                <div style={{ borderTop:'1px solid #1a2535', marginTop:6, paddingTop:6, display:'flex', justifyContent:'space-between' }}>
+                  <span style={{ color:'#8899aa' }}>R:R</span>
+                  <span style={{ color: parseFloat(rr) >= 2 ? '#00ff88' : '#fbbf24', fontWeight:'bold' }}>{rr}:1</span>
+                </div>
+              </div>
+            </div>
+
+            {/* Panel 2 — Position stats */}
+            <div style={{ background:'#0d1520', border:'1px solid #1a2535', borderRadius:8, padding:'12px 14px' }}>
+              <div style={{ fontSize:8, color:'#c084fc', letterSpacing:1, marginBottom:10, fontFamily:'monospace', fontWeight:'bold' }}>POSITION STATS</div>
+              <div style={{ fontSize:11, fontFamily:'monospace', lineHeight:2, color:'#94a3b8' }}>
+                <div>Unrealized P&L: <b style={{color:clr(pnl)}}>{pnl>=0?'+':''}{fmt(pnl,0)} ({pct(pnlPct)})</b></div>
+                <div>Realized P&L: <b style={{color:clr(pos.realized_pnl||0)}}>{(pos.realized_pnl||0)>=0?'+':''}{fmt(pos.realized_pnl||0,0)}</b></div>
+                <div>Shares held: <b style={{color:'#e0e0e0'}}>{pos.shares_remaining} / {pos.shares}</b></div>
+                <div>Position size: <b style={{color:'#e0e0e0'}}>${fmt(pos.position_size,0)}</b></div>
+                <div>Risk amount: <b style={{color:'#ff4466'}}>${fmt(pos.risk_actual,0)}</b></div>
+                <div>Time open: <b style={{color:'#00d4ff'}}>{duration}</b></div>
+                <div>MAE: <b style={{color:'#ff4466'}}>{maePct}%</b> · MFE: <b style={{color:'#00ff88'}}>+{mfePct}%</b></div>
+              </div>
+            </div>
+
+            {/* Panel 3 — Trade log */}
+            <div style={{ background:'#0d1520', border:'1px solid #1a2535', borderRadius:8, padding:'12px 14px' }}>
+              <div style={{ fontSize:8, color:'#c084fc', letterSpacing:1, marginBottom:10, fontFamily:'monospace', fontWeight:'bold' }}>TRADE LOG</div>
+              {(pos.trades || []).length === 0 && (
+                <div style={{ fontSize:10, color:'#2a4a5a' }}>No trades recorded</div>
+              )}
+              {(pos.trades || []).map((t, i) => (
+                <div key={i} style={{ fontSize:10, fontFamily:'monospace', lineHeight:1.8, borderBottom:'1px solid #0d1520', paddingBottom:4, marginBottom:4 }}>
+                  <div style={{ display:'flex', justifyContent:'space-between' }}>
+                    <span style={{ color: t.type==='entry'?'#00d4ff': t.pnl>=0?'#00ff88':'#ff4466', fontWeight:'bold' }}>
+                      {t.type?.replace(/_/g,' ').toUpperCase()}
+                    </span>
+                    {t.pnl != null && t.type !== 'entry' && (
+                      <span style={{ color: t.pnl>=0?'#00ff88':'#ff4466' }}>{t.pnl>=0?'+':''}{fmt(t.pnl,0)}</span>
+                    )}
+                  </div>
+                  <div style={{ color:'#8899aa' }}>
+                    @ ${fmt(t.price,2)} · {t.shares} shares
+                    {t.executed_at && <span style={{ color:'#2a4a5a' }}> · {t.executed_at.slice(11,16)}</span>}
+                  </div>
+                </div>
+              ))}
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 };
 
+// ── Closed trade row — clickable, expands full detail panel ───────────────
 const ClosedRow = ({ pos }) => {
   const [expanded, setExpanded] = useState(false);
   const pnl       = pos.realized_pnl || 0;
@@ -175,35 +280,20 @@ const ClosedRow = ({ pos }) => {
             <Clock size={9} color="#2a4a5a" /> {duration}
           </span>
         </td>
-        {/* Close reason — short summary, full on expand */}
         <td style={{ padding:'8px 6px', textAlign:'left', fontSize:10 }}>
-          <span style={{
-            color: rColor,
-            background: `${rColor}15`,
-            border: `1px solid ${rColor}33`,
-            borderRadius: 4,
-            padding: '2px 7px',
-            fontWeight: 'bold',
-            whiteSpace: 'nowrap',
-          }}>
+          <span style={{ color:rColor, background:`${rColor}15`, border:`1px solid ${rColor}33`, borderRadius:4, padding:'2px 7px', fontWeight:'bold', whiteSpace:'nowrap' }}>
             {lastTrade.tp_level || (isWin ? 'WIN' : 'LOSS')}
           </span>
         </td>
       </tr>
-
-      {/* Expanded row — full details */}
       {expanded && (
         <tr style={{ borderBottom:'1px solid #0d1a2a', background:'#080c14' }}>
           <td colSpan={8} style={{ padding:'10px 14px' }}>
             <div style={{ display:'grid', gridTemplateColumns:'1fr 1fr 1fr', gap:16 }}>
-
-              {/* Close reason */}
-              <div style={{ background: `${rColor}0d`, border:`1px solid ${rColor}33`, borderRadius:8, padding:'10px 14px' }}>
+              <div style={{ background:`${rColor}0d`, border:`1px solid ${rColor}33`, borderRadius:8, padding:'10px 14px' }}>
                 <div style={{ fontSize:8, color:'#8899aa', letterSpacing:1, marginBottom:5, fontFamily:'monospace' }}>CLOSE REASON</div>
-                <div style={{ fontSize:12, color: rColor, fontWeight:'bold', lineHeight:1.5 }}>{fullReason}</div>
+                <div style={{ fontSize:12, color:rColor, fontWeight:'bold', lineHeight:1.5 }}>{fullReason}</div>
               </div>
-
-              {/* Trade stats */}
               <div style={{ background:'#0d1520', border:'1px solid #1a2535', borderRadius:8, padding:'10px 14px' }}>
                 <div style={{ fontSize:8, color:'#8899aa', letterSpacing:1, marginBottom:8, fontFamily:'monospace' }}>TRADE STATS</div>
                 <div style={{ fontSize:11, color:'#94a3b8', fontFamily:'monospace', lineHeight:1.8 }}>
@@ -215,8 +305,6 @@ const ClosedRow = ({ pos }) => {
                   {pos.tp3_hit && <div style={{color:'#00ff88'}}>✓ TP3 hit</div>}
                 </div>
               </div>
-
-              {/* All trades in this position */}
               <div style={{ background:'#0d1520', border:'1px solid #1a2535', borderRadius:8, padding:'10px 14px' }}>
                 <div style={{ fontSize:8, color:'#8899aa', letterSpacing:1, marginBottom:8, fontFamily:'monospace' }}>TRADE LOG</div>
                 {(pos.trades || []).map((t, i) => (
@@ -276,29 +364,20 @@ export default function PortfolioTab() {
     setLoading(true);
     try {
       const scanRes = await fetch(`${API()}/api/scan`, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
+        method: 'POST', headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ symbols: [openTicker.trim().toUpperCase()], watchlist: null }),
       });
       const scanData = await scanRes.json();
       const best = (scanData.results || [])[0];
-      if (!best || best.hard_fail) {
-        setError(`${openTicker}: No valid signal`);
-        setLoading(false);
-        return;
-      }
+      if (!best || best.hard_fail) { setError(`${openTicker}: No valid signal`); setLoading(false); return; }
       const r = await fetch(`${API()}/api/portfolio/open`, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          ticker: best.ticker,
-          entry_price: best.entry_high || best.last_close,
+        method: 'POST', headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ ticker: best.ticker, entry_price: best.entry_high || best.last_close,
           sl: best.sl, tp1: best.tp1, tp2: best.tp2, tp3: best.tp3,
-          conviction: best.conviction_pct, asset_type: 'stock',
-        }),
+          conviction: best.conviction_pct, asset_type: 'stock' }),
       });
       const result = await r.json();
-      if (result.error) { setError(result.error); }
+      if (result.error) setError(result.error);
       else { setOpenTicker(''); await load(); }
     } catch (e) { setError(e.message); }
     setLoading(false);
@@ -330,15 +409,9 @@ export default function PortfolioTab() {
   };
 
   useEffect(() => { load(); }, [load]);
-
   useEffect(() => {
     if (!autoRefresh) return;
-    const timer = setInterval(() => {
-      setCountdown(c => {
-        if (c <= 1) { checkPrices(); return 30; }
-        return c - 1;
-      });
-    }, 1000);
+    const timer = setInterval(() => setCountdown(c => { if (c <= 1) { checkPrices(); return 30; } return c - 1; }), 1000);
     return () => clearInterval(timer);
   }, [autoRefresh]);
 
@@ -351,6 +424,7 @@ export default function PortfolioTab() {
   return (
     <div style={{ padding:20, fontFamily:"'Inter',sans-serif", color:'#e0e0e0', maxWidth:1200, margin:'0 auto' }}>
 
+      {/* Header */}
       <div style={{ display:'flex', alignItems:'center', justifyContent:'space-between', marginBottom:20 }}>
         <div style={{ display:'flex', alignItems:'center', gap:12 }}>
           <div style={{ background:'linear-gradient(135deg,#00d4ff,#0088cc)', borderRadius:10, padding:10, display:'flex' }}>
@@ -382,6 +456,7 @@ export default function PortfolioTab() {
         </div>
       )}
 
+      {/* Stats */}
       <div style={{ display:'flex', gap:10, marginBottom:20, flexWrap:'wrap' }}>
         <StatCard label="TOTAL VALUE"  value={usd(s.total_value)}  color='#00d4ff' />
         <StatCard label="CASH"         value={usd(s.cash)}          color='#7ee8ff' sub={`${slots} slot${slots!==1?'s':''} open`} />
@@ -392,10 +467,14 @@ export default function PortfolioTab() {
         <StatCard label="WIN RATE"     value={`${s.win_rate||0}%`}  sub={`${s.total_closed||0} closed`} color={s.win_rate>=60?'#00ff88':s.win_rate>=40?'#fbbf24':'#ff4466'} />
       </div>
 
+      {/* Positions */}
       <div style={{ background:'#0a1018', border:'1px solid #1a2535', borderRadius:10, padding:16, marginBottom:20 }}>
-        <div style={{ display:'flex', justifyContent:'space-between', alignItems:'center', marginBottom:12 }}>
-          <div style={{ fontSize:13, fontWeight:'bold', color:'#00d4ff', letterSpacing:1 }}>
-            POSITIONS — {openPositions.length}/{MAX_SLOTS} SLOTS USED
+        <div style={{ display:'flex', justifyContent:'space-between', alignItems:'center', marginBottom:8 }}>
+          <div>
+            <div style={{ fontSize:13, fontWeight:'bold', color:'#00d4ff', letterSpacing:1 }}>
+              POSITIONS — {openPositions.length}/{MAX_SLOTS} SLOTS USED
+            </div>
+            <div style={{ fontSize:10, color:'#2a4a5a', marginTop:2, fontFamily:'sans-serif' }}>Click any position to expand details</div>
           </div>
           <div style={{ display:'flex', gap:8 }}>
             <input value={openTicker} onChange={e => setOpenTicker(e.target.value.toUpperCase())}
@@ -414,17 +493,12 @@ export default function PortfolioTab() {
         </div>
 
         {loading && <div style={{ padding:10, color:'#fbbf24', fontSize:11, fontFamily:'monospace' }}>⏳ Processing...</div>}
-
         {openPositions.length === 0 && !loading && (
           <div style={{ textAlign:'center', padding:'30px 20px', color:'#8899aa', fontSize:12 }}>
             No open positions. Enter a ticker or click AUTO-FILL to start.
           </div>
         )}
-
-        {openPositions.map(pos => (
-          <PositionCard key={pos.id} pos={pos} onClose={closePos} />
-        ))}
-
+        {openPositions.map(pos => <PositionCard key={pos.id} pos={pos} onClose={closePos} />)}
         {Array.from({ length: slots }).map((_, i) => (
           <div key={i} style={{ border:'1px dashed #1a2535', borderRadius:10, padding:14, marginBottom:10, textAlign:'center', color:'#1a2535', fontSize:12 }}>
             — empty slot {openPositions.length + i + 1} —
@@ -432,14 +506,13 @@ export default function PortfolioTab() {
         ))}
       </div>
 
+      {/* Trade log */}
       {closedPositions.length > 0 && (
         <div style={{ background:'#0a1018', border:'1px solid #1a2535', borderRadius:10, padding:16 }}>
           <div style={{ fontSize:13, fontWeight:'bold', color:'#94a3b8', marginBottom:4, letterSpacing:1 }}>
             TRADE LOG — {closedPositions.length} CLOSED
           </div>
-          <div style={{ fontSize:10, color:'#2a4a5a', marginBottom:12, fontFamily:'sans-serif' }}>
-            Click any row to expand full details
-          </div>
+          <div style={{ fontSize:10, color:'#2a4a5a', marginBottom:12, fontFamily:'sans-serif' }}>Click any row to expand full details</div>
           <div style={{ overflowX:'auto' }}>
             <table style={{ width:'100%', borderCollapse:'collapse', fontSize:11, fontFamily:'monospace' }}>
               <thead>
