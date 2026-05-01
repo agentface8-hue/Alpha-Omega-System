@@ -282,11 +282,12 @@ def score_ticker(data: Dict[str, Any], regime: Dict[str, Any], skip_calibration:
         except Exception:
             pass  # calibration not available, use raw
 
-    return _build_result(data, regime, conviction, pillar_scores, False, "", ta_notes)
+    return _build_result(data, regime, conviction, pillar_scores, False, "", ta_notes, lr_slope)
 
 
 def _build_result(data: Dict, regime: Dict, conviction: int, pillars: Dict,
-                  hard_fail: bool, hard_fail_reason: str, ta_notes: List[str]) -> Dict[str, Any]:
+                  hard_fail: bool, hard_fail_reason: str, ta_notes: List[str],
+                  lr_slope: float = 0.0) -> Dict[str, Any]:
     if hard_fail: heat = "Cold"
     elif conviction >= 75: heat = "TOP"
     elif conviction >= 60: heat = "Hot"
