@@ -173,7 +173,7 @@ def _execute(action: str, ticker: Optional[str], close_all: bool) -> str:
             pf_stat = pf.get("stats", {})
             return (
                 f"---- <b>System Status</b>\n"
-                f"------------------------------------------------------\n"
+                f"━━━━━━━━━━━━━━━━━━\n"
                 f"<b>Signal Tracker</b>\n"
                 f"  Active: {stats.get('active_count',0)} signals\n"
                 f"  Win rate: {stats.get('win_rate',0)}%\n"
@@ -184,7 +184,7 @@ def _execute(action: str, ticker: Optional[str], close_all: bool) -> str:
                 f"  P&L: {'+' if pf_stat.get('total_pnl',0)>=0 else ''}"
                 f"${pf_stat.get('total_pnl',0):,.0f} ({pf_stat.get('total_pnl_pct',0):+.2f}%)\n"
                 f"  Open: {pf_stat.get('open_count',0)} positions\n"
-                f"---- {datetime.utcnow().strftime('%H:%M UTC')}"
+                f"🕐 {datetime.utcnow().strftime('%H:%M UTC')}"
             )
 
         elif action == "scan":
@@ -204,7 +204,7 @@ def _execute(action: str, ticker: Optional[str], close_all: bool) -> str:
                     lines.append(f"  {r['ticker']} {r['conviction_pct']}% | TP1 ${r['tp1']:.2f} | SL ${r['sl']:.2f}")
             if not longs and not shorts:
                 lines.append("No qualifying signals right now.")
-            lines.append(f"---- {datetime.utcnow().strftime('%H:%M UTC')}")
+            lines.append(f"🕐 {datetime.utcnow().strftime('%H:%M UTC')}")
             return "\n".join(lines)
 
         elif action == "portfolio":
@@ -229,7 +229,7 @@ def _execute(action: str, ticker: Optional[str], close_all: bool) -> str:
                         f"{'+' if upnl>=0 else ''}${upnl:.0f} "
                         f"({p.get('unrealized_pnl_pct',0):+.2f}%)"
                     )
-            lines.append(f"---- {datetime.utcnow().strftime('%H:%M UTC')}")
+            lines.append(f"🕐 {datetime.utcnow().strftime('%H:%M UTC')}")
             return "\n".join(lines)
 
         elif action == "check":
@@ -247,7 +247,7 @@ def _execute(action: str, ticker: Optional[str], close_all: bool) -> str:
                     lines.append(f"  {ex['ticker']}: {ex['action']}")
             else:
                 lines.append("No exits triggered.")
-            lines.append(f"---- {datetime.utcnow().strftime('%H:%M UTC')}")
+            lines.append(f"🕐 {datetime.utcnow().strftime('%H:%M UTC')}")
             return "\n".join(lines)
 
         elif action == "open_long" and ticker:
@@ -381,7 +381,7 @@ def _execute(action: str, ticker: Optional[str], close_all: bool) -> str:
         elif action == "help":
             return (
                 "---- <b>Alpha-Omega AI Agent Commands</b>\n"
-                "------------------------------------------------------\n"
+                "━━━━━━━━━━━━━━━━━━\n"
                 "/status --- full system summary\n"
                 "/scan --- run long + short scan\n"
                 "/portfolio --- portfolio P&L\n"
@@ -457,13 +457,14 @@ def start():
     # Send startup notification to group only
     try:
         _send(GROUP_ID,
-            "---- <b>Alpha-Omega AI Agent Online</b>\n"
-            "------------------------------------------------------\n"
+            "🤖 <b>Alpha-Omega Trading - AI Agent Online</b>\n"
+            "━━━━━━━━━━━━━━━━━━\n"
             "I'm monitoring the system 24/7.\n"
             "Type /help to see what I can do.\n"
-            f"---- {datetime.utcnow().strftime('%H:%M UTC')}"
+            f"🕐 {datetime.utcnow().strftime('%H:%M UTC')}"
         )
     except:
         pass
+
 
 
