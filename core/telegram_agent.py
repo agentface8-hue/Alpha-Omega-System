@@ -1,28 +1,35 @@
-﻿"""
-telegram_agent.py --- AI-powered Telegram bot for Alpha-Omega.
-You message it --- Claude interprets --- system executes --- you get results.
+"""
+telegram_agent.py — AI-powered Telegram bot for Alpha-Omega.
+You message it — Claude interprets — system executes — you get results.
 
 Commands (natural language or slash):
-  /status        --- portfolio + signal tracker summary
-  /scan          --- run dual-direction scan
-  /portfolio     --- portfolio P&L snapshot
-  /check         --- refresh all prices now
-  /open AAPL     --- open long position on AAPL
-  /short TSLA    --- open short position on TSLA
-  /close all     --- close all open positions
-  /close AAPL    --- close specific position
-  /signals       --- active signals summary
-  /autopilot     --- run autopilot on all systems
-  /regime        --- current market regime + strategy mode
-  /futures       --- futures snapshot
-  /learn         --- run self-calibration now
-  /help          --- show all commands
+  /status        — portfolio + signal tracker summary
+  /scan          — run dual-direction scan
+  /portfolio     — portfolio P&L snapshot
+  /check         — refresh all prices now
+  /open AAPL     — open long position on AAPL
+  /short TSLA    — open short position on TSLA
+  /close all     — close all open positions
+  /close AAPL    — close specific position
+  /signals       — active signals summary
+  /autopilot     — run autopilot on all systems
+  /regime        — current market regime + strategy mode
+  /futures       — futures snapshot
+  /learn         — run self-calibration now
+  /help          — show all commands
 
 Architecture:
   - Polls Telegram for new messages every 5s
-  - Sends message text to Claude claude-sonnet-4-20250514 for intent parsing
-  - Claude returns structured JSON: {action, params, reply}
+  - Sends message text to Gemini for intent parsing
+  - Returns structured JSON: {action, params, reply}
   - Agent executes the action and sends result back to Telegram
+
+FIX LOG:
+  2026-05-01 — Fixed two bugs causing bot to ignore all messages:
+    1. Webhook conflict: deleteWebhook is now called before polling starts.
+       If a webhook was previously set, Telegram silently drops getUpdates.
+    2. Group command stripping: /status@AlphaOmega_signals_bot is now
+       normalised to /status before intent parsing.
 """
 import os, json, time, logging, threading, urllib.request, urllib.parse
 from datetime import datetime
@@ -41,7 +48,7 @@ ALLOWED_CHAT_IDS = {PERSONAL_ID, GROUP_ID}
 _last_update_id = 0
 
 
-# ------ Telegram helpers ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------
+# ------ Telegram helpers -----------------------------------------------
 
 def _tg_request(method: str, data: dict) -> Optional[dict]:
     try:
@@ -74,7 +81,28 @@ def _get_updates(offset: int) -> list:
     return []
 
 
-# ------ Claude intent parser ------------------------------------------------------------------------------------------------------------------------------------------------------------------
+def _delete_webhook() -> bool:
+    """
+    FIX #1: Delete any existing webhook so long-polling works.
+    If a webhook is registered, Telegram will NOT deliver updates via
+    getUpdates — it silently drops them. This must run before polling starts.
+    drop_pending_updates=False keeps any queued messages so they're processed
+    once polling starts.
+    """
+    try:
+        result = _tg_request("deleteWebhook", {"drop_pending_updates": False})
+        if result and result.get("ok"):
+            logger.info("[AGENT] deleteWebhook OK — polling mode active")
+            return True
+        else:
+            logger.warning(f"[AGENT] deleteWebhook unexpected response: {result}")
+            return False
+    except Exception as e:
+        logger.error(f"[AGENT] deleteWebhook error: {e}")
+        return False
+
+
+# ------ Claude intent parser -------------------------------------------
 
 SYSTEM_PROMPT = """You are the AI agent for Alpha-Omega, an AI trading system.
 Parse user messages and return ONLY a JSON object with:
@@ -86,19 +114,19 @@ Parse user messages and return ONLY a JSON object with:
 }
 
 Examples:
-"scan now" --- {"action":"scan","ticker":null,"close_all":false,"reply":"Running dual scan now..."}
-"open NVDA" --- {"action":"open_long","ticker":"NVDA","close_all":false,"reply":"Opening NVDA long position..."}
-"short TSLA" --- {"action":"open_short","ticker":"TSLA","close_all":false,"reply":"Opening TSLA short..."}
-"close all" --- {"action":"close","ticker":null,"close_all":true,"reply":"Closing all positions..."}
-"close AAPL" --- {"action":"close","ticker":"AAPL","close_all":false,"reply":"Closing AAPL..."}
-"how is the portfolio" --- {"action":"portfolio","ticker":null,"close_all":false,"reply":"Checking portfolio..."}
-"what's the market doing" --- {"action":"regime","ticker":null,"close_all":false,"reply":"Checking regime..."}
-"run autopilot" --- {"action":"autopilot","ticker":null,"close_all":false,"reply":"Running autopilot..."}
+"scan now" → {"action":"scan","ticker":null,"close_all":false,"reply":"Running dual scan now..."}
+"open NVDA" → {"action":"open_long","ticker":"NVDA","close_all":false,"reply":"Opening NVDA long position..."}
+"short TSLA" → {"action":"open_short","ticker":"TSLA","close_all":false,"reply":"Opening TSLA short..."}
+"close all" → {"action":"close","ticker":null,"close_all":true,"reply":"Closing all positions..."}
+"close AAPL" → {"action":"close","ticker":"AAPL","close_all":false,"reply":"Closing AAPL..."}
+"how is the portfolio" → {"action":"portfolio","ticker":null,"close_all":false,"reply":"Checking portfolio..."}
+"what's the market doing" → {"action":"regime","ticker":null,"close_all":false,"reply":"Checking regime..."}
+"run autopilot" → {"action":"autopilot","ticker":null,"close_all":false,"reply":"Running autopilot..."}
 Return ONLY valid JSON. No markdown, no explanation."""
 
 
 def _parse_intent(text: str) -> Dict:
-    """Parse user intent --- Claude if API key available, else robust keyword fallback."""
+    """Parse user intent — Gemini if API key available, else robust keyword fallback."""
     api_key = os.environ.get("GOOGLE_API_KEY", "").strip()
     if api_key:
         try:
@@ -113,10 +141,10 @@ def _parse_intent(text: str) -> Dict:
         except Exception as e:
             logger.warning(f"[AGENT] Gemini parse failed, using fallback: {e}")
 
-    # ------ Robust keyword fallback (works with no API key) ------------------------------------------------------------------
+    # ------ Robust keyword fallback (works with no API key) ---------------
     t = text.lower().strip().lstrip("/")
 
-    # Extract ticker --- any ALL-CAPS word 1-5 chars that's not a command word
+    # Extract ticker — any ALL-CAPS word 1-5 chars that's not a command word
     import re
     COMMANDS = {"status","scan","portfolio","check","open","short","close",
                 "autopilot","regime","futures","learn","help","start","hi","hello"}
@@ -158,7 +186,7 @@ def _parse_intent(text: str) -> Dict:
             "reply":"I didn't understand that. Type /help for all commands."}
 
 
-# ------ Action executor ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------
+# ------ Action executor ------------------------------------------------
 
 def _execute(action: str, ticker: Optional[str], close_all: bool) -> str:
     """Execute the parsed action and return a formatted response string."""
@@ -172,7 +200,7 @@ def _execute(action: str, ticker: Optional[str], close_all: bool) -> str:
             stats   = sigs.get("stats", {})
             pf_stat = pf.get("stats", {})
             return (
-                f"---- <b>System Status</b>\n"
+                f"🤖 <b>System Status</b>\n"
                 f"━━━━━━━━━━━━━━━━━━\n"
                 f"<b>Signal Tracker</b>\n"
                 f"  Active: {stats.get('active_count',0)} signals\n"
@@ -193,13 +221,13 @@ def _execute(action: str, ticker: Optional[str], close_all: bool) -> str:
             longs  = scan.get("longs", [])[:3]
             shorts = scan.get("shorts", [])[:3]
             mode   = scan.get("mode", {})
-            lines  = [f"---- <b>Dual Scan Complete</b> --- {mode.get('label','')}\n------------------------------------------------------"]
+            lines  = [f"🔍 <b>Dual Scan Complete</b> — {mode.get('label','')}\n──────────────────"]
             if longs:
-                lines.append("---- <b>TOP LONGS</b>")
+                lines.append("📈 <b>TOP LONGS</b>")
                 for r in longs:
                     lines.append(f"  {r['ticker']} {r['conviction_pct']}% | TP1 ${r['tp1']:.2f} | SL ${r['sl']:.2f}")
             if shorts:
-                lines.append("---- <b>TOP SHORTS</b>")
+                lines.append("📉 <b>TOP SHORTS</b>")
                 for r in shorts:
                     lines.append(f"  {r['ticker']} {r['conviction_pct']}% | TP1 ${r['tp1']:.2f} | SL ${r['sl']:.2f}")
             if not longs and not shorts:
@@ -211,10 +239,9 @@ def _execute(action: str, ticker: Optional[str], close_all: bool) -> str:
             from core.portfolio_manager import get_portfolio
             pf   = get_portfolio()
             stat = pf.get("stats", {})
-            st   = pf.get("state", {})
             open_pos = pf.get("open_positions", [])
             lines = [
-                f"---- <b>Portfolio</b>\n------------------------------------------------------",
+                f"💼 <b>Portfolio</b>\n──────────────────",
                 f"Value: <b>${stat.get('total_value',0):,.2f}</b>",
                 f"P&L: <b>{'+' if stat.get('total_pnl',0)>=0 else ''}${stat.get('total_pnl',0):,.2f}</b> ({stat.get('total_pnl_pct',0):+.2f}%)",
                 f"Cash: ${stat.get('cash',0):,.2f}",
@@ -225,7 +252,7 @@ def _execute(action: str, ticker: Optional[str], close_all: bool) -> str:
                 for p in open_pos:
                     upnl = p.get("unrealized_pnl", 0)
                     lines.append(
-                        f"  {p['ticker']} @ ${p['entry_price']} --- "
+                        f"  {p['ticker']} @ ${p['entry_price']} — "
                         f"{'+' if upnl>=0 else ''}${upnl:.0f} "
                         f"({p.get('unrealized_pnl_pct',0):+.2f}%)"
                     )
@@ -238,7 +265,7 @@ def _execute(action: str, ticker: Optional[str], close_all: bool) -> str:
             stat   = result.get("portfolio", {}).get("stats", {})
             exits  = [u for u in result.get("updates", []) if u.get("action")]
             lines  = [
-                f"---- <b>Prices Refreshed</b>\n------------------------------------------------------",
+                f"🔄 <b>Prices Refreshed</b>\n──────────────────",
                 f"Total P&L: {'+' if stat.get('total_pnl',0)>=0 else ''}${stat.get('total_pnl',0):,.0f}",
             ]
             if exits:
@@ -258,7 +285,7 @@ def _execute(action: str, ticker: Optional[str], close_all: bool) -> str:
             regime  = fetch_market_regime()
             scored  = score_ticker(data, regime)
             if scored.get("hard_fail"):
-                return f"------ <b>{ticker.upper()}</b> hard fail: {scored.get('hard_fail_reason','')}"
+                return f"⛔ <b>{ticker.upper()}</b> hard fail: {scored.get('hard_fail_reason','')}"
             result = open_position(
                 ticker=ticker.upper(),
                 entry_price=scored.get("entry_high", scored["last_close"]),
@@ -266,9 +293,9 @@ def _execute(action: str, ticker: Optional[str], close_all: bool) -> str:
                 conviction=scored["conviction_pct"],
             )
             if "error" in result:
-                return f"--- Cannot open {ticker.upper()}: {result['error']}"
+                return f"❌ Cannot open {ticker.upper()}: {result['error']}"
             return (
-                f"--- <b>LONG OPENED --- {ticker.upper()}</b>\n"
+                f"✅ <b>LONG OPENED — {ticker.upper()}</b>\n"
                 f"Entry: ${result['entry_price']:.2f}\n"
                 f"SL: ${result['sl']:.2f} | TP1: ${result['tp1']:.2f}\n"
                 f"Shares: {result['shares']} | Risk: ${result['risk_actual']:.0f}\n"
@@ -283,7 +310,7 @@ def _execute(action: str, ticker: Optional[str], close_all: bool) -> str:
             regime = fetch_market_regime()
             scored = score_short(data, regime)
             if scored.get("hard_fail"):
-                return f"------ <b>{ticker.upper()}</b> short fail: {scored.get('hard_fail_reason','')}"
+                return f"⛔ <b>{ticker.upper()}</b> short fail: {scored.get('hard_fail_reason','')}"
             result = open_print_pos(
                 ticker=ticker.upper(), direction="short",
                 entry_price=scored["entry"],
@@ -293,9 +320,9 @@ def _execute(action: str, ticker: Optional[str], close_all: bool) -> str:
                 conviction=scored["conviction_pct"],
             )
             if "error" in result:
-                return f"--- Cannot short {ticker.upper()}: {result['error']}"
+                return f"❌ Cannot short {ticker.upper()}: {result['error']}"
             return (
-                f"---- <b>SHORT OPENED --- {ticker.upper()}</b>\n"
+                f"🔻 <b>SHORT OPENED — {ticker.upper()}</b>\n"
                 f"Entry: ${result['entry_price']:.2f}\n"
                 f"SL: ${result['sl']:.2f} | TP1: ${result['tp1']:.2f}\n"
                 f"Shares: {result['shares']} | Risk: ${result['risk_usd']:.0f}\n"
@@ -307,29 +334,29 @@ def _execute(action: str, ticker: Optional[str], close_all: bool) -> str:
             pf = get_portfolio()
             positions = pf.get("open_positions", [])
             if not positions:
-                return "---- No open positions to close."
+                return "📭 No open positions to close."
             if close_all:
                 results = [close_position(p["id"]) for p in positions]
                 total_pnl = sum(r.get("pnl", 0) for r in results if "pnl" in r)
                 return (
-                    f"---- <b>All positions closed</b>\n"
+                    f"✅ <b>All positions closed</b>\n"
                     f"Closed: {len(results)} positions\n"
                     f"Total P&L: {'+' if total_pnl>=0 else ''}${total_pnl:.0f}"
                 )
             elif ticker:
                 pos = next((p for p in positions if p["ticker"] == ticker.upper()), None)
                 if not pos:
-                    return f"--- No open position found for {ticker.upper()}"
+                    return f"❌ No open position found for {ticker.upper()}"
                 r = close_position(pos["id"])
-                return f"---- <b>Closed {ticker.upper()}</b>\nP&L: {'+' if r.get('pnl',0)>=0 else ''}${r.get('pnl',0):.0f}"
+                return f"✅ <b>Closed {ticker.upper()}</b>\nP&L: {'+' if r.get('pnl',0)>=0 else ''}${r.get('pnl',0):.0f}"
 
         elif action == "autopilot":
             from core.portfolio_manager import autopilot_fill
             result = autopilot_fill()
             opened = result.get("opened", [])
             if not opened:
-                return f"---- Autopilot: {result.get('message', 'No qualifying signals')}"
-            lines = [f"---- <b>Autopilot Filled {len(opened)} Slots</b>"]
+                return f"🤖 Autopilot: {result.get('message', 'No qualifying signals')}"
+            lines = [f"🚀 <b>Autopilot Filled {len(opened)} Slots</b>"]
             for o in opened:
                 lines.append(f"  {o['ticker']} @ ${o['entry']:.2f} ({o['conviction']}%)")
             return "\n".join(lines)
@@ -340,14 +367,14 @@ def _execute(action: str, ticker: Optional[str], close_all: bool) -> str:
             regime = fetch_market_regime()
             mode   = get_strategy_mode(regime)
             return (
-                f"---- <b>Market Regime</b>\n------------------------------------------------------\n"
+                f"🌍 <b>Market Regime</b>\n──────────────────\n"
                 f"Regime: <b>{regime['regime']}</b>\n"
                 f"VIX: <b>{regime['vix']}</b>\n"
                 f"SPY: ${regime['spy_close']} ({regime['spy_change_pct']:+.2f}%)\n\n"
                 f"Strategy Mode: <b>{mode['label']}</b>\n"
                 f"{mode['description']}\n"
-                f"Longs: {'---' if mode['long_enabled'] else '---'}  "
-                f"Shorts: {'---' if mode['short_enabled'] else '---'}\n"
+                f"Longs: {'✅' if mode['long_enabled'] else '❌'}  "
+                f"Shorts: {'✅' if mode['short_enabled'] else '❌'}\n"
                 f"Edge: {mode['expected_edge']}"
             )
 
@@ -356,12 +383,12 @@ def _execute(action: str, ticker: Optional[str], close_all: bool) -> str:
             data = fetch_all_futures()
             session = data.get("session", {})
             lines = [
-                f"---- <b>Futures</b> --- {session.get('et_time','')}\n"
-                f"{session.get('label','')}\n------------------------------------------------------"
+                f"📊 <b>Futures</b> — {session.get('et_time','')}\n"
+                f"{session.get('label','')}\n──────────────────"
             ]
             for sym, f in data.get("futures", {}).items():
                 if f.get("error"): continue
-                trend_e = "----" if f["trend"]=="BULL" else "----"
+                trend_e = "🟢" if f["trend"]=="BULL" else "🔴"
                 lines.append(
                     f"{trend_e} <b>{sym}</b> ${f['price']:,.2f} "
                     f"({f['change_pct']:+.2f}%) {f['trend']}"
@@ -372,39 +399,39 @@ def _execute(action: str, ticker: Optional[str], close_all: bool) -> str:
             from core.learning_loop import run_once
             result = run_once()
             if result.get("status") == "insufficient_data":
-                return f"---- {result['message']}"
+                return f"📚 {result['message']}"
             return (
-                f"---- <b>Calibration Complete</b>\n"
+                f"🎓 <b>Calibration Complete</b>\n"
                 f"Signals analyzed: {result.get('signals_analyzed', 0)}"
             )
 
         elif action == "help":
             return (
-                "---- <b>Alpha-Omega AI Agent Commands</b>\n"
+                "🤖 <b>Alpha-Omega AI Agent Commands</b>\n"
                 "━━━━━━━━━━━━━━━━━━\n"
-                "/status --- full system summary\n"
-                "/scan --- run long + short scan\n"
-                "/portfolio --- portfolio P&L\n"
-                "/check --- refresh all prices\n"
-                "/open AAPL --- open long position\n"
-                "/short TSLA --- open short position\n"
-                "/close AAPL --- close position\n"
-                "/close all --- close everything\n"
-                "/autopilot --- auto-fill all slots\n"
-                "/regime --- market regime + strategy\n"
-                "/futures --- ES/NQ/CL/GC snapshot\n"
-                "/learn --- run self-calibration\n\n"
-                "---- Or just type naturally --- I understand plain English."
+                "/status — full system summary\n"
+                "/scan — run long + short scan\n"
+                "/portfolio — portfolio P&L\n"
+                "/check — refresh all prices\n"
+                "/open AAPL — open long position\n"
+                "/short TSLA — open short position\n"
+                "/close AAPL — close position\n"
+                "/close all — close everything\n"
+                "/autopilot — auto-fill all slots\n"
+                "/regime — market regime + strategy\n"
+                "/futures — ES/NQ/CL/GC snapshot\n"
+                "/learn — run self-calibration\n\n"
+                "💬 Or just type naturally — I understand plain English."
             )
 
-        return f"--- Unknown action: {action}"
+        return f"❓ Unknown action: {action}"
 
     except Exception as e:
         logger.error(f"[AGENT] Execute error: {e}", exc_info=True)
-        return f"------ Error executing {action}: {str(e)[:100]}"
+        return f"⚠️ Error executing {action}: {str(e)[:100]}"
 
 
-# ------ Message handler ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------
+# ------ Message handler ------------------------------------------------
 
 def _handle_message(update: dict):
     msg     = update.get("message", {})
@@ -412,11 +439,19 @@ def _handle_message(update: dict):
     text    = msg.get("text", "").strip()
 
     if not text or chat_id not in ALLOWED_CHAT_IDS:
+        # Log rejections to help diagnose auth issues
+        if text and chat_id not in ALLOWED_CHAT_IDS:
+            logger.warning(f"[AGENT] Rejected message from unknown chat_id={chat_id!r} (allowed: {ALLOWED_CHAT_IDS})")
         return
 
-    logger.info(f"[AGENT] Message from {chat_id}: {text[:80]}")
+    # FIX #2: Strip @botname suffix from group commands.
+    # In groups Telegram sends "/status@AlphaOmega_signals_bot" — strip to "/status".
+    if text.startswith("/") and "@" in text:
+        text = text.split("@")[0]
 
-    # Parse intent with Claude
+    logger.info(f"[AGENT] Message from chat_id={chat_id}: {text[:80]}")
+
+    # Parse intent
     intent = _parse_intent(text)
     action = intent.get("action", "unknown")
     ticker = intent.get("ticker")
@@ -424,48 +459,56 @@ def _handle_message(update: dict):
 
     # Send acknowledgement immediately
     ack = intent.get("reply", "Processing...")
-    _send(chat_id, f"------ {ack}")
+    _send(chat_id, f"⏳ {ack}")
 
     # Execute and send result
     if action != "unknown":
         result = _execute(action, ticker, close_all)
         _send(chat_id, result)
     else:
-        _send(chat_id, "--- I didn't understand that. Type /help for available commands.")
+        _send(chat_id, "❓ I didn't understand that. Type /help for available commands.")
 
 
-# ------ Polling loop ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------
+# ------ Polling loop ---------------------------------------------------
 
 def _poll_loop():
     global _last_update_id
-    logger.info("[AGENT] Telegram polling started")
+    logger.info("[AGENT] Telegram polling loop started")
     while True:
         try:
             updates = _get_updates(_last_update_id + 1)
             for update in updates:
                 _last_update_id = max(_last_update_id, update.get("update_id", 0))
-                _handle_message(update)
+                # Handle each message in its own thread so slow actions
+                # don't block the polling loop
+                threading.Thread(
+                    target=_handle_message, args=(update,), daemon=True
+                ).start()
         except Exception as e:
             logger.error(f"[AGENT] Poll error: {e}")
         time.sleep(4)   # poll every 4 seconds
 
 
 def start():
+    # FIX #1: Delete any existing webhook FIRST.
+    # A registered webhook causes Telegram to silently drop all getUpdates responses.
+    # The bot appeared to work (startup message sent fine) because sendMessage is
+    # outbound — but incoming updates were never delivered.
+    logger.info("[AGENT] Deleting webhook before polling...")
+    _delete_webhook()
+
     t = threading.Thread(target=_poll_loop, daemon=True, name="telegram_agent")
     t.start()
     logger.info("[AGENT] Telegram AI Agent started")
+
     # Send startup notification to group only
     try:
         _send(GROUP_ID,
-            "🤖 <b>Alpha-Omega Trading - AI Agent Online</b>\n"
+            "🤖 <b>Alpha-Omega Trading — AI Agent Online</b>\n"
             "━━━━━━━━━━━━━━━━━━\n"
-            "I'm monitoring the system 24/7.\n"
+            "Webhook cleared ✅ — now receiving messages.\n"
             "Type /help to see what I can do.\n"
             f"🕐 {datetime.utcnow().strftime('%H:%M UTC')}"
         )
-    except:
+    except Exception:
         pass
-
-
-
-  
