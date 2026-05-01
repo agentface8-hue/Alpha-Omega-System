@@ -1,6 +1,6 @@
 """
 portfolio_manager.py — Paper trading portfolio engine v1.0
-$25K capital, max 5 positions, $500 risk/trade, split exits, trailing SL.
+$25K capital, max 10 positions, $5,000 max/trade, split exits, trailing SL.
 """
 import uuid, datetime, math
 from typing import Dict, Any, List, Optional
@@ -8,9 +8,9 @@ import yfinance as yf
 from core import portfolio_store as store
 
 # ── Constants ──────────────────────────────────────────────────
-MAX_POSITIONS   = 5
+MAX_POSITIONS   = 10
 STARTING_CASH   = 25_000.0
-MAX_POS_SIZE    = 5_000.0   # 20% of $25K — ensures all 5 slots always fillable
+MAX_POS_SIZE    = 5_000.0   # $5K per slot — 10 slots = full $50K notional
 MIN_POS_SIZE    = 3_000.0   # floor for small-cap or high-priced names
 MAX_RISK        = 500.0     # $500 = 2% of $25K
 SPLIT_TP1_PCT   = 0.50
@@ -44,7 +44,6 @@ def _size_position(entry: float, sl: float) -> Dict:
     """
     sl_dist = max(entry - sl, 0.01)
     shares_by_risk = math.floor(MAX_RISK / sl_dist)
-    # Cap by position size limits
     max_shares = math.floor(MAX_POS_SIZE / entry)
     min_shares = math.ceil(MIN_POS_SIZE / entry)
     shares = max(min_shares, min(shares_by_risk, max_shares))
@@ -53,7 +52,6 @@ def _size_position(entry: float, sl: float) -> Dict:
     position_size = round(shares * entry, 2)
     risk_actual   = round(shares * sl_dist, 2)
 
-    # Split shares (50/30/20) — minimums of 1
     tp1_shares = max(1, round(shares * SPLIT_TP1_PCT))
     tp2_shares = max(1, round(shares * SPLIT_TP2_PCT))
     tp3_shares = shares - tp1_shares - tp2_shares
@@ -83,12 +81,10 @@ def open_position(ticker: str, entry_price: float, sl: float,
 
     sizing = _size_position(entry_price, sl)
 
-    # If position doesn't fit at full size, try at minimum viable size
     if sizing["position_size"] > state["cash"]:
         min_shares = max(1, math.ceil(MIN_POS_SIZE / entry_price))
         min_size   = round(min_shares * entry_price, 2)
         if min_size <= state["cash"]:
-            # Rebuild sizing with min shares
             tp1_sh = max(1, round(min_shares * SPLIT_TP1_PCT))
             tp2_sh = max(1, round(min_shares * SPLIT_TP2_PCT))
             tp3_sh = max(0, min_shares - tp1_sh - tp2_sh)
@@ -131,6 +127,7 @@ def open_position(ticker: str, entry_price: float, sl: float,
         "mfe": 0.0,
         "conviction": conviction,
         "signal_id": signal_id,
+        "close_reason": None,
         "trades": [{
             "id": str(uuid.uuid4()),
             "type": "entry",
@@ -142,7 +139,6 @@ def open_position(ticker: str, entry_price: float, sl: float,
         "updated_at": now,
     }
 
-    # Deduct cash
     state["cash"] = round(state["cash"] - sizing["position_size"], 2)
     store.save_position(pos)
     store.save_state(state)
@@ -174,9 +170,7 @@ def check_portfolio() -> Dict:
         tp2     = pos["tp2"]
         tp3     = pos["tp3"]
         shares  = pos["shares_remaining"]
-        old_price = pos.get("current_price", entry)
 
-        # Update price + MAE/MFE
         pos["current_price"] = price
         gain_from_entry = price - entry
         pos["mae"] = round(min(pos.get("mae", 0), gain_from_entry), 4)
@@ -200,6 +194,7 @@ def check_portfolio() -> Dict:
             pos["shares_remaining"] = 0
             pos["status"] = "closed"
             pos["closed_at"] = now
+            pos["close_reason"] = f"Stop-loss hit @ ${sl:.2f} (entry ${entry:.2f}, loss ${abs(pnl):.0f})"
             pos["unrealized_pnl"] = 0
             action = f"SL hit @ ${sl}"
             closed_count += 1
@@ -219,6 +214,7 @@ def check_portfolio() -> Dict:
             pos["shares_remaining"] = 0
             pos["status"] = "closed"
             pos["closed_at"] = now
+            pos["close_reason"] = f"TP3 hit @ ${tp3:.2f} — full target reached (+${pnl:.0f})"
             pos["unrealized_pnl"] = 0
             action = f"TP3 hit @ ${tp3}"
             closed_count += 1
@@ -237,7 +233,6 @@ def check_portfolio() -> Dict:
             pos["tp2_hit"] = True
             pos["shares_remaining"] -= tp2_sh
             pos["status"] = "partial"
-            # Trailing SL moves to TP1
             pos["sl"] = round(tp1, 4)
             action = f"TP2 hit @ ${tp2}, SL -> TP1"
 
@@ -255,7 +250,6 @@ def check_portfolio() -> Dict:
             pos["tp1_hit"] = True
             pos["shares_remaining"] -= tp1_sh
             pos["status"] = "partial"
-            # Trailing SL moves to entry (break even)
             pos["sl"] = round(entry, 4)
             action = f"TP1 hit @ ${tp1}, SL -> BE"
 
@@ -264,7 +258,6 @@ def check_portfolio() -> Dict:
         updates.append({"ticker": ticker, "price": price, "action": action,
                         "pnl": pos["unrealized_pnl"], "status": pos["status"]})
 
-        # ── Trade log: record any fully closed position ──
         if pos["status"] == "closed":
             try:
                 from core.trade_log import log_closed_position
@@ -272,7 +265,6 @@ def check_portfolio() -> Dict:
             except Exception as _tl_err:
                 print(f"  [TradeLog] warning: {_tl_err}")
 
-    # Recalculate total portfolio value
     open_after = store.load_positions("open")
     positions_value = sum(
         p["shares_remaining"] * p.get("current_price", p["entry_price"])
@@ -298,7 +290,8 @@ def close_position(position_id: str, reason: str = "MANUAL") -> Dict:
     state = store.load_state()
     price = _live_price(pos["ticker"], pos.get("asset_type", "stock")) or pos["current_price"]
     shares = pos["shares_remaining"]
-    pnl = round(shares * (price - pos["entry_price"]), 2)
+    entry  = pos["entry_price"]
+    pnl = round(shares * (price - entry), 2)
     now = datetime.datetime.utcnow().isoformat()
 
     pos["trades"].append({
@@ -311,16 +304,20 @@ def close_position(position_id: str, reason: str = "MANUAL") -> Dict:
     pos["shares_remaining"] = 0
     pos["status"] = "closed"
     pos["closed_at"] = now
+    pos["close_reason"] = (
+        f"Manual close @ ${price:.2f} — "
+        f"{'profit' if pnl >= 0 else 'loss'} "
+        f"{'+'if pnl>=0 else ''}{pnl:.0f}"
+        + (f" ({reason})" if reason != "MANUAL" else "")
+    )
     pos["unrealized_pnl"] = 0
 
     store.save_position(pos)
-    # Recalc total
     open_after = [p for p in open_pos if p["id"] != position_id]
     positions_value = sum(p["shares_remaining"] * p.get("current_price", p["entry_price"]) for p in open_after)
     state["total_value"] = round(state["cash"] + positions_value, 2)
     store.save_state(state)
 
-    # ── Trade log ──
     try:
         from core.trade_log import log_closed_position
         log_closed_position(pos)
@@ -332,22 +329,21 @@ def close_position(position_id: str, reason: str = "MANUAL") -> Dict:
 
 # ── Portfolio snapshot ─────────────────────────────────────────
 def get_portfolio() -> Dict:
-    state     = store.load_state()
-    open_pos  = store.load_positions("open")
+    state      = store.load_state()
+    open_pos   = store.load_positions("open")
     closed_pos = store.load_positions("closed")
 
-    # Stats
     all_closed = closed_pos
     winning = [p for p in all_closed if p.get("realized_pnl", 0) > 0]
-    total_realized = round(sum(p.get("realized_pnl", 0) for p in all_closed), 2)
+    total_realized   = round(sum(p.get("realized_pnl", 0) for p in all_closed), 2)
     total_unrealized = round(sum(p.get("unrealized_pnl", 0) for p in open_pos), 2)
     total_pnl = round(total_realized + total_unrealized, 2)
-    win_rate = round(len(winning) / len(all_closed) * 100, 1) if all_closed else 0
+    win_rate  = round(len(winning) / len(all_closed) * 100, 1) if all_closed else 0
 
     return {
         "state": state,
         "open_positions": open_pos,
-        "closed_positions": closed_pos[-20:],  # last 20
+        "closed_positions": closed_pos[-20:],
         "stats": {
             "open_count": len(open_pos),
             "slots_available": MAX_POSITIONS - len(open_pos),
@@ -378,7 +374,6 @@ def autopilot_fill(watchlist_name: str = "full_scan") -> Dict:
         return {"message": "Portfolio full", "opened": []}
 
     existing_tickers = {p["ticker"] for p in open_pos}
-    # get_watchlist returns {"label": ..., "tickers": [...]}
     wl_data = get_watchlist(watchlist_name)
     all_symbols = wl_data.get("tickers", []) if isinstance(wl_data, dict) else list(wl_data)
     symbols = [s for s in all_symbols if s not in existing_tickers]
@@ -386,7 +381,7 @@ def autopilot_fill(watchlist_name: str = "full_scan") -> Dict:
     if not symbols:
         return {"message": "No new symbols to scan", "opened": []}
 
-    scan_result = run_scan(symbols[:20])  # cap scan at 20
+    scan_result = run_scan(symbols[:20])
     candidates = [r for r in scan_result.get("results", [])
                   if not r.get("hard_fail") and r.get("conviction_pct", 0) >= 65
                   and r["ticker"] not in existing_tickers]

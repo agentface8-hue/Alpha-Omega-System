@@ -25,6 +25,24 @@ const sessionColor = s => {
   return "#ff4466";
 };
 
+// Format duration between two ISO timestamps (or from start to now)
+const formatDuration = (startIso, endIso = null) => {
+  if (!startIso) return '—';
+  try {
+    const start = new Date(startIso);
+    const end   = endIso ? new Date(endIso) : new Date();
+    const mins  = Math.floor((end - start) / 60000);
+    if (mins < 1)  return '<1m';
+    if (mins < 60) return `${mins}m`;
+    const hrs    = Math.floor(mins / 60);
+    const remMin = mins % 60;
+    if (hrs < 24)  return `${hrs}h ${remMin}m`;
+    const days   = Math.floor(hrs / 24);
+    const remHrs = hrs % 24;
+    return `${days}d ${remHrs}h`;
+  } catch { return '—'; }
+};
+
 const SignalTracker = () => {
   const [data, setData] = useState(null);
   const [loading, setLoading] = useState(false);
@@ -38,7 +56,14 @@ const SignalTracker = () => {
   const [autopilotResult, setAutopilotResult] = useState(null);
   const [cryptoLoading, setCryptoLoading] = useState(false);
   const [expandedSignal, setExpandedSignal] = useState(null);
+  const [now, setNow] = useState(new Date());
   const apiUrl = import.meta.env.VITE_API_URL || 'http://127.0.0.1:8000';
+
+  // Tick every minute so durations on open signals stay live
+  useEffect(() => {
+    const t = setInterval(() => setNow(new Date()), 60000);
+    return () => clearInterval(t);
+  }, []);
 
   const fetchSignals = async (refresh = false) => {
     if (refresh) setRefreshing(true); else setLoading(true);
@@ -48,7 +73,6 @@ const SignalTracker = () => {
       const res = await fetch(`${apiUrl}${endpoint}`, { method });
       const json = await res.json();
       setData(json);
-      // Reset countdown on manual refresh but keep auto-refresh running
       if (refresh && autoRefresh) setCountdown(30);
     } catch (e) { console.error(e); }
     setLoading(false); setRefreshing(false);
@@ -92,23 +116,22 @@ const SignalTracker = () => {
     if (!autoRefresh) return;
     setCountdown(30);
     const priceInterval = setInterval(() => fetchSignals(true), 30000);
-    const tickInterval = setInterval(() => setCountdown(c => c <= 1 ? 30 : c - 1), 1000);
+    const tickInterval  = setInterval(() => setCountdown(c => c <= 1 ? 30 : c - 1), 1000);
     return () => { clearInterval(priceInterval); clearInterval(tickInterval); };
   }, [autoRefresh]);
 
-  // Auto-enable refresh when signals exist
   useEffect(() => {
     if (data?.active?.length > 0 && !autoRefresh) setAutoRefresh(true);
   }, [data?.active?.length]);
 
   useEffect(() => { fetchSignals(); }, []);
 
-  const stats = data?.stats || {};
-  const active = data?.active || [];
-  const closed = data?.closed || [];
+  const stats    = data?.stats || {};
+  const active   = data?.active || [];
+  const closed   = data?.closed || [];
   const mktStatus = data?.market_status || {};
-  const warnings = data?.warnings || [];
-  const display = tab === 'active' ? active : closed;
+  const warnings  = data?.warnings || [];
+  const display   = tab === 'active' ? active : closed;
 
   return (
     <div style={{ background:"#050810", padding:"20px 16px", fontFamily:"'Courier New',monospace", color:"#c9d8e8" }}>
@@ -204,7 +227,7 @@ const SignalTracker = () => {
         )}
       </div>
 
-      {/* Stats Cards — expanded with v2.0 metrics */}
+      {/* Stats Cards */}
       <div style={{ display:"grid", gridTemplateColumns:"repeat(4,1fr)", gap:8, marginBottom:12 }}>
         {[
           { label:"ACTIVE", val:active.length, color:"#00d4ff" },
@@ -271,14 +294,19 @@ const SignalTracker = () => {
         <div style={{ display:"flex", flexDirection:"column", gap:8 }}>
           {display.map(s => {
             const isExpanded = expandedSignal === s.id;
-            const hasGap = s.gap_info;
-            const isStale = s.price_stale_at_entry;
-            const method = s.target_method || (s.atr_at_entry > 0 ? "atr" : "pct");
+            const isStale    = s.price_stale_at_entry;
+            const method     = s.target_method || (s.atr_at_entry > 0 ? "atr" : "pct");
+            // Duration: open trades count from entry_time to now; closed from entry_time to close_time
+            const closeTs    = s.close_time || s.closed_at || null;
+            const isOpen     = s.status === "OPEN";
+            const duration   = formatDuration(s.entry_time, isOpen ? null : closeTs);
             return (
               <div key={s.id} style={{ background:"#0a0f18", border:`1px solid ${isExpanded?"#c084fc33":"#1a2535"}`, borderRadius:10, overflow:"hidden" }}>
                 {/* Main Row */}
-                <div onClick={() => setExpandedSignal(isExpanded ? null : s.id)} style={{ display:"grid", gridTemplateColumns:"120px 80px 1fr 100px 80px 60px", gap:8, padding:"12px 14px", alignItems:"center", cursor:"pointer" }}>
-                  {/* Ticker + Type */}
+                <div onClick={() => setExpandedSignal(isExpanded ? null : s.id)}
+                  style={{ display:"grid", gridTemplateColumns:"120px 80px 1fr 100px 90px 60px", gap:8, padding:"12px 14px", alignItems:"center", cursor:"pointer" }}>
+
+                  {/* Ticker + Date */}
                   <div>
                     <div style={{ display:"flex", alignItems:"center", gap:6 }}>
                       <span style={{ color:s.asset_type==="crypto"?"#f7931a":"#00d4ff", fontWeight:"bold", fontSize:15 }}>{s.ticker}</span>
@@ -287,11 +315,13 @@ const SignalTracker = () => {
                     </div>
                     <div style={{ fontSize:9, color:"#2a4a5a", fontFamily:"sans-serif", marginTop:2 }}>{s.entry_time?.slice(0,10)} · {s.entry_session || ""}</div>
                   </div>
+
                   {/* Conviction */}
                   <div style={{ textAlign:"center" }}>
                     <div style={{ fontSize:16, fontWeight:"bold", color:s.conviction>=70?"#00ff88":s.conviction>=60?"#fbbf24":s.conviction>0?"#94a3b8":"#2a4a5a" }}>{s.conviction||"—"}%</div>
                     <div style={{ fontSize:8, color:"#2a4a5a", fontFamily:"sans-serif" }}>{s.tas}</div>
                   </div>
+
                   {/* Entry → Current | SL TP1 */}
                   <div style={{ display:"flex", gap:12, alignItems:"center", flexWrap:"wrap" }}>
                     <span style={{ fontSize:11, color:"#94a3b8" }}>${s.entry_price}</span>
@@ -300,6 +330,7 @@ const SignalTracker = () => {
                     <span style={{ fontSize:9, color:"#ff4466", fontFamily:"sans-serif" }}>SL ${s.sl}</span>
                     <span style={{ fontSize:9, color:s.tp1_hit?"#00ff88":"#8899aa", fontWeight:s.tp1_hit?"bold":"normal", fontFamily:"sans-serif" }}>TP1 ${s.tp1}{s.tp1_hit?" ✓":""}</span>
                   </div>
+
                   {/* P&L */}
                   <div style={{ textAlign:"right" }}>
                     <div style={{ display:"flex", alignItems:"center", justifyContent:"flex-end", gap:4 }}>
@@ -312,18 +343,35 @@ const SignalTracker = () => {
                       </div>
                     )}
                   </div>
-                  {/* Status */}
+
+                  {/* Status + Duration + Close Reason */}
                   <div style={{ textAlign:"center" }}>
                     <span style={{ fontSize:10, fontWeight:"bold", padding:"3px 8px", borderRadius:3, fontFamily:"sans-serif",
                       background:`${statusColor(s.status)}15`, color:statusColor(s.status), border:`1px solid ${statusColor(s.status)}33` }}>
                       {statusLabel(s.status)}
                     </span>
-                    <div style={{ fontSize:9, color:"#2a4a5a", fontFamily:"sans-serif", marginTop:3 }}>{s.bars_held}d</div>
+                    {/* Duration */}
+                    <div style={{ display:"flex", alignItems:"center", justifyContent:"center", gap:3, marginTop:4 }}>
+                      <Clock size={9} color="#2a4a5a" />
+                      <span style={{ fontSize:9, color: isOpen ? "#00d4ff" : "#8899aa", fontFamily:"sans-serif", fontWeight: isOpen ? "bold" : "normal" }}>
+                        {duration}
+                      </span>
+                    </div>
+                    {/* Close reason — visible inline for closed signals */}
+                    {!isOpen && s.close_reason && (
+                      <div style={{ fontSize:8, color:"#8899aa", fontFamily:"sans-serif", marginTop:2,
+                        maxWidth:88, overflow:"hidden", textOverflow:"ellipsis", whiteSpace:"nowrap",
+                        margin:"2px auto 0" }} title={s.close_reason}>
+                        {s.close_reason}
+                      </div>
+                    )}
                   </div>
+
                   {/* Actions */}
                   <div style={{ textAlign:"right" }}>
                     {tab === 'active' && (
-                      <button onClick={(e) => { e.stopPropagation(); closeSignal(s.id); }} style={{ background:"transparent", border:"1px solid #ff446633", borderRadius:3, padding:"3px 6px", color:"#ff4466", fontSize:9, cursor:"pointer", fontFamily:"sans-serif" }}>
+                      <button onClick={(e) => { e.stopPropagation(); closeSignal(s.id); }}
+                        style={{ background:"transparent", border:"1px solid #ff446633", borderRadius:3, padding:"3px 6px", color:"#ff4466", fontSize:9, cursor:"pointer", fontFamily:"sans-serif" }}>
                         <X size={10} />
                       </button>
                     )}
@@ -334,6 +382,7 @@ const SignalTracker = () => {
                 {isExpanded && (
                   <div style={{ background:"#080c14", borderTop:"1px solid #1a2535", padding:"14px" }}>
                     <div style={{ display:"grid", gridTemplateColumns:"1fr 1fr 1fr", gap:16 }}>
+
                       {/* Entry Context */}
                       <div>
                         <div style={{ fontSize:9, fontWeight:"bold", color:"#c084fc", fontFamily:"sans-serif", marginBottom:8, letterSpacing:1 }}>ENTRY CONTEXT</div>
@@ -344,6 +393,13 @@ const SignalTracker = () => {
                             <div>Session: <b style={{ color:sessionColor(s.entry_session) }}>{s.entry_session}</b></div>
                           </div>
                         )}
+                        {/* Time open — shown prominently in expanded view */}
+                        <div style={{ marginTop:8, background:"#0d1520", borderRadius:4, padding:"6px 10px", display:"inline-flex", alignItems:"center", gap:5 }}>
+                          <Clock size={10} color="#8899aa" />
+                          <span style={{ fontSize:10, color: isOpen ? "#00d4ff" : "#8899aa", fontFamily:"sans-serif" }}>
+                            {isOpen ? `Open for ${duration}` : `Held for ${duration}`}
+                          </span>
+                        </div>
                         {s.pillar_scores && Object.keys(s.pillar_scores).length > 0 && (
                           <div style={{ marginTop:8, display:"flex", gap:4 }}>
                             {Object.entries(s.pillar_scores).map(([k,v]) => (
@@ -372,20 +428,20 @@ const SignalTracker = () => {
                         </div>
                       </div>
 
-                      {/* Close / Snapshot */}
+                      {/* Exit / Snapshot */}
                       <div>
                         {s.close_reason && (
                           <>
                             <div style={{ fontSize:9, fontWeight:"bold", color:"#c084fc", fontFamily:"sans-serif", marginBottom:8, letterSpacing:1 }}>EXIT</div>
                             <div style={{ fontSize:10, color:"#94a3b8", fontFamily:"sans-serif", lineHeight:1.8 }}>
-                              <div>{s.close_reason}</div>
+                              {/* Full close reason on its own line */}
+                              <div style={{ color:s.pnl_pct >= 0 ? "#00ff88" : "#ff4466", fontWeight:"bold", marginBottom:4 }}>{s.close_reason}</div>
                               <div>Close Price: <b>${s.close_price}</b></div>
                               {s.close_market_context && <div>Exit Regime: <b style={{color:"#fbbf24"}}>{s.close_market_context.regime}</b> · VIX: <b>{s.close_market_context.vix}</b></div>}
                               {s.gap_info && <div style={{ color:"#f97316" }}>⚠ Gap: {s.gap_info.note}</div>}
                             </div>
                           </>
                         )}
-                        {/* Entry Snapshot Indicators */}
                         {s.entry_snapshot && Object.keys(s.entry_snapshot).length > 0 && !s.entry_snapshot.error && (
                           <>
                             <div style={{ fontSize:9, fontWeight:"bold", color:"#c084fc", fontFamily:"sans-serif", marginBottom:6, marginTop:s.close_reason?10:0, letterSpacing:1 }}>INDICATORS AT ENTRY</div>
@@ -399,7 +455,6 @@ const SignalTracker = () => {
                       </div>
                     </div>
 
-                    {/* TA Note */}
                     {s.ta_note && (
                       <div style={{ marginTop:10, fontSize:9, color:"#8899aa", fontFamily:"sans-serif", background:"#0d1520", borderRadius:4, padding:"6px 10px" }}>
                         📝 {s.ta_note}
