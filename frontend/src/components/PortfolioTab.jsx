@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useCallback } from 'react';
-import { TrendingUp, TrendingDown, RefreshCw, X, Zap, RotateCcw, DollarSign, Target, BarChart2, Clock } from 'lucide-react';
+import { TrendingUp, TrendingDown, RefreshCw, X, Zap, RotateCcw, DollarSign, Target, BarChart2, Clock, ChevronDown, ChevronRight } from 'lucide-react';
 
 const API = () => import.meta.env.VITE_API_URL || 'http://127.0.0.1:8000';
 const fmt  = (n, d=2) => (n == null ? '—' : Number(n).toFixed(d));
@@ -10,7 +10,6 @@ const heatClr = c => c >= 75 ? '#00ff88' : c >= 60 ? '#fbbf24' : '#94a3b8';
 
 const MAX_SLOTS = 10;
 
-// Format duration between two ISO timestamps
 const formatDuration = (startIso, endIso = null) => {
   if (!startIso) return '—';
   try {
@@ -26,6 +25,50 @@ const formatDuration = (startIso, endIso = null) => {
     const remHrs = hrs % 24;
     return `${days}d ${remHrs}h`;
   } catch { return '—'; }
+};
+
+// Build a full close reason from whatever data the position has
+const buildCloseReason = (pos) => {
+  // If backend already stored a full reason, use it
+  if (pos.close_reason && pos.close_reason.length > 5) return pos.close_reason;
+
+  const lastTrade  = (pos.trades || []).slice(-1)[0] || {};
+  const level      = lastTrade.tp_level || '';
+  const exitPrice  = lastTrade.price;
+  const entry      = pos.entry_price;
+  const pnl        = pos.realized_pnl || 0;
+  const absP       = Math.abs(pnl).toFixed(0);
+  const pnlSign    = pnl >= 0 ? '+' : '-';
+
+  if (level === 'SL' || level?.toLowerCase().includes('stop')) {
+    return `Stop-loss hit @ $${fmt(exitPrice, 2)} (entry $${fmt(entry, 2)}, loss $${absP})`;
+  }
+  if (level === 'TP3') {
+    return `TP3 hit @ $${fmt(exitPrice, 2)} — full target reached (${pnlSign}$${absP})`;
+  }
+  if (level === 'TP2') {
+    return `TP2 hit @ $${fmt(exitPrice, 2)} — 2nd target (${pnlSign}$${absP})`;
+  }
+  if (level === 'TP1') {
+    return `TP1 hit @ $${fmt(exitPrice, 2)} — 1st target (${pnlSign}$${absP})`;
+  }
+  if (level === 'MANUAL' || level?.toLowerCase().includes('manual')) {
+    return `Manual close @ $${fmt(exitPrice, 2)} — ${pnl >= 0 ? 'profit' : 'loss'} ${pnlSign}$${absP}`;
+  }
+  if (level === 'TIMEOUT') {
+    return `Timeout — closed @ $${fmt(exitPrice, 2)} after max hold period (${pnlSign}$${absP})`;
+  }
+  if (level) return `${level} @ $${fmt(exitPrice, 2)} (${pnlSign}$${absP})`;
+  return `Closed @ $${fmt(exitPrice, 2)} (${pnlSign}$${absP})`;
+};
+
+const reasonColor = (pos) => {
+  const pnl = pos.realized_pnl || 0;
+  const lastTrade = (pos.trades || []).slice(-1)[0] || {};
+  const level = lastTrade.tp_level || '';
+  if (level === 'SL' || level?.toLowerCase().includes('stop')) return '#ff4466';
+  if (level?.startsWith('TP')) return '#00ff88';
+  return pnl >= 0 ? '#00ff88' : '#ff4466';
 };
 
 const StatCard = ({ label, value, sub, color, small }) => (
@@ -47,7 +90,6 @@ const PositionCard = ({ pos, onClose }) => {
   const tp3    = pos.tp3;
   const isPartial = pos.status === 'partial';
   const duration  = formatDuration(pos.entry_date);
-
   const range    = tp1 - sl;
   const progress = range > 0 ? Math.min(100, Math.max(0, (curr - sl) / range * 100)) : 0;
   const barColor = pnl >= 0 ? '#00ff88' : '#ff4466';
@@ -61,7 +103,6 @@ const PositionCard = ({ pos, onClose }) => {
           {pos.tp1_hit && <span style={{ fontSize:9, background:'rgba(0,255,136,0.1)', color:'#00ff88', borderRadius:4, padding:'2px 6px' }}>TP1✓</span>}
           {pos.tp2_hit && <span style={{ fontSize:9, background:'rgba(0,255,136,0.15)', color:'#00ff88', borderRadius:4, padding:'2px 6px' }}>TP2✓</span>}
           {pos.conviction > 0 && <span style={{ fontSize:9, color:heatClr(pos.conviction), fontFamily:'monospace' }}>{pos.conviction}%</span>}
-          {/* Live duration badge */}
           <span style={{ fontSize:9, color:'#00d4ff', display:'flex', alignItems:'center', gap:3, background:'rgba(0,212,255,0.08)', borderRadius:4, padding:'2px 6px' }}>
             <Clock size={9} /> {duration}
           </span>
@@ -73,11 +114,9 @@ const PositionCard = ({ pos, onClose }) => {
           <button onClick={() => onClose(pos.id)} style={{ background:'transparent', border:'1px solid #ff4466', borderRadius:4, padding:'3px 8px', color:'#ff4466', fontSize:10, cursor:'pointer' }}>✕ Close</button>
         </div>
       </div>
-
       <div style={{ position:'relative', height:6, background:'#1a2535', borderRadius:3, marginBottom:10, overflow:'hidden' }}>
         <div style={{ position:'absolute', left:0, top:0, height:'100%', width:`${progress}%`, background:barColor, borderRadius:3, transition:'width 0.5s' }} />
       </div>
-
       <div style={{ display:'grid', gridTemplateColumns:'repeat(6,1fr)', gap:6, fontSize:10, fontFamily:'monospace' }}>
         {[
           { label:'ENTRY', val:`$${fmt(entry,2)}`, color:'#94a3b8' },
@@ -93,7 +132,6 @@ const PositionCard = ({ pos, onClose }) => {
           </div>
         ))}
       </div>
-
       <div style={{ display:'flex', gap:12, marginTop:8, fontSize:10, color:'#8899aa', fontFamily:'monospace' }}>
         <span>{pos.shares_remaining}/{pos.shares} shares</span>
         <span>Size: ${fmt(pos.position_size, 0)}</span>
@@ -106,31 +144,98 @@ const PositionCard = ({ pos, onClose }) => {
 };
 
 const ClosedRow = ({ pos }) => {
-  const pnl      = pos.realized_pnl || 0;
-  const pnlPct   = pos.position_size > 0 ? (pnl / pos.position_size * 100) : 0;
+  const [expanded, setExpanded] = useState(false);
+  const pnl       = pos.realized_pnl || 0;
+  const pnlPct    = pos.position_size > 0 ? (pnl / pos.position_size * 100) : 0;
   const lastTrade = (pos.trades || []).slice(-1)[0] || {};
   const duration  = formatDuration(pos.entry_date, pos.closed_at);
-  const reason    = pos.close_reason || lastTrade.tp_level || '—';
+  const fullReason = buildCloseReason(pos);
+  const rColor    = reasonColor(pos);
+  const isWin     = pnl >= 0;
 
   return (
-    <tr style={{ borderBottom:'1px solid #0d1a2a' }}>
-      <td style={{ padding:'6px 6px', color:'#e0e0e0', fontWeight:'bold', fontFamily:'monospace' }}>{pos.ticker}</td>
-      <td style={{ padding:'6px 6px', textAlign:'right', color:'#8899aa', fontSize:10 }}>{(pos.entry_date||'').slice(0,10)}</td>
-      <td style={{ padding:'6px 6px', textAlign:'right', color:'#94a3b8' }}>${fmt(pos.entry_price,2)}</td>
-      <td style={{ padding:'6px 6px', textAlign:'right', color:'#94a3b8' }}>${fmt(lastTrade.price,2)}</td>
-      <td style={{ padding:'6px 6px', textAlign:'right', color:clr(pnl), fontWeight:'bold' }}>{pnl>=0?'+':''}{fmt(pnl,0)}</td>
-      <td style={{ padding:'6px 6px', textAlign:'right', color:clr(pnlPct) }}>{pct(pnlPct)}</td>
-      {/* Duration */}
-      <td style={{ padding:'6px 6px', textAlign:'right', color:'#8899aa', fontSize:10 }}>
-        <span style={{ display:'inline-flex', alignItems:'center', gap:3 }}>
-          <Clock size={9} color="#2a4a5a" /> {duration}
-        </span>
-      </td>
-      {/* Close reason */}
-      <td style={{ padding:'6px 6px', textAlign:'left', color: reason.includes('TP') ? '#00ff88' : reason.toLowerCase().includes('stop') || reason === 'SL' ? '#ff4466' : '#94a3b8', fontSize:10, maxWidth:180 }}>
-        {reason}
-      </td>
-    </tr>
+    <>
+      <tr
+        onClick={() => setExpanded(e => !e)}
+        style={{ borderBottom: expanded ? 'none' : '1px solid #0d1a2a', cursor:'pointer', background: expanded ? '#0d1520' : 'transparent' }}
+      >
+        <td style={{ padding:'8px 6px', color:'#e0e0e0', fontWeight:'bold', fontFamily:'monospace' }}>
+          <span style={{ display:'inline-flex', alignItems:'center', gap:4 }}>
+            {expanded ? <ChevronDown size={10} color="#8899aa" /> : <ChevronRight size={10} color="#8899aa" />}
+            {pos.ticker}
+          </span>
+        </td>
+        <td style={{ padding:'8px 6px', textAlign:'right', color:'#8899aa', fontSize:10 }}>{(pos.entry_date||'').slice(0,10)}</td>
+        <td style={{ padding:'8px 6px', textAlign:'right', color:'#94a3b8' }}>${fmt(pos.entry_price,2)}</td>
+        <td style={{ padding:'8px 6px', textAlign:'right', color:'#94a3b8' }}>${fmt(lastTrade.price,2)}</td>
+        <td style={{ padding:'8px 6px', textAlign:'right', color:clr(pnl), fontWeight:'bold' }}>{pnl>=0?'+':''}{fmt(pnl,0)}</td>
+        <td style={{ padding:'8px 6px', textAlign:'right', color:clr(pnlPct) }}>{pct(pnlPct)}</td>
+        <td style={{ padding:'8px 6px', textAlign:'right', color:'#8899aa', fontSize:10 }}>
+          <span style={{ display:'inline-flex', alignItems:'center', gap:3 }}>
+            <Clock size={9} color="#2a4a5a" /> {duration}
+          </span>
+        </td>
+        {/* Close reason — short summary, full on expand */}
+        <td style={{ padding:'8px 6px', textAlign:'left', fontSize:10 }}>
+          <span style={{
+            color: rColor,
+            background: `${rColor}15`,
+            border: `1px solid ${rColor}33`,
+            borderRadius: 4,
+            padding: '2px 7px',
+            fontWeight: 'bold',
+            whiteSpace: 'nowrap',
+          }}>
+            {lastTrade.tp_level || (isWin ? 'WIN' : 'LOSS')}
+          </span>
+        </td>
+      </tr>
+
+      {/* Expanded row — full details */}
+      {expanded && (
+        <tr style={{ borderBottom:'1px solid #0d1a2a', background:'#080c14' }}>
+          <td colSpan={8} style={{ padding:'10px 14px' }}>
+            <div style={{ display:'grid', gridTemplateColumns:'1fr 1fr 1fr', gap:16 }}>
+
+              {/* Close reason */}
+              <div style={{ background: `${rColor}0d`, border:`1px solid ${rColor}33`, borderRadius:8, padding:'10px 14px' }}>
+                <div style={{ fontSize:8, color:'#8899aa', letterSpacing:1, marginBottom:5, fontFamily:'monospace' }}>CLOSE REASON</div>
+                <div style={{ fontSize:12, color: rColor, fontWeight:'bold', lineHeight:1.5 }}>{fullReason}</div>
+              </div>
+
+              {/* Trade stats */}
+              <div style={{ background:'#0d1520', border:'1px solid #1a2535', borderRadius:8, padding:'10px 14px' }}>
+                <div style={{ fontSize:8, color:'#8899aa', letterSpacing:1, marginBottom:8, fontFamily:'monospace' }}>TRADE STATS</div>
+                <div style={{ fontSize:11, color:'#94a3b8', fontFamily:'monospace', lineHeight:1.8 }}>
+                  <div>Entry: <b style={{color:'#e0e0e0'}}>${fmt(pos.entry_price,2)}</b> → Exit: <b style={{color:rColor}}>${fmt(lastTrade.price,2)}</b></div>
+                  <div>Shares: <b style={{color:'#e0e0e0'}}>{pos.shares}</b> · Size: <b style={{color:'#e0e0e0'}}>${fmt(pos.position_size,0)}</b></div>
+                  <div>Risk: <b style={{color:'#ff4466'}}>${fmt(pos.risk_actual,0)}</b> · Held: <b style={{color:'#00d4ff'}}>{duration}</b></div>
+                  {pos.tp1_hit && <div style={{color:'#00ff88'}}>✓ TP1 hit</div>}
+                  {pos.tp2_hit && <div style={{color:'#00ff88'}}>✓ TP2 hit</div>}
+                  {pos.tp3_hit && <div style={{color:'#00ff88'}}>✓ TP3 hit</div>}
+                </div>
+              </div>
+
+              {/* All trades in this position */}
+              <div style={{ background:'#0d1520', border:'1px solid #1a2535', borderRadius:8, padding:'10px 14px' }}>
+                <div style={{ fontSize:8, color:'#8899aa', letterSpacing:1, marginBottom:8, fontFamily:'monospace' }}>TRADE LOG</div>
+                {(pos.trades || []).map((t, i) => (
+                  <div key={i} style={{ fontSize:10, color:'#8899aa', fontFamily:'monospace', lineHeight:1.7 }}>
+                    <span style={{ color: t.type==='entry'?'#00d4ff': t.pnl>=0?'#00ff88':'#ff4466' }}>
+                      {t.type?.replace(/_/g,' ').toUpperCase()}
+                    </span>
+                    {' '}@ ${fmt(t.price,2)} · {t.shares}sh
+                    {t.pnl != null && t.type !== 'entry' && (
+                      <span style={{ color: t.pnl>=0?'#00ff88':'#ff4466' }}> {t.pnl>=0?'+':''}{fmt(t.pnl,0)}</span>
+                    )}
+                  </div>
+                ))}
+              </div>
+            </div>
+          </td>
+        </tr>
+      )}
+    </>
   );
 };
 
@@ -240,14 +345,12 @@ export default function PortfolioTab() {
   const s               = data?.stats || {};
   const openPositions   = data?.open_positions  || [];
   const closedPositions = (data?.closed_positions || []).slice().reverse();
-  // Use slots_available from API if available, else compute from MAX_SLOTS
   const slots    = s.slots_available != null ? s.slots_available : Math.max(0, MAX_SLOTS - openPositions.length);
   const totalPnl = s.total_pnl || 0;
 
   return (
     <div style={{ padding:20, fontFamily:"'Inter',sans-serif", color:'#e0e0e0', maxWidth:1200, margin:'0 auto' }}>
 
-      {/* Header */}
       <div style={{ display:'flex', alignItems:'center', justifyContent:'space-between', marginBottom:20 }}>
         <div style={{ display:'flex', alignItems:'center', gap:12 }}>
           <div style={{ background:'linear-gradient(135deg,#00d4ff,#0088cc)', borderRadius:10, padding:10, display:'flex' }}>
@@ -279,7 +382,6 @@ export default function PortfolioTab() {
         </div>
       )}
 
-      {/* Stats row */}
       <div style={{ display:'flex', gap:10, marginBottom:20, flexWrap:'wrap' }}>
         <StatCard label="TOTAL VALUE"  value={usd(s.total_value)}  color='#00d4ff' />
         <StatCard label="CASH"         value={usd(s.cash)}          color='#7ee8ff' sub={`${slots} slot${slots!==1?'s':''} open`} />
@@ -290,7 +392,6 @@ export default function PortfolioTab() {
         <StatCard label="WIN RATE"     value={`${s.win_rate||0}%`}  sub={`${s.total_closed||0} closed`} color={s.win_rate>=60?'#00ff88':s.win_rate>=40?'#fbbf24':'#ff4466'} />
       </div>
 
-      {/* Position slots + open controls */}
       <div style={{ background:'#0a1018', border:'1px solid #1a2535', borderRadius:10, padding:16, marginBottom:20 }}>
         <div style={{ display:'flex', justifyContent:'space-between', alignItems:'center', marginBottom:12 }}>
           <div style={{ fontSize:13, fontWeight:'bold', color:'#00d4ff', letterSpacing:1 }}>
@@ -324,7 +425,6 @@ export default function PortfolioTab() {
           <PositionCard key={pos.id} pos={pos} onClose={closePos} />
         ))}
 
-        {/* Empty slots */}
         {Array.from({ length: slots }).map((_, i) => (
           <div key={i} style={{ border:'1px dashed #1a2535', borderRadius:10, padding:14, marginBottom:10, textAlign:'center', color:'#1a2535', fontSize:12 }}>
             — empty slot {openPositions.length + i + 1} —
@@ -332,18 +432,20 @@ export default function PortfolioTab() {
         ))}
       </div>
 
-      {/* Closed positions table */}
       {closedPositions.length > 0 && (
         <div style={{ background:'#0a1018', border:'1px solid #1a2535', borderRadius:10, padding:16 }}>
-          <div style={{ fontSize:13, fontWeight:'bold', color:'#94a3b8', marginBottom:12, letterSpacing:1 }}>
+          <div style={{ fontSize:13, fontWeight:'bold', color:'#94a3b8', marginBottom:4, letterSpacing:1 }}>
             TRADE LOG — {closedPositions.length} CLOSED
+          </div>
+          <div style={{ fontSize:10, color:'#2a4a5a', marginBottom:12, fontFamily:'sans-serif' }}>
+            Click any row to expand full details
           </div>
           <div style={{ overflowX:'auto' }}>
             <table style={{ width:'100%', borderCollapse:'collapse', fontSize:11, fontFamily:'monospace' }}>
               <thead>
                 <tr style={{ borderBottom:'1px solid #1a2535' }}>
-                  {['Ticker','Date','Entry','Exit','P&L $','P&L %','Duration','Close Reason'].map(h => (
-                    <th key={h} style={{ padding:'6px 6px', textAlign: h==='Close Reason' ? 'left' : 'right', color:'#8899aa', fontSize:9, fontWeight:'normal', letterSpacing:1 }}>{h}</th>
+                  {['Ticker','Date','Entry','Exit','P&L $','P&L %','Duration','Result'].map(h => (
+                    <th key={h} style={{ padding:'6px 6px', textAlign: h==='Result' ? 'left' : 'right', color:'#8899aa', fontSize:9, fontWeight:'normal', letterSpacing:1 }}>{h}</th>
                   ))}
                 </tr>
               </thead>
