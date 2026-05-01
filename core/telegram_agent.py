@@ -1,6 +1,6 @@
 """
 telegram_agent.py — AI-powered Telegram bot for Alpha-Omega.
-You message it — Claude interprets — system executes — you get results.
+Bot: @AlphaOmegaCEO_bot
 
 Commands (natural language or slash):
   /status        — portfolio + signal tracker summary
@@ -28,8 +28,9 @@ FIX LOG:
   2026-05-01 — Fixed two bugs causing bot to ignore all messages:
     1. Webhook conflict: deleteWebhook is now called before polling starts.
        If a webhook was previously set, Telegram silently drops getUpdates.
-    2. Group command stripping: /status@AlphaOmega_signals_bot is now
+    2. Group command stripping: /status@AlphaOmegaCEO_bot is now
        normalised to /status before intent parsing.
+  2026-05-01 — New bot created: @AlphaOmegaCEO_bot (old bot deleted)
 """
 import os, json, time, logging, threading, urllib.request, urllib.parse
 from datetime import datetime
@@ -37,7 +38,7 @@ from typing import Optional, Dict, Any
 
 logger = logging.getLogger(__name__)
 
-TOKEN       = os.environ.get("TELEGRAM_TOKEN", "8691159247:AAEfGEBQgXBqXvA9RCO67cFCwwtDaFrNRH4")
+TOKEN       = os.environ.get("TELEGRAM_TOKEN", "8246500243:AAFXsq94Fia3RimL4_Q-AM6sdDJpZNoxTYM")
 PERSONAL_ID = os.environ.get("TELEGRAM_PERSONAL_CHAT_ID", "5812682751")
 GROUP_ID    = os.environ.get("TELEGRAM_GROUP_CHAT_ID", "-5228475615")
 BASE_URL    = f"https://api.telegram.org/bot{TOKEN}"
@@ -83,11 +84,9 @@ def _get_updates(offset: int) -> list:
 
 def _delete_webhook() -> bool:
     """
-    FIX #1: Delete any existing webhook so long-polling works.
+    Delete any existing webhook so long-polling works.
     If a webhook is registered, Telegram will NOT deliver updates via
     getUpdates — it silently drops them. This must run before polling starts.
-    drop_pending_updates=False keeps any queued messages so they're processed
-    once polling starts.
     """
     try:
         result = _tg_request("deleteWebhook", {"drop_pending_updates": False})
@@ -102,7 +101,7 @@ def _delete_webhook() -> bool:
         return False
 
 
-# ------ Claude intent parser -------------------------------------------
+# ------ Intent parser --------------------------------------------------
 
 SYSTEM_PROMPT = """You are the AI agent for Alpha-Omega, an AI trading system.
 Parse user messages and return ONLY a JSON object with:
@@ -141,17 +140,15 @@ def _parse_intent(text: str) -> Dict:
         except Exception as e:
             logger.warning(f"[AGENT] Gemini parse failed, using fallback: {e}")
 
-    # ------ Robust keyword fallback (works with no API key) ---------------
+    # ------ Robust keyword fallback -----------------------------------
     t = text.lower().strip().lstrip("/")
 
-    # Extract ticker — any ALL-CAPS word 1-5 chars that's not a command word
     import re
     COMMANDS = {"status","scan","portfolio","check","open","short","close",
                 "autopilot","regime","futures","learn","help","start","hi","hello"}
     tickers = [w for w in re.findall(r'\b[A-Z]{1,5}\b', text)
                if w not in COMMANDS and len(w) >= 1]
     ticker = tickers[0] if tickers else None
-
     close_all = "all" in t
 
     if any(x in t for x in ["help","command","what can","what do"]):
@@ -439,32 +436,25 @@ def _handle_message(update: dict):
     text    = msg.get("text", "").strip()
 
     if not text or chat_id not in ALLOWED_CHAT_IDS:
-        # Log rejections to help diagnose auth issues
         if text and chat_id not in ALLOWED_CHAT_IDS:
             logger.warning(f"[AGENT] Rejected message from unknown chat_id={chat_id!r} (allowed: {ALLOWED_CHAT_IDS})")
         return
 
-    # FIX #2: Strip @botname suffix from group commands.
-    # In groups Telegram sends "/status@AlphaOmega_signals_bot" — strip to "/status".
+    # Strip @botname suffix from group commands: /status@AlphaOmegaCEO_bot → /status
     if text.startswith("/") and "@" in text:
         text = text.split("@")[0]
 
     logger.info(f"[AGENT] Message from chat_id={chat_id}: {text[:80]}")
 
-    # Parse intent
-    intent = _parse_intent(text)
-    action = intent.get("action", "unknown")
-    ticker = intent.get("ticker")
+    intent    = _parse_intent(text)
+    action    = intent.get("action", "unknown")
+    ticker    = intent.get("ticker")
     close_all = intent.get("close_all", False)
 
-    # Send acknowledgement immediately
-    ack = intent.get("reply", "Processing...")
-    _send(chat_id, f"⏳ {ack}")
+    _send(chat_id, f"⏳ {intent.get('reply', 'Processing...')}")
 
-    # Execute and send result
     if action != "unknown":
-        result = _execute(action, ticker, close_all)
-        _send(chat_id, result)
+        _send(chat_id, _execute(action, ticker, close_all))
     else:
         _send(chat_id, "❓ I didn't understand that. Type /help for available commands.")
 
@@ -479,34 +469,27 @@ def _poll_loop():
             updates = _get_updates(_last_update_id + 1)
             for update in updates:
                 _last_update_id = max(_last_update_id, update.get("update_id", 0))
-                # Handle each message in its own thread so slow actions
-                # don't block the polling loop
                 threading.Thread(
                     target=_handle_message, args=(update,), daemon=True
                 ).start()
         except Exception as e:
             logger.error(f"[AGENT] Poll error: {e}")
-        time.sleep(4)   # poll every 4 seconds
+        time.sleep(4)
 
 
 def start():
-    # FIX #1: Delete any existing webhook FIRST.
-    # A registered webhook causes Telegram to silently drop all getUpdates responses.
-    # The bot appeared to work (startup message sent fine) because sendMessage is
-    # outbound — but incoming updates were never delivered.
     logger.info("[AGENT] Deleting webhook before polling...")
     _delete_webhook()
 
     t = threading.Thread(target=_poll_loop, daemon=True, name="telegram_agent")
     t.start()
-    logger.info("[AGENT] Telegram AI Agent started")
+    logger.info("[AGENT] Telegram AI Agent started — @AlphaOmegaCEO_bot")
 
-    # Send startup notification to group only
     try:
         _send(GROUP_ID,
             "🤖 <b>Alpha-Omega Trading — AI Agent Online</b>\n"
             "━━━━━━━━━━━━━━━━━━\n"
-            "Webhook cleared ✅ — now receiving messages.\n"
+            "Bot: @AlphaOmegaCEO_bot ✅\n"
             "Type /help to see what I can do.\n"
             f"🕐 {datetime.utcnow().strftime('%H:%M UTC')}"
         )
