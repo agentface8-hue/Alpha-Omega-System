@@ -331,7 +331,7 @@ def autopilot_fill(watchlist_name: str = "full_scan", symbols_override: list = N
     state    = store.load_state()
     open_pos = store.load_positions("open")
     slots    = MAX_POSITIONS - len(open_pos)
-    if slots == 0: return {"message":"Portfolio full","opened":[]}
+    if slots == 0: return {"message":"Portfolio full","opened":[],"slots_used":0}
     existing_tickers = {p["ticker"] for p in open_pos}
 
     if symbols_override:

@@ -7,7 +7,7 @@ const pct  = n => `${n > 0 ? '+' : ''}${fmt(n)}%`;
 const usd  = n => `$${fmt(n, 0).replace(/\B(?=(\d{3})+(?!\d))/g, ',')}`;
 const clr  = n => n > 0 ? '#00ff88' : n < 0 ? '#ff4466' : '#94a3b8';
 const heatClr = c => c >= 75 ? '#00ff88' : c >= 60 ? '#fbbf24' : '#94a3b8';
-const MAX_SLOTS = 10;
+const MAX_SLOTS_FALLBACK = 10;
 
 const formatDuration = (startIso, endIso = null) => {
   if (!startIso) return '—';
@@ -418,7 +418,8 @@ export default function PortfolioTab() {
   const s               = data?.stats || {};
   const openPositions   = data?.open_positions  || [];
   const closedPositions = (data?.closed_positions || []).slice().reverse();
-  const slots    = s.slots_available != null ? s.slots_available : Math.max(0, MAX_SLOTS - openPositions.length);
+  const maxPositions    = data?.state?.max_positions ?? MAX_SLOTS_FALLBACK;
+  const slots           = Math.max(0, maxPositions - openPositions.length);
   const totalPnl = s.total_pnl || 0;
 
   return (
@@ -432,7 +433,7 @@ export default function PortfolioTab() {
           </div>
           <div>
             <div style={{ fontSize:18, fontWeight:'bold', color:'#fff', letterSpacing:1 }}>ACTIVE PORTFOLIO</div>
-            <div style={{ fontSize:11, color:'#8899aa' }}>Paper trading · $25K starting capital · Max {MAX_SLOTS} positions · $5,000/trade · $500 risk/trade</div>
+            <div style={{ fontSize:11, color:'#8899aa' }}>Paper trading · $25K starting capital · Max {maxPositions} positions · $5,000/trade · $500 risk/trade</div>
           </div>
         </div>
         <div style={{ display:'flex', gap:8, alignItems:'center' }}>
@@ -472,7 +473,7 @@ export default function PortfolioTab() {
         <div style={{ display:'flex', justifyContent:'space-between', alignItems:'center', marginBottom:8 }}>
           <div>
             <div style={{ fontSize:13, fontWeight:'bold', color:'#00d4ff', letterSpacing:1 }}>
-              POSITIONS — {openPositions.length}/{MAX_SLOTS} SLOTS USED
+              POSITIONS — {openPositions.length}/{maxPositions} SLOTS USED
             </div>
             <div style={{ fontSize:10, color:'#2a4a5a', marginTop:2, fontFamily:'sans-serif' }}>Click any position to expand details</div>
           </div>
@@ -486,8 +487,8 @@ export default function PortfolioTab() {
               <Target size={13} /> OPEN
             </button>
             <button onClick={autopilot} disabled={loading || slots===0}
-              style={{ background: slots===0?'#1a2535':'linear-gradient(135deg,#7c3aed,#a855f7)', border:'none', borderRadius:6, padding:'6px 14px', color:'#fff', fontSize:12, fontWeight:'bold', cursor: slots===0?'not-allowed':'pointer', display:'flex', alignItems:'center', gap:5 }}>
-              <Zap size={13} /> AUTO-FILL {slots} SLOTS
+              style={{ background: slots===0?'#1a2535':'linear-gradient(135deg,#7c3aed,#a855f7)', border: slots===0?'1px solid #2a3545':'none', borderRadius:6, padding:'6px 14px', color: slots===0?'#4a5568':'#fff', fontSize:12, fontWeight:'bold', cursor: slots===0?'not-allowed':'pointer', display:'flex', alignItems:'center', gap:5 }}>
+              <Zap size={13} /> {slots===0 ? 'PORTFOLIO FULL' : `AUTO-FILL ${slots} SLOTS`}
             </button>
           </div>
         </div>
