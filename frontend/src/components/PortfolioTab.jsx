@@ -390,7 +390,7 @@ export default function PortfolioTab() {
       const result = await r.json();
       await load();
       if (result.opened?.length > 0) setError(null);
-      else setError('No qualifying signals found (need conviction >= 65%)');
+      else setError(result.message || 'No qualifying signals found (need conviction >= 55%)');
     } catch (e) { setError(e.message); }
     setLoading(false);
   };

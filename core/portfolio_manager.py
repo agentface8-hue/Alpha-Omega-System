@@ -347,10 +347,10 @@ def autopilot_fill(watchlist_name: str = "full_scan", symbols_override: list = N
 
     scan_result = run_scan(symbols[:20])
     candidates  = [r for r in scan_result.get("results",[])
-                   if not r.get("hard_fail") and r.get("conviction_pct",0)>=65
+                   if not r.get("hard_fail") and r.get("conviction_pct",0)>=55
                    and r["ticker"] not in existing_tickers][:slots]
     if not candidates:
-        return {"message":"No qualifying signals (need conviction >= 65%)","opened":[],
+        return {"message":"No qualifying signals (need conviction >= 55%)","opened":[],
                 "top_scores":[(r["ticker"],r.get("conviction_pct",0),r.get("hard_fail_reason","")[:40])
                               for r in scan_result.get("results",[])[:8] if not r.get("hard_fail")]}
     opened = []
