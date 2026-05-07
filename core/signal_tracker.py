@@ -30,6 +30,9 @@ MAX_TP3_EXTENSIONS = 3
 FADE_CHECKS_NEEDED  = 5    # consecutive lower price checks
 FADE_GIVEBACK_PCT   = 2.0  # % given back from MFE peak
 
+# Trailing SL settings
+TSL_TRIGGER_PCT = 0.5  # Activate TSL once trade is +0.5% or more in profit
+
 
 def _get_atr_multipliers(regime_str: str) -> dict:
     return REGIME_MULTIPLIERS.get(regime_str, _DEFAULT_MULTS)
@@ -267,6 +270,7 @@ def record_signal(scan_result: Dict[str, Any], asset_type: str = "stock") -> Lis
             "close_price":None,"close_snapshot":None,
             "close_market_context":None,"close_session":None,
             "gap_info":None,"slippage_pct":0,"turbo":False,
+            "original_sl":r["sl"],"trailing_sl_active":False,"sl_last_updated":None,
         }
         active.append(signal); active_tickers.add(ticker); new_signals.append(signal)
     store.save_active(active)
@@ -349,6 +353,7 @@ def create_turbo_signal(symbol: str, asset_type: str = "stock", scan_data: Dict 
         "close_price":None,"close_snapshot":None,
         "close_market_context":None,"close_session":None,
         "gap_info":None,"slippage_pct":0,"turbo":True,
+        "original_sl":sl,"trailing_sl_active":False,"sl_last_updated":None,
     }
 
     active=store.load_active(); active.append(signal); store.save_active(active)
@@ -438,6 +443,37 @@ def check_signals() -> Dict[str, Any]:
             s["mae_pct"]=round((s["lowest_price"]-entry)/entry*100,2)
             s["mfe_pct"]=round((s["highest_price"]-entry)/entry*100,2)
 
+        # ── Trailing SL (TSL) — ratchets up as highest_price rises ──────────
+        # Activates once trade is TSL_TRIGGER_PCT% in profit.
+        # New SL = highest_price - (atr * regime_sl_mult), floored at entry.
+        # SL ONLY moves up — never down.
+        if s["pnl_pct"] >= TSL_TRIGGER_PCT:
+            atr      = s.get("atr_at_entry", 0)
+            highest  = s["highest_price"]
+            curr_sl  = s["sl"]
+            # Use same ATR multiplier that set the initial SL for this regime
+            mults    = s.get("regime_multipliers", _DEFAULT_MULTS)
+            sl_mult  = mults.get("sl", 0.5)
+            if atr > 0:
+                new_tsl = round(highest - atr * sl_mult, 4)
+            else:
+                new_tsl = round(highest * 0.98, 4)  # fallback: 2% below high
+            # Floor: never let a winner turn into a loser
+            new_tsl = max(new_tsl, entry)
+            # Only ratchet UP
+            if new_tsl > curr_sl:
+                if not s.get("trailing_sl_active"):
+                    s["original_sl"] = s.get("original_sl", curr_sl)
+                    s["trailing_sl_active"] = True
+                old_sl = curr_sl
+                s["sl"] = new_tsl
+                s["sl_last_updated"] = datetime.datetime.utcnow().isoformat()
+                print(f"  [TSL] {sym}: SL ${old_sl:.2f} → ${new_tsl:.2f}  (high=${highest:.2f}, atr={atr:.2f})")
+                try:
+                    from core.telegram_alerts import alert_trailing_sl_update
+                    alert_trailing_sl_update(s, old_sl, new_tsl, highest)
+                except: pass
+
         # ── TP hit tracking ──────────────────────────────────────────────────
         if price>=s["tp1"] and not s["tp1_hit"]:
             s["tp1_hit"]=True; s["tp1_hit_time"]=datetime.datetime.utcnow().isoformat()
@@ -483,7 +519,9 @@ def check_signals() -> Dict[str, Any]:
         if price<=s["sl"]:
             close_status="STOPPED_OUT"
             actual_fill=gap_info["fill_price"] if gap_info["gap_detected"] else s["sl"]
-            close_reason=f"SL hit at ${s['sl']}"
+            sl_label = "Trailing SL" if s.get("trailing_sl_active") else "SL"
+            orig_sl_note = f" (original SL was ${s.get('original_sl', s['sl']):.2f})" if s.get("trailing_sl_active") else ""
+            close_reason=f"{sl_label} hit at ${s['sl']}{orig_sl_note}"
             if gap_info["gap_detected"]:
                 close_reason+=f" (gap fill at ${actual_fill}, slippage {gap_info.get('slippage_pct',0)}%)"
                 s["slippage_pct"]=gap_info.get("slippage_pct",0)
@@ -587,6 +625,9 @@ def _save_case_report(signal: Dict):
                      "regime_multipliers":signal.get("regime_multipliers",{}),
                      "price_stale_at_entry":signal.get("price_stale_at_entry",False)},
             "targets":{"sl":signal["sl"],"tp1":signal["tp1"],"tp2":signal["tp2"],"tp3":signal["tp3"],
+                       "original_sl":signal.get("original_sl",signal["sl"]),
+                       "trailing_sl_active":signal.get("trailing_sl_active",False),
+                       "sl_last_updated":signal.get("sl_last_updated"),
                        "rr":signal["rr"],"turbo":signal.get("turbo",False),
                        "tp3_extensions":signal.get("tp3_extensions",0),
                        "trailing_active":signal.get("trailing_active",False)},
@@ -634,6 +675,10 @@ def _generate_trade_analysis(signal: Dict) -> Dict[str, Any]:
     close_r=signal.get("close_market_context",{}).get("regime","")
     if entry_r and close_r and entry_r!=close_r:
         analysis["regime_shift"]=f"Regime changed '{entry_r}' → '{close_r}' during trade."
+    if signal.get("trailing_sl_active"):
+        orig=signal.get("original_sl",0); final_sl=signal.get("sl",0)
+        sl_moved=round(final_sl-orig,2) if orig and final_sl else 0
+        analysis["trailing_sl"]=f"TSL active — SL raised ${sl_moved:.2f} from original ${orig:.2f} → final ${final_sl:.2f}."
     if signal.get("trailing_active"):
         ext=signal.get("tp3_extensions",0)
         analysis["trailing_tp"]=f"Trailing TP3: {ext} extension{'s' if ext!=1 else ''}. Final exit ${signal.get('close_price','?')}."

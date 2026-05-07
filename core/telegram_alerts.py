@@ -102,6 +102,24 @@ def alert_momentum_fade_close(signal: dict, locked_pnl_pct: float, peak_mfe_pct:
     )
 
 
+def alert_trailing_sl_update(signal: dict, old_sl: float, new_sl: float, highest: float):
+    ticker  = signal.get("ticker","?")
+    entry   = signal.get("entry_price",0)
+    price   = signal.get("current_price", highest)
+    pnl_pct = ((price - entry) / entry * 100) if entry else 0
+    locked  = ((new_sl - entry) / entry * 100) if entry else 0
+    return _send(
+        f"\U0001f4c8 <b>TRAILING SL MOVED — {ticker}</b>\n"
+        f"━━━━━━━━━━━━━━━━━━\n"
+        f"\U0001f6d1 SL:  <b>${old_sl:.2f} → ${new_sl:.2f}</b>\n"
+        f"\U0001f3c6 High: <b>${highest:.2f}</b>  |  Now: ${price:.2f}\n"
+        f"\U0001f512 Locked: <b>{'+' if locked>=0 else ''}{locked:.1f}%</b> protected\n"
+        f"\U0001f4ca P&L now: <b>{'+' if pnl_pct>=0 else ''}{pnl_pct:.1f}%</b>\n"
+        f"\U0001f4e5 Entry: ${entry}\n"
+        f"\U0001f550 {datetime.utcnow().strftime('%H:%M UTC')}"
+    )
+
+
 def alert_sl_hit(signal: dict, price: float):
     ticker = signal.get("ticker","?"); entry = signal.get("entry_price",0)
     pnl_pct = ((price - entry) / entry * 100) if entry else 0
