@@ -83,6 +83,27 @@ const PillarChart = ({ scores }) => {
 };
 
 const EntryReasonPanel = ({ signal }) => {
+  // Detect legacy signals (created before v2.1 -- scan_data not captured)
+  const hasScanData =
+    (signal.conviction > 0) ||
+    (signal.pillar_scores && Object.keys(signal.pillar_scores).length > 0) ||
+    (signal.entry_market_context && Object.keys(signal.entry_market_context).length > 0) ||
+    !!signal.entry_session;
+
+  if (!hasScanData) {
+    return (
+      <div>
+        <div style={{ fontSize:9, fontWeight:"bold", color:"#c084fc", fontFamily:"sans-serif", marginBottom:10, letterSpacing:1 }}>ENTRY REASON</div>
+        <div style={{ background:"#0d1520", borderRadius:8, padding:"20px 12px", textAlign:"center", border:"1px dashed #1a2535" }}>
+          <div style={{ fontSize:18, marginBottom:8 }}>&#128203;</div>
+          <div style={{ fontSize:11, color:"#8899aa", fontFamily:"sans-serif", marginBottom:4 }}>No entry data</div>
+          <div style={{ fontSize:9, color:"#2a4a5a", fontFamily:"sans-serif" }}>Legacy signal &#8212; created before v2.1</div>
+          <div style={{ fontSize:8, color:"#1a2535", fontFamily:"sans-serif", marginTop:8 }}>New signals capture full conviction context</div>
+        </div>
+      </div>
+    );
+  }
+
   const conv  = signal.conviction || 0;
   const level = convictionLevel(conv);
   const ctx   = signal.entry_market_context || {};
@@ -185,9 +206,10 @@ const OverrideSLForm = ({ signal, onSave, onCancel }) => {
   );
 };
 
+// Always renders: shows empty state for legacy signals with no action_log
 const SignalActionLog = ({ log }) => {
   if (!log || log.length === 0) return (
-    <div style={{ fontSize:9, color:"#2a4a5a", fontFamily:"sans-serif", padding:"8px 0" }}>No actions recorded yet.</div>
+    <div style={{ fontSize:9, color:"#8899aa", fontFamily:"sans-serif", padding:"8px 0", fontStyle:"italic" }}>No actions recorded yet &#8212; events will appear here as the trade progresses.</div>
   );
   return (
     <div style={{ maxHeight:160, overflowY:"auto" }}>
@@ -255,7 +277,7 @@ const TSLStatusPanel = ({ signal }) => {
   );
 };
 
-// ════════════════════════════════════════════════════════════
+// ================================================
 const SignalTracker = () => {
   const [data,             setData]             = useState(null);
   const [loading,          setLoading]          = useState(false);
@@ -559,7 +581,7 @@ const SignalTracker = () => {
                       <div style={{ fontSize:8, color:"#8899aa", fontFamily:"sans-serif", marginTop:2, maxWidth:88, overflow:"hidden", textOverflow:"ellipsis", whiteSpace:"nowrap", margin:"2px auto 0" }} title={s.close_reason}>{s.close_reason}</div>
                     )}
                   </div>
-                  {/* Actions */}
+                  {/* Actions -- Override SL button always visible on active tab, no scan_data dependency */}
                   <div style={{ display:"flex", gap:4, justifyContent:"flex-end", alignItems:"center" }} onClick={e => e.stopPropagation()}>
                     {tab==='active' && (
                       <>
@@ -576,7 +598,7 @@ const SignalTracker = () => {
                   </div>
                 </div>
 
-                {/* Override SL form */}
+                {/* Override SL form -- renders for any active/open signal regardless of scan_data */}
                 {showOverride && isOpen && (
                   <div style={{ padding:"0 14px 14px" }}>
                     <OverrideSLForm signal={s} onSave={() => { setOverrideSLFor(null); fetchSignals(true); }} onCancel={() => setOverrideSLFor(null)} />
@@ -587,6 +609,7 @@ const SignalTracker = () => {
                 {isExpanded && (
                   <div style={{ background:"#080c14", borderTop:"1px solid #1a2535", padding:16 }}>
                     <div style={{ display:"grid", gridTemplateColumns:"1fr 1fr 1fr", gap:20, marginBottom:16 }}>
+                      {/* EntryReasonPanel: shows legacy placeholder if no scan_data */}
                       <EntryReasonPanel signal={s} />
                       {isOpen
                         ? <TSLStatusPanel signal={s} />
@@ -635,10 +658,10 @@ const SignalTracker = () => {
                       </div>
                     </div>
 
-                    {/* Per-signal action log */}
+                    {/* Per-signal action log -- always renders, shows placeholder for legacy signals */}
                     <div style={{ borderTop:"1px solid #1a2535", paddingTop:14 }}>
                       <div style={{ fontSize:9, fontWeight:"bold", color:"#c084fc", fontFamily:"sans-serif", marginBottom:8, letterSpacing:1, display:"flex", alignItems:"center", gap:6 }}>
-                        <Activity size={10} /> TRADE LOG &mdash; {s.ticker}
+                        <Activity size={10} /> TRADE LOG &#8212; {s.ticker}
                       </div>
                       <SignalActionLog log={s.action_log} />
                     </div>
@@ -650,9 +673,7 @@ const SignalTracker = () => {
         </div>
       )}
 
-      {/* ═══════════════════════════════════════════════════
-          SYSTEM ACTION LOG — global feed, all signals
-          ═══════════════════════════════════════════════════ */}
+      {/* SYSTEM ACTION LOG -- global feed, all signals */}
       <div style={{ marginTop:32, background:"#0a0f18", border:"1px solid #1a2535", borderRadius:12, overflow:"hidden" }}>
         <div style={{ display:"flex", alignItems:"center", justifyContent:"space-between", padding:"12px 16px", borderBottom:"1px solid #1a2535", background:"#080c14" }}>
           <div style={{ display:"flex", alignItems:"center", gap:8 }}>
@@ -667,8 +688,8 @@ const SignalTracker = () => {
           </div>
         </div>
         {globalLog.length===0 ? (
-          <div style={{ padding:"30px", textAlign:"center", color:"#2a4a5a", fontFamily:"sans-serif", fontSize:12 }}>
-            No actions recorded yet &mdash; start a signal to begin logging
+          <div style={{ padding:"30px", textAlign:"center", color:"#8899aa", fontFamily:"sans-serif", fontSize:12 }}>
+            No actions recorded yet &#8212; start a signal to begin logging
           </div>
         ) : (
           <div style={{ maxHeight:400, overflowY:"auto" }}>
