@@ -277,6 +277,14 @@ async def turbo_signal(symbol: str, asset_type: str = "stock"):
     return result
 
 
+@app.post("/api/signals/override-sl/{signal_id}")
+async def override_sl(signal_id: str, new_sl: float):
+    from core.signal_tracker import override_signal_sl
+    result = override_signal_sl(signal_id, new_sl)
+    if not result: raise HTTPException(status_code=404, detail="Signal not found")
+    return result
+
+
 @app.get("/api/signals/report/{signal_id}")
 async def get_signal_report(signal_id: str):
     from core.signal_tracker import get_signal_report as gsr

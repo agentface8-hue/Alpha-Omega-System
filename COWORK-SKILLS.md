@@ -7,6 +7,51 @@ Reference this when performing any task on the Alpha-Omega system.
 
 ---
 
+## SUPERPOWERS WORKFLOW (use for all new development)
+
+This project uses the Superpowers development methodology. Any coding agent working
+on this project should follow these steps for every new feature or significant change.
+Skills are in `.claude/skills/` and are invoked via the agent's Skill tool.
+
+### Step 1 — BRAINSTORM before any code
+Invoke `brainstorming` skill. Refine the idea through questions. Get a design approved.
+Never write code without an approved design. Even "simple" tasks need this.
+
+### Step 2 — WRITE A PLAN
+Invoke `writing-plans` skill. Break work into bite-sized tasks (2-5 min each).
+Each task: exact files to touch, code to write, how to test.
+Save plans to: `docs/superpowers/plans/YYYY-MM-DD-<feature-name>.md`
+
+### Step 3 — ISOLATED WORKSPACE
+Invoke `using-git-worktrees` skill. Work on a fresh branch.
+Never implement features directly on `main`.
+
+### Step 4 — EXECUTE with TDD
+Invoke `subagent-driven-development` (if subagents available) or `executing-plans`.
+For every task: invoke `test-driven-development` — write failing test FIRST, then code.
+RED → GREEN → REFACTOR. No exceptions.
+
+### Step 5 — REVIEW
+Invoke `requesting-code-review` between tasks.
+Critical issues block progress.
+
+### Step 6 — VERIFY before claiming done
+Invoke `verification-before-completion`.
+Run smoke tests. Check output. THEN say it's done.
+
+### Step 7 — FINISH the branch
+Invoke `finishing-a-development-branch`.
+Verify all tests pass → merge / PR / keep / discard.
+
+### Debugging? Use the right skill:
+- Any bug or unexpected behavior → `systematic-debugging` (find root cause first)
+- Multiple independent failures → `dispatching-parallel-agents`
+- Receiving review feedback → `receiving-code-review`
+
+---
+
+---
+
 ## SKILL 1: DEPLOY CHANGES
 
 ### When: After modifying any file

@@ -38,6 +38,19 @@ def _get_atr_multipliers(regime_str: str) -> dict:
     return REGIME_MULTIPLIERS.get(regime_str, _DEFAULT_MULTS)
 
 
+def _append_action(signal: Dict, action: str, detail: str, category: str = "neutral"):
+    """Append one entry to signal['action_log']. category: 'profit' | 'risk' | 'neutral'"""
+    if "action_log" not in signal:
+        signal["action_log"] = []
+    signal["action_log"].append({
+        "ts":       datetime.datetime.utcnow().isoformat(),
+        "ticker":   signal.get("ticker", "?"),
+        "action":   action,
+        "detail":   detail,
+        "category": category,
+    })
+
+
 # ══════════════════════════════════════════════════════════════
 # HELPERS
 # ══════════════════════════════════════════════════════════════
@@ -271,7 +284,12 @@ def record_signal(scan_result: Dict[str, Any], asset_type: str = "stock") -> Lis
             "close_market_context":None,"close_session":None,
             "gap_info":None,"slippage_pct":0,"turbo":False,
             "original_sl":r["sl"],"trailing_sl_active":False,"sl_last_updated":None,
+            "action_log":[],
         }
+        _append_action(signal, "OPENED",
+            f"Conviction {signal['conviction']}% ({signal['heat']}) · "
+            f"{scan_result.get('market_regime','')} · TAS {signal['tas']}",
+            "neutral")
         active.append(signal); active_tickers.add(ticker); new_signals.append(signal)
     store.save_active(active)
     return new_signals
@@ -354,7 +372,12 @@ def create_turbo_signal(symbol: str, asset_type: str = "stock", scan_data: Dict 
         "close_market_context":None,"close_session":None,
         "gap_info":None,"slippage_pct":0,"turbo":True,
         "original_sl":sl,"trailing_sl_active":False,"sl_last_updated":None,
+        "action_log":[],
     }
+    _append_action(signal, "OPENED",
+        f"Turbo · {regime_str} · ATR ${round(atr_val,2)} · "
+        f"SL ${sl:.2f} · TP1 ${tp1:.2f} · TP3 ${tp3:.2f}",
+        "neutral")
 
     active=store.load_active(); active.append(signal); store.save_active(active)
 
@@ -468,6 +491,9 @@ def check_signals() -> Dict[str, Any]:
                 old_sl = curr_sl
                 s["sl"] = new_tsl
                 s["sl_last_updated"] = datetime.datetime.utcnow().isoformat()
+                _append_action(s, "TSL MOVED UP",
+                    f"SL ${old_sl:.2f} → ${new_tsl:.2f}  (new high ${highest:.2f})",
+                    "neutral")
                 print(f"  [TSL] {sym}: SL ${old_sl:.2f} → ${new_tsl:.2f}  (high=${highest:.2f}, atr={atr:.2f})")
                 try:
                     from core.telegram_alerts import alert_trailing_sl_update
@@ -477,16 +503,19 @@ def check_signals() -> Dict[str, Any]:
         # ── TP hit tracking ──────────────────────────────────────────────────
         if price>=s["tp1"] and not s["tp1_hit"]:
             s["tp1_hit"]=True; s["tp1_hit_time"]=datetime.datetime.utcnow().isoformat()
+            _append_action(s, "TP1 HIT", f"Price ${price:.2f} · PnL +{s['pnl_pct']:.1f}%", "profit")
             try:
                 from core.telegram_alerts import alert_tp_hit; alert_tp_hit(s,"tp1",price)
             except: pass
         if price>=s["tp2"] and not s["tp2_hit"]:
             s["tp2_hit"]=True; s["tp2_hit_time"]=datetime.datetime.utcnow().isoformat()
+            _append_action(s, "TP2 HIT", f"Price ${price:.2f} · PnL +{s['pnl_pct']:.1f}%", "profit")
             try:
                 from core.telegram_alerts import alert_tp_hit; alert_tp_hit(s,"tp2",price)
             except: pass
         if price>=s["tp3"] and not s["tp3_hit"]:
             s["tp3_hit"]=True; s["tp3_hit_time"]=datetime.datetime.utcnow().isoformat()
+            _append_action(s, "TP3 HIT", f"Price ${price:.2f} · PnL +{s['pnl_pct']:.1f}%", "profit")
             try:
                 from core.telegram_alerts import alert_tp_hit; alert_tp_hit(s,"tp3",price)
             except: pass
@@ -526,6 +555,9 @@ def check_signals() -> Dict[str, Any]:
                 close_reason+=f" (gap fill at ${actual_fill}, slippage {gap_info.get('slippage_pct',0)}%)"
                 s["slippage_pct"]=gap_info.get("slippage_pct",0)
             s["close_price"]=round(actual_fill,4); s["pnl_pct"]=round((actual_fill-entry)/entry*100,2)
+            _append_action(s, "STOPPED OUT",
+                f"{sl_label} ${s['sl']:.2f} · exit ${actual_fill:.2f} · PnL {s['pnl_pct']:.1f}%",
+                "risk")
             should_close=True
             try:
                 from core.telegram_alerts import alert_sl_hit; alert_sl_hit(s,actual_fill)
@@ -534,6 +566,9 @@ def check_signals() -> Dict[str, Any]:
         elif is_turbo and s["tp1_hit"]:
             close_status="TP1_HIT"; close_reason=f"Turbo TP1 hit at ${s['tp1']}"
             s["close_price"]=round(price,4); should_close=True
+            _append_action(s, "TP1 CLOSE",
+                f"Turbo closed at TP1 ${s['tp1']:.2f} · PnL +{s['pnl_pct']:.1f}%",
+                "profit")
 
         elif s["tp3_hit"]:
             extensions=s.get("tp3_extensions",0)
@@ -544,6 +579,9 @@ def check_signals() -> Dict[str, Any]:
                 new_tp3=round(price+(atr_est*0.5 if atr_est>0 else price*0.01),4); old_tp3=s["tp3"]
                 s["tp3"]=new_tp3; s["tp3_hit"]=False
                 s["tp3_extensions"]=extensions+1; s["trailing_active"]=True
+                _append_action(s, "TP3 EXTENDED",
+                    f"New TP3 ${new_tp3:.2f} — ext #{extensions+1}, riding momentum",
+                    "profit")
                 print(f"  [TRAIL] {sym}: TP3 {old_tp3:.2f} → {new_tp3:.2f} (ext #{extensions+1})")
                 try:
                     from core.telegram_alerts import alert_tp_extended
@@ -556,6 +594,10 @@ def check_signals() -> Dict[str, Any]:
                     if s.get("trailing_active") else f"TP3 hit at ${s['tp3']}"
                 )
                 s["close_price"]=round(price,4); should_close=True
+                _append_action(s, "TP3 CLOSE",
+                    f"Final exit ${price:.2f} · PnL +{s['pnl_pct']:.1f}%"
+                    + (f" · {ext_count} extensions" if ext_count else ""),
+                    "profit")
 
         elif s.get("momentum_fade_close"):
             # ── AUTO-CLOSE: momentum faded, lock in profits ──
@@ -566,6 +608,9 @@ def check_signals() -> Dict[str, Any]:
                 f"— locked in +{pnl_c:.1f}%"
             )
             s["close_price"]=round(price,4); should_close=True
+            _append_action(s, "MOMENTUM FADE",
+                f"Auto-closed ${price:.2f} · locked +{pnl_c:.1f}% (peak +{mfe_c:.1f}%)",
+                "profit" if pnl_c>0 else "risk")
             try:
                 from core.telegram_alerts import alert_momentum_fade_close
                 alert_momentum_fade_close(s,pnl_c,mfe_c)
@@ -574,6 +619,9 @@ def check_signals() -> Dict[str, Any]:
         elif s["bars_held"]>=30:
             close_status="TIMEOUT"; close_reason=f"30-day timeout at ${price}"
             s["close_price"]=round(price,4); should_close=True
+            _append_action(s, "TIMEOUT",
+                f"30-day timeout · exit ${price:.2f} · PnL {s['pnl_pct']:.1f}%",
+                "neutral")
 
         if should_close:
             s["status"]=close_status; s["close_reason"]=close_reason
@@ -708,6 +756,9 @@ def close_signal(signal_id: str, reason: str = "manual") -> Optional[Dict]:
             s["close_snapshot"]={"price":s["close_price"],"pnl_pct":s["pnl_pct"],
                                   "mae_pct":s.get("mae_pct",0),"mfe_pct":s.get("mfe_pct",0),
                                   "bars_held":s["bars_held"],"tp3_extensions":s.get("tp3_extensions",0)}
+            _append_action(s, "MANUAL CLOSE",
+                f"Closed at ${s['close_price']:.2f} · PnL {s['pnl_pct']:.1f}% · reason: {reason}",
+                "profit" if s["pnl_pct"]>0 else "risk")
             _save_case_report(s); target=s; closed.append(s)
         else: remaining.append(s)
     store.save_active(remaining); store.save_closed(closed)
@@ -721,6 +772,33 @@ def close_signal(signal_id: str, reason: str = "manual") -> Optional[Dict]:
             alert_signal_closed(target,reason,target.get("close_price",0))
         except: pass
     return target
+
+
+def override_signal_sl(signal_id: str, new_sl: float) -> Optional[Dict]:
+    """Manually override the stop-loss on an open signal."""
+    active=store.load_active()
+    for s in active:
+        if s["id"]==signal_id:
+            old_sl=s["sl"]
+            s["original_sl"]=s.get("original_sl", old_sl)
+            s["sl"]=round(new_sl,4)
+            s["trailing_sl_active"]=True
+            s["sl_last_updated"]=datetime.datetime.utcnow().isoformat()
+            direction="tightened" if new_sl>old_sl else "loosened"
+            _append_action(s, "SL OVERRIDE",
+                f"User {direction} SL: ${old_sl:.2f} → ${new_sl:.2f}",
+                "neutral")
+            store.save_active(active)
+            try:
+                from core.telegram_alerts import _send
+                pnl=s.get("pnl_pct",0)
+                _send(f"🔧 <b>SL OVERRIDDEN — {s['ticker']}</b>\n"
+                      f"${old_sl:.2f} → <b>${new_sl:.2f}</b> ({direction})\n"
+                      f"Current price: ${s.get('current_price',0):.2f} | PnL: {pnl:+.1f}%\n"
+                      f"⚙️ User intervention")
+            except: pass
+            return s
+    return None
 
 
 def get_all_signals() -> Dict[str, Any]:
