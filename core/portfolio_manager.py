@@ -56,7 +56,9 @@ def _size_position(entry: float, sl: float) -> Dict:
 def open_position(ticker: str, entry_price: float, sl: float,
                   tp1: float, tp2: float, tp3: float,
                   conviction: int = 0, asset_type: str = "stock",
-                  signal_id: str = "") -> Dict:
+                  signal_id: str = "",
+                  pillar_scores: dict = None, tas: str = "",
+                  entry_market_context: dict = None) -> Dict:
     state    = store.load_state()
     open_pos = store.load_positions("open")
     if len(open_pos) >= MAX_POSITIONS:
@@ -99,6 +101,9 @@ def open_position(ticker: str, entry_price: float, sl: float,
         "momentum_down_count": 0, "fade_alert_sent": False,
         "momentum_fade_close": False,
         "conviction": conviction, "signal_id": signal_id, "close_reason": None,
+        "pillar_scores": pillar_scores or {},
+        "tas": tas or "",
+        "entry_market_context": entry_market_context or {},
         "trades": [{"id": str(uuid.uuid4()), "type": "entry",
                     "price": round(entry_price, 4), "shares": sizing["shares"],
                     "pnl": 0.0, "executed_at": now}],

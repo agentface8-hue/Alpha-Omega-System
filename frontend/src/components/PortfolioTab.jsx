@@ -383,8 +383,8 @@ const PositionCard = ({ pos, onClose, onRefresh, bench = [], onOpenBench }) => {
               {pos.regime && <span>Regime: <b style={{color:'#00d4ff'}}>{pos.regime}</b></span>}
               {pos.sector && <span>Sector: <b style={{color:'#8899aa'}}>{pos.sector}</b></span>}
               {pos.signal_id && <span style={{color:'#2a4a5a'}}>ID: {pos.signal_id.slice(0,8)}</span>}
-              {!pos.conviction && !pos.atr_at_entry && !pos.regime && !pos.pillar_scores && (
-                <span style={{color:'#2a4a5a'}}>No entry context recorded</span>
+              {(!pos.pillar_scores || Object.keys(pos.pillar_scores).length === 0) && !pos.tas && (!pos.entry_market_context || !pos.entry_market_context.vix) && (
+                <span style={{color:'#2a4a5a', fontStyle:'italic'}}>Legacy position — detailed entry context not stored. Conviction: {pos.conviction}%</span>
               )}
             </div>
           </div>
@@ -602,6 +602,9 @@ export default function PortfolioTab() {
           ticker: candidate.ticker, entry_price: candidate.entry_price,
           sl: candidate.sl, tp1: candidate.tp1, tp2: candidate.tp2, tp3: candidate.tp3,
           conviction: candidate.conviction_pct, asset_type: 'stock',
+          pillar_scores: candidate.pillar_scores || {},
+          tas: candidate.tas || '',
+          entry_market_context: candidate.entry_market_context || {},
         }),
       });
       const result = await r.json();
@@ -641,7 +644,11 @@ export default function PortfolioTab() {
         method: 'POST', headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ ticker: best.ticker, entry_price: best.entry_high || best.last_close,
           sl: best.sl, tp1: best.tp1, tp2: best.tp2, tp3: best.tp3,
-          conviction: best.conviction_pct, asset_type: 'stock' }),
+          conviction: best.conviction_pct, asset_type: 'stock',
+          pillar_scores: best.pillar_scores || {},
+          tas: best.tas || '',
+          entry_market_context: best.entry_market_context || {},
+        }),
       });
       const result = await r.json();
       if (result.error) setError(result.error);

@@ -890,9 +890,13 @@ async def open_position_endpoint(body: dict):
     tp2=float(body.get("tp2",0)); tp3=float(body.get("tp3",0))
     conviction=int(body.get("conviction",0)); asset_type=body.get("asset_type","stock")
     signal_id=body.get("signal_id","")
+    pillar_scores=body.get("pillar_scores") or {}
+    tas=body.get("tas","")
+    entry_market_context=body.get("entry_market_context") or {}
     if not ticker or not entry or not sl or not tp1:
         raise HTTPException(status_code=400, detail="ticker, entry_price, sl, tp1 required")
-    return open_position(ticker,entry,sl,tp1,tp2,tp3,conviction,asset_type,signal_id)
+    return open_position(ticker,entry,sl,tp1,tp2,tp3,conviction,asset_type,signal_id,
+                         pillar_scores=pillar_scores,tas=tas,entry_market_context=entry_market_context)
 
 @app.post("/api/portfolio/close/{position_id}")
 async def close_position_endpoint(position_id: str, body: dict = {}):
