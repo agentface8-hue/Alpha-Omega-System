@@ -127,6 +127,37 @@ const PortfolioSLHistoryPanel = ({ pos, onClose }) => {
   );
 };
 
+// ── Trade State Badge (Phase 1 — observe only) ───────────────────────────────
+const P_STATE_CFG = {
+  RUNNING:    { color:'#00ff88', bg:'rgba(0,255,136,0.12)',  label:'RUNNING',  pulse:true  },
+  DEVELOPING: { color:'#00d4ff', bg:'rgba(0,212,255,0.12)',  label:'DEVELOP',  pulse:false },
+  PROTECTING: { color:'#fbbf24', bg:'rgba(251,191,36,0.12)', label:'PROTECT',  pulse:false },
+  EXIT:       { color:'#ff4466', bg:'rgba(255,68,102,0.12)', label:'EXIT',     pulse:true  },
+};
+const PTradeStateBadge = ({ state }) => {
+  if (!state) return null;
+  const cfg = P_STATE_CFG[state] || { color:'#8899aa', bg:'rgba(136,153,170,0.1)', label:state, pulse:false };
+  return (
+    <span style={{
+      fontSize:8, fontWeight:'bold', fontFamily:'sans-serif',
+      padding:'1px 5px', borderRadius:3,
+      background:cfg.bg, color:cfg.color,
+      border:`1px solid ${cfg.color}44`,
+      animation: cfg.pulse ? 'p-pulse 1.5s ease-in-out infinite' : 'none',
+      display:'inline-block', verticalAlign:'middle',
+    }}>
+      {cfg.label}
+    </span>
+  );
+};
+const PScoreTrendArrow = ({ score, prev }) => {
+  if (score == null || prev == null) return null;
+  const diff = score - prev;
+  if (diff > 0.5)  return <span style={{ color:'#00ff88', fontSize:11 }}>&#8593;</span>;
+  if (diff < -0.5) return <span style={{ color:'#ff4466', fontSize:11 }}>&#8595;</span>;
+  return <span style={{ color:'#8899aa', fontSize:11 }}>&#8594;</span>;
+};
+
 const StatCard = ({ label, value, sub, color, small }) => (
   <div style={{ background:'#0d1a2a', border:'1px solid #1a2535', borderRadius:8, padding:'12px 16px', minWidth:100, textAlign:'center' }}>
     <div style={{ fontSize:9, color:'#8899aa', letterSpacing:1, marginBottom:5, fontFamily:'monospace' }}>{label}</div>
@@ -177,6 +208,13 @@ const PositionCard = ({ pos, onClose, bench = [], onOpenBench }) => {
             {pos.tp1_hit && <span style={{ fontSize:9, background:'rgba(0,255,136,0.1)', color:'#00ff88', borderRadius:4, padding:'2px 6px' }}>TP1✓</span>}
             {pos.tp2_hit && <span style={{ fontSize:9, background:'rgba(0,255,136,0.15)', color:'#00ff88', borderRadius:4, padding:'2px 6px' }}>TP2✓</span>}
             {pos.conviction > 0 && <span style={{ fontSize:9, color:heatClr(pos.conviction), fontFamily:'monospace' }}>{pos.conviction}%</span>}
+            {pos.live_score != null && (
+              <>
+                <span style={{ fontSize:9, color:'#8899aa', fontFamily:'monospace' }}>&#8635;{pos.live_score}%</span>
+                <PScoreTrendArrow score={pos.live_score} prev={pos.live_score_prev} />
+                <PTradeStateBadge state={pos.trade_state} />
+              </>
+            )}
             <span style={{ fontSize:9, color:'#00d4ff', display:'flex', alignItems:'center', gap:3, background:'rgba(0,212,255,0.08)', borderRadius:4, padding:'2px 6px' }}>
               <Clock size={9} /> {duration}
             </span>
@@ -225,6 +263,18 @@ const PositionCard = ({ pos, onClose, bench = [], onOpenBench }) => {
       </div>
 
       {slHistoryOpen && <PortfolioSLHistoryPanel pos={pos} onClose={() => setSlHistoryOpen(false)} />}
+
+      {pos.trade_state === 'EXIT' && pos.live_score != null && (
+        <div style={{ borderTop:'1px solid #ff446633', padding:'7px 14px', background:'rgba(255,68,102,0.07)', display:'flex', alignItems:'center', gap:8 }}>
+          <AlertTriangle size={13} color='#ff4466' style={{ flexShrink:0, animation:'p-pulse 1.5s ease-in-out infinite' }} />
+          <span style={{ fontSize:10, color:'#ff4466', fontFamily:'sans-serif', fontWeight:'bold' }}>
+            &#9888; Score below threshold — consider closing this position
+          </span>
+          <span style={{ fontSize:9, color:'#8899aa', fontFamily:'sans-serif', marginLeft:'auto' }}>
+            Live score: {pos.live_score}%
+          </span>
+        </div>
+      )}
 
       {bench.length > 0 && (
         <React.Fragment>
@@ -547,6 +597,7 @@ export default function PortfolioTab() {
 
   return (
     <div style={{ padding:20, fontFamily:"'Inter',sans-serif", color:'#e0e0e0', maxWidth:1200, margin:'0 auto' }}>
+      <style>{`@keyframes p-pulse { 0%,100%{opacity:1} 50%{opacity:0.45} }`}</style>
       <div style={{ display:'flex', alignItems:'center', justifyContent:'space-between', marginBottom:20 }}>
         <div style={{ display:'flex', alignItems:'center', gap:12 }}>
           <div style={{ background:'linear-gradient(135deg,#00d4ff,#0088cc)', borderRadius:10, padding:10, display:'flex' }}>

@@ -41,6 +41,37 @@ const convictionLevel = c => {
   if (c >= 60) return { label:"WARM", color:"#fbbf24" };
   return          { label:"COOL", color:"#00d4ff"  };
 };
+
+// ── Trade State Badge (Phase 1 — observe only) ───────────────────────────────
+const STATE_CFG = {
+  RUNNING:    { color:"#00ff88", bg:"rgba(0,255,136,0.12)",  label:"RUNNING",    pulse:true  },
+  DEVELOPING: { color:"#00d4ff", bg:"rgba(0,212,255,0.12)",  label:"DEVELOP",    pulse:false },
+  PROTECTING: { color:"#fbbf24", bg:"rgba(251,191,36,0.12)", label:"PROTECT",    pulse:false },
+  EXIT:       { color:"#ff4466", bg:"rgba(255,68,102,0.12)", label:"EXIT",       pulse:true  },
+};
+const TradeStateBadge = ({ state }) => {
+  if (!state) return null;
+  const cfg = STATE_CFG[state] || { color:"#8899aa", bg:"rgba(136,153,170,0.1)", label:state, pulse:false };
+  return (
+    <span style={{
+      fontSize:7, fontWeight:"bold", fontFamily:"sans-serif",
+      padding:"1px 4px", borderRadius:3,
+      background:cfg.bg, color:cfg.color,
+      border:`1px solid ${cfg.color}44`,
+      animation: cfg.pulse ? "st-pulse 1.5s ease-in-out infinite" : "none",
+      display:"inline-block", verticalAlign:"middle",
+    }}>
+      {cfg.label}
+    </span>
+  );
+};
+const ScoreTrendArrow = ({ score, prev }) => {
+  if (score == null || prev == null) return null;
+  const diff = score - prev;
+  if (diff > 0.5)  return <span style={{ color:"#00ff88", fontSize:10 }}>&#8593;</span>;
+  if (diff < -0.5) return <span style={{ color:"#ff4466", fontSize:10 }}>&#8595;</span>;
+  return <span style={{ color:"#8899aa", fontSize:10 }}>&#8594;</span>;
+};
 const formatDuration = (startIso, endIso = null) => {
   if (!startIso) return '-';
   try {
@@ -515,6 +546,7 @@ const SignalTracker = () => {
 
   return (
     <div style={{ background:"#050810", padding:"20px 16px", fontFamily:"'Courier New',monospace", color:"#c9d8e8" }}>
+      <style>{`@keyframes st-pulse { 0%,100%{opacity:1} 50%{opacity:0.45} }`}</style>
 
       {/* Header */}
       <div style={{ display:"flex", alignItems:"center", justifyContent:"space-between", borderBottom:"1px solid #1a2535", paddingBottom:14, marginBottom:16 }}>
@@ -698,6 +730,13 @@ const SignalTracker = () => {
                   <div style={{ textAlign:"center" }}>
                     <div style={{ fontSize:16, fontWeight:"bold", color:s.conviction>=70?"#00ff88":s.conviction>=60?"#fbbf24":s.conviction>0?"#94a3b8":"#2a4a5a" }}>{s.conviction||"-"}%</div>
                     <div style={{ fontSize:8, color:"#2a4a5a", fontFamily:"sans-serif" }}>{s.tas}</div>
+                    {isOpen && s.live_score != null && (
+                      <div style={{ display:"flex", alignItems:"center", justifyContent:"center", gap:3, marginTop:3 }}>
+                        <span style={{ fontSize:9, color:"#8899aa", fontFamily:"sans-serif" }}>{s.live_score}%</span>
+                        <ScoreTrendArrow score={s.live_score} prev={s.live_score_prev} />
+                        <TradeStateBadge state={s.trade_state} />
+                      </div>
+                    )}
                   </div>
                   {/* Price */}
                   <div style={{ display:"flex", gap:12, alignItems:"center", flexWrap:"wrap" }}>
@@ -756,6 +795,19 @@ const SignalTracker = () => {
                     )}
                   </div>
                 </div>
+
+                {/* EXIT warning banner */}
+                {isOpen && s.trade_state === 'EXIT' && (
+                  <div style={{ borderTop:"1px solid #ff446633", padding:"7px 14px", background:"rgba(255,68,102,0.07)", display:"flex", alignItems:"center", gap:8 }}>
+                    <AlertTriangle size={13} color="#ff4466" style={{ flexShrink:0, animation:"st-pulse 1.5s ease-in-out infinite" }} />
+                    <span style={{ fontSize:10, color:"#ff4466", fontFamily:"sans-serif", fontWeight:"bold" }}>
+                      &#9888; Score below threshold — consider closing this position
+                    </span>
+                    <span style={{ fontSize:9, color:"#8899aa", fontFamily:"sans-serif", marginLeft:"auto" }}>
+                      Live score: {s.live_score}%
+                    </span>
+                  </div>
+                )}
 
                 {/* SL History Dropdown — click SL or TP1 in the main row to toggle */}
                 {slDropdown===s.id && isOpen && (

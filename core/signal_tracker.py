@@ -543,6 +543,36 @@ def check_signals() -> Dict[str, Any]:
                 s["momentum_fade_close"]=True  # triggers close below
                 print(f"  [FADE-CLOSE] {sym}: auto-closing — gave back {giving_back:.1f}% from MFE +{mfe:.1f}%")
 
+        # ── Live conviction rescan (Phase 1 — observe only) ──────────────────
+        try:
+            from agents.swing_scanner import SwingScanner
+            _scanner = SwingScanner()
+            _scan_result = _scanner.scan([sym])
+            _results = _scan_result.get("results", [])
+            if _results and not _results[0].get("hard_fail"):
+                _new_score = _results[0].get("conviction_pct", 0)
+                _prev_score = s.get("live_score", _new_score)
+                _direction = _new_score - _prev_score
+                s["live_score_prev"] = _prev_score
+                s["live_score"] = _new_score
+                s["live_score_updated_at"] = datetime.datetime.utcnow().isoformat()
+                if _new_score >= 70 and _direction >= 0:
+                    _new_state = "RUNNING"
+                elif _new_score >= 55:
+                    _new_state = "DEVELOPING"
+                elif _new_score >= 40:
+                    _new_state = "PROTECTING"
+                else:
+                    _new_state = "EXIT"
+                _old_state = s.get("trade_state")
+                if _old_state != _new_state:
+                    _append_action(s, "STATE_CHANGE",
+                        f"State {_old_state or 'NEW'} → {_new_state} · score {_new_score}%",
+                        "neutral")
+                s["trade_state"] = _new_state
+        except Exception as _e:
+            print(f"  [RESCAN] {sym}: rescan failed ({_e}), keeping previous state")
+
         # ── Close conditions ─────────────────────────────────────────────────
         is_turbo=s.get("turbo",False); should_close=False; close_status=""; close_reason=""
 
