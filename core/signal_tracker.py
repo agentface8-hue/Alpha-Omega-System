@@ -641,6 +641,11 @@ def check_signals() -> Dict[str, Any]:
                     _append_action(s, "STATE_CHANGE",
                         f"State {_old_state or 'NEW'} → {_new_state} · score {_new_score}%",
                         "neutral")
+                    try:
+                        from core.telegram_alerts import alert_state_change
+                        alert_state_change(s, _old_state or "NEW", _new_state, _new_score)
+                    except Exception:
+                        pass
                 s["trade_state"] = _new_state
         except Exception as _e:
             print(f"  [RESCAN] {sym}: rescan failed ({_e}), keeping previous state")

@@ -150,30 +150,26 @@ def alert_signal_closed(signal: dict, reason: str, price: float):
     )
 
 
-def alert_autopilot_launched(count: int, asset_type: str = "stocks", source: str = ""):
-    source_note = f" [{source}]" if source else ""
+def alert_state_change(signal: dict, old_state: str, new_state: str, score: float):
+    ticker  = signal.get("ticker", "?")
+    entry   = signal.get("entry_price", 0)
+    price   = signal.get("current_price", entry)
+    pnl_pct = ((price - entry) / entry * 100) if entry else 0
+    emoji_map = {
+        "RUNNING":    "\U0001f7e2",
+        "DEVELOPING": "\U0001f7e1",
+        "PROTECTING": "\U0001f7e0",
+        "EXIT":       "\U0001f534",
+    }
+    new_e  = emoji_map.get(new_state, "\u26aa")
+    old_e  = emoji_map.get(old_state, "\u26aa")
+    urgent = " \u26a0\ufe0f REVIEW NOW" if new_state == "EXIT" else ""
     return _send(
-        f"\U0001f916 <b>AUTO-PILOT LAUNCHED</b>{source_note}\n"
-        f"━━━━━━━━━━━━━━━━━━\n"
-        f"\U0001f4ca Signals: <b>{count} {asset_type}</b>\n"
-        f"\U0001f517 alpha-omega-ngfw.vercel.app\n"
-        f"\U0001f550 {datetime.utcnow().strftime('%H:%M UTC')}"
-    )
-
-
-def alert_system_online():
-    return _send(
-        f"\u2705 <b>Alpha-Omega System Online</b>\n"
-        f"━━━━━━━━━━━━━━━━━━\n"
-        f"\U0001f517 alpha-omega-ngfw.vercel.app\n"
-        f"\U0001f550 {datetime.utcnow().strftime('%H:%M UTC')}"
-    )
-
-
-def test_alert():
-    return _send(
-        f"\U0001f9ea <b>Alpha-Omega Alert Test</b>\n"
-        f"━━━━━━━━━━━━━━━━━━\n"
-        f"\u2705 Group chat: working\n"
+        f"{new_e} <b>STATE CHANGE \u2014 {ticker}</b>{urgent}\n"
+        f"\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\n"
+        f"{old_e} {old_state or 'NEW'} \u2192 {new_e} <b>{new_state}</b>\n"
+        f"\U0001f4ca Conviction score: <b>{score:.0f}%</b>\n"
+        f"\U0001f4b0 P&L now: <b>{'+' if pnl_pct >= 0 else ''}{pnl_pct:.1f}%</b>\n"
+        f"\U0001f4e5 Entry: ${entry} | Now: ${price:.2f}\n"
         f"\U0001f550 {datetime.utcnow().strftime('%H:%M UTC')}"
     )
