@@ -14,3 +14,4 @@ termcolor
 fastapi
 uvicorn
 supabase
+requests

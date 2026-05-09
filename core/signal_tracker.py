@@ -217,8 +217,63 @@ def _fetch_indicator_snapshot(symbol: str, asset_type: str = "stock") -> Dict[st
         return {"error":str(e),"timestamp":datetime.datetime.utcnow().isoformat()}
 
 
+
+def _fetch_live_price_alphavantage(symbol: str, asset_type: str) -> Dict[str, Any]:
+    """Try Alpha Vantage for a real-time quote. Returns {"valid":False} on any failure."""
+    import os as _os, requests as _req
+    key = _os.environ.get("ALPHA_VANTAGE_API_KEY", "").strip()
+    if not key:
+        return {"valid": False, "reason": "no_av_key"}
+    try:
+        if asset_type == "crypto":
+            from_ccy = symbol.replace("-USD", "")
+            url = (f"https://www.alphavantage.co/query"
+                   f"?function=CURRENCY_EXCHANGE_RATE"
+                   f"&from_currency={from_ccy}&to_currency=USD&apikey={key}")
+            r = _req.get(url, timeout=6)
+            data = r.json()
+            if "Note" in data or "Information" in data:
+                return {"valid": False, "reason": "av_rate_limit"}
+            rd = data.get("Realtime Currency Exchange Rate", {})
+            price = float(rd.get("5. Exchange Rate", 0))
+            prev_close = price  # exchange rate has no prev-close concept
+        else:
+            url = (f"https://www.alphavantage.co/query"
+                   f"?function=GLOBAL_QUOTE&symbol={symbol}&apikey={key}")
+            r = _req.get(url, timeout=6)
+            data = r.json()
+            if "Note" in data or "Information" in data:
+                return {"valid": False, "reason": "av_rate_limit"}
+            q = data.get("Global Quote", {})
+            price = float(q.get("05. price", 0))
+            prev_close = float(q.get("08. previous close", price) or price)
+        if not price or price <= 0:
+            return {"valid": False, "reason": "av_no_price"}
+        market = _is_us_market_open()
+        gap_pct = round((price - prev_close) / prev_close * 100, 2) if prev_close else 0
+        return {
+            "price":      round(price, 4),
+            "prev_close": round(prev_close, 4),
+            "gap_pct":    gap_pct,
+            "is_stale":   False,
+            "valid":      True,
+            "source":     "alphavantage",
+            "session":    market["session"],
+            "delay_warning": "realtime" if asset_type != "crypto" else "near-realtime",
+        }
+    except Exception as e:
+        return {"valid": False, "reason": f"av_error:{e}"}
+
 def _fetch_live_price(symbol: str, asset_type: str = "stock") -> Dict[str, Any]:
+    """Fetch live price. Tries Alpha Vantage first, falls back to yfinance silently."""
     lookup = f"{symbol}-USD" if asset_type=="crypto" and not symbol.endswith("-USD") else symbol
+    # ── Alpha Vantage (real-time) ─────────────────────────────────────────────
+    av = _fetch_live_price_alphavantage(symbol, asset_type)
+    if av["valid"]:
+        return av
+    if av.get("reason") != "no_av_key":
+        print(f"  [AV] {symbol}: {av.get('reason')} → yfinance fallback")
+    # ── yfinance fallback (15-20min delayed) ──────────────────────────────────
     try:
         tk=yf.Ticker(lookup); fi=tk.fast_info
         price=fi.get("lastPrice") or fi.get("last_price") or fi.get("previousClose",0)
@@ -230,10 +285,10 @@ def _fetch_live_price(symbol: str, asset_type: str = "stock") -> Dict[str, Any]:
         gap_pct=round((price-prev_close)/prev_close*100,2) if prev_close else 0
         return {"price":round(price,4),"prev_close":round(prev_close,4),
                 "gap_pct":gap_pct,"is_stale":is_stale,"valid":True,
-                "session":market["session"],
+                "source":"yfinance","session":market["session"],
                 "delay_warning":"15-20min delayed" if asset_type=="stock" else "near-realtime"}
     except Exception as e:
-        return {"price":0,"valid":False,"reason":str(e)}
+        return {"price":0,"valid":False,"reason":str(e),"source":"yfinance"}
 
 
 def _detect_gap_fill(signal: Dict, current_price: float, prev_close: float) -> Dict[str, Any]:
