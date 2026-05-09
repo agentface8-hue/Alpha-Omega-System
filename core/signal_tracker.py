@@ -40,16 +40,23 @@ def _get_atr_multipliers(regime_str: str) -> dict:
 
 
 def _append_action(signal: Dict, action: str, detail: str, category: str = "neutral"):
-    """Append one entry to signal['action_log']. category: 'profit' | 'risk' | 'neutral'"""
+    """Append one entry to signal['action_log']. category: 'profit' | 'risk' | 'neutral'
+    Also writes to the Supabase action_log table (non-blocking, fails silently)."""
     if "action_log" not in signal:
         signal["action_log"] = []
-    signal["action_log"].append({
+    entry = {
         "ts":       datetime.datetime.utcnow().isoformat(),
         "ticker":   signal.get("ticker", "?"),
         "action":   action,
         "detail":   detail,
         "category": category,
-    })
+    }
+    signal["action_log"].append(entry)
+    # Persist to Supabase action_log table (optional analytics, never blocks)
+    try:
+        store.append_action_log(signal.get("id", ""), signal.get("ticker", "?"), entry)
+    except Exception:
+        pass
 
 
 # ══════════════════════════════════════════════════════════════

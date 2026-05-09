@@ -19,6 +19,42 @@ REPORTS_DIR.mkdir(exist_ok=True)
 # ── Supabase client (lazy init) ──
 _sb = None
 _sb_available = None  # None = not checked yet, True/False = checked
+_startup_done = False  # Track one-time startup migration
+
+
+def _startup_migrate_if_needed(sb):
+    """On first successful Supabase connect: if Supabase is empty but local
+    JSON has signals, migrate them automatically (one-time operation)."""
+    global _startup_done
+    if _startup_done:
+        return
+    _startup_done = True
+    try:
+        result = sb.table("signals").select("id").execute()
+        sb_count = len(result.data)
+        active = _load_json(SIGNALS_FILE)
+        closed = _load_json(CLOSED_FILE)
+        local_total = len(active) + len(closed)
+        if sb_count == 0 and local_total > 0:
+            logger.info(
+                f"Supabase is empty -- migrating {len(active)} active + "
+                f"{len(closed)} closed signals from local JSON"
+            )
+            migrated = 0
+            for s in active + closed:
+                if _sb_save_signal(s):
+                    migrated += 1
+            # Migrate case reports
+            for f in sorted(REPORTS_DIR.glob("*.json")):
+                try:
+                    _sb_save_report(json.loads(f.read_text()))
+                except Exception:
+                    pass
+            logger.info(f"One-time migration complete: {migrated}/{local_total} signals synced")
+        else:
+            logger.info(f"Supabase has {sb_count} signals -- no migration needed")
+    except Exception as e:
+        logger.warning(f"Startup migration check failed: {e}")
 
 
 def _get_supabase():
@@ -40,6 +76,8 @@ def _get_supabase():
         _sb.table("signals").select("id").limit(1).execute()
         _sb_available = True
         logger.info("Supabase storage: CONNECTED")
+        # Run one-time startup migration (JSON -> Supabase if Supabase is empty)
+        _startup_migrate_if_needed(_sb)
         return _sb
     except Exception as e:
         logger.warning(f"Supabase unavailable: {e}. Using JSON fallback.")
@@ -176,6 +214,24 @@ def _sb_load_report(signal_id: str) -> Optional[Dict]:
         return None
 
 
+def _sb_append_action_log(signal_id: str, ticker: str, entry: Dict) -> bool:
+    """Insert a single action entry into the action_log table.
+    Silently skips if the table does not exist (optional analytics table)."""
+    sb = _get_supabase()
+    if not sb:
+        return False
+    try:
+        sb.table("action_log").insert({
+            "signal_id": signal_id,
+            "ticker":    ticker,
+            "entry":     entry,
+        }).execute()
+        return True
+    except Exception as e:
+        logger.debug(f"action_log insert skipped: {e}")
+        return False
+
+
 # ══════════════════════════════════════════════════════════════
 # PUBLIC API — Supabase-first with JSON fallback
 # ══════════════════════════════════════════════════════════════
@@ -229,6 +285,15 @@ def save_single_signal(signal: Dict):
     """Save/update a single signal (used for frequent updates like price checks)."""
     _sb_save_signal(signal)
     # JSON is saved in bulk by the caller
+
+
+def append_action_log(signal_id: str, ticker: str, entry: Dict):
+    """Write a single action entry to the Supabase action_log table.
+    Non-blocking: never raises, silently skips if table is absent."""
+    try:
+        _sb_append_action_log(signal_id, ticker, entry)
+    except Exception:
+        pass
 
 def save_report(report: Dict):
     """Save a case report to both Supabase and local JSON."""
