@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useCallback } from 'react';
-import { RefreshCw, Zap, RotateCcw, Target, BarChart2, Clock, ChevronDown, ChevronRight, TrendingUp, TrendingDown, AlertTriangle } from 'lucide-react';
+import { RefreshCw, Zap, RotateCcw, Target, BarChart2, Clock, ChevronDown, ChevronRight, TrendingUp, TrendingDown, AlertTriangle, Shield } from 'lucide-react';
 
 const API = () => import.meta.env.VITE_API_URL || 'http://127.0.0.1:8000';
 const fmt  = (n, d=2) => (n == null ? '—' : Number(n).toFixed(d));
@@ -167,9 +167,25 @@ const StatCard = ({ label, value, sub, color, small }) => (
 );
 
 // ── Open position card ───────────────────────────────────────────────────────
-const PositionCard = ({ pos, onClose, bench = [], onOpenBench }) => {
+const PositionCard = ({ pos, onClose, onRefresh, bench = [], onOpenBench }) => {
   const [expanded, setExpanded] = useState(false);
   const [slHistoryOpen, setSlHistoryOpen] = useState(false);
+  const [slOverrideOpen, setSlOverrideOpen]     = useState(false);
+  const [slOverrideVal,  setSlOverrideVal]       = useState('');
+  const [slOverrideErr,  setSlOverrideErr]       = useState(null);
+  const [slOverrideBusy, setSlOverrideBusy]      = useState(false);
+  const submitOverrideSL = async () => {
+    const val = parseFloat(slOverrideVal);
+    if (!val || val <= 0 || val >= (pos.entry_price || 9999)) { setSlOverrideErr('Enter a valid SL below entry price'); return; }
+    setSlOverrideBusy(true); setSlOverrideErr(null);
+    try {
+      const r = await fetch(`${API()}/api/signals/override-sl/${pos.id}?new_sl=${val}`, { method:'POST' });
+      const d = await r.json();
+      if (d.error) { setSlOverrideErr(d.error); }
+      else { setSlOverrideOpen(false); setSlOverrideVal(''); if (onRefresh) onRefresh(); }
+    } catch (e) { setSlOverrideErr(e.message); }
+    setSlOverrideBusy(false);
+  };
   const pnl       = pos.unrealized_pnl || 0;
   const pnlPct    = pos.unrealized_pnl_pct || 0;
   const entry     = pos.entry_price;
@@ -225,6 +241,11 @@ const PositionCard = ({ pos, onClose, bench = [], onOpenBench }) => {
             <span style={{ fontSize:18, fontWeight:'bold', color:clr(pnl), fontFamily:'monospace' }}>
               {pnl >= 0 ? '+' : ''}{fmt(pnl, 0)} <span style={{ fontSize:12 }}>({pct(pnlPct)})</span>
             </span>
+            <button onClick={e => { e.stopPropagation(); setSlOverrideOpen(o => !o); setSlOverrideErr(null); }}
+              title='Override stop-loss'
+              style={{ background:'transparent', border:`1px solid ${slOverrideOpen ? '#c084fc' : '#2a4a5a'}`, borderRadius:4, padding:'3px 7px', color: slOverrideOpen ? '#c084fc' : '#2a4a5a', fontSize:10, cursor:'pointer', display:'flex', alignItems:'center', gap:3 }}>
+              <Shield size={10} /> SL
+            </button>
             <button onClick={e => { e.stopPropagation(); onClose(pos.id); }}
               style={{ background:'transparent', border:'1px solid #ff4466', borderRadius:4, padding:'3px 8px', color:'#ff4466', fontSize:10, cursor:'pointer' }}
             >✕ Close</button>
@@ -264,6 +285,30 @@ const PositionCard = ({ pos, onClose, bench = [], onOpenBench }) => {
 
       {slHistoryOpen && <PortfolioSLHistoryPanel pos={pos} onClose={() => setSlHistoryOpen(false)} />}
 
+      {slOverrideOpen && (
+        <div style={{ background:'#07101d', borderTop:'1px solid #c084fc44', padding:'10px 14px' }}
+          onClick={e => e.stopPropagation()}>
+          <div style={{ display:'flex', alignItems:'center', gap:8, flexWrap:'wrap' }}>
+            <Shield size={12} color='#c084fc' />
+            <span style={{ fontSize:9, fontWeight:'bold', color:'#c084fc', fontFamily:'monospace', letterSpacing:1 }}>OVERRIDE STOP-LOSS</span>
+            <span style={{ fontSize:9, color:'#8899aa', fontFamily:'monospace' }}>current: ${fmt(sl,2)}</span>
+            <input type='number' step='0.01' value={slOverrideVal}
+              onChange={e => setSlOverrideVal(e.target.value)}
+              onKeyDown={e => e.key === 'Enter' && submitOverrideSL()}
+              placeholder={fmt(sl,2)}
+              style={{ width:90, background:'#0d1a2a', border:'1px solid #c084fc', borderRadius:4, padding:'4px 8px', color:'#e0e0e0', fontSize:12, fontFamily:'monospace', textAlign:'center' }}
+              autoFocus />
+            <button onClick={submitOverrideSL} disabled={slOverrideBusy}
+              style={{ background:'linear-gradient(135deg,#c084fc,#7c3aed)', border:'none', borderRadius:4, padding:'4px 12px', color:'#fff', fontSize:10, fontWeight:'bold', cursor:'pointer' }}>
+              {slOverrideBusy ? '…' : 'SET'}
+            </button>
+            <button onClick={() => { setSlOverrideOpen(false); setSlOverrideErr(null); }}
+              style={{ background:'transparent', border:'none', color:'#8899aa', cursor:'pointer', fontSize:14, lineHeight:1 }}>×</button>
+          </div>
+          {slOverrideErr && <div style={{ fontSize:10, color:'#ff4466', marginTop:6, fontFamily:'sans-serif' }}>{slOverrideErr}</div>}
+        </div>
+      )}
+
       {pos.trade_state === 'EXIT' && pos.live_score != null && (
         <div style={{ borderTop:'1px solid #ff446633', padding:'7px 14px', background:'rgba(255,68,102,0.07)', display:'flex', alignItems:'center', gap:8 }}>
           <AlertTriangle size={13} color='#ff4466' style={{ flexShrink:0, animation:'p-pulse 1.5s ease-in-out infinite' }} />
@@ -297,16 +342,49 @@ const PositionCard = ({ pos, onClose, bench = [], onOpenBench }) => {
 
       {expanded && (
         <div style={{ borderTop:'1px solid #1a2535', padding:'14px', background:'#080c14' }}>
-          <div style={{ background:'#0d1520', border:'1px solid #1a2535', borderRadius:8, padding:'10px 14px', marginBottom:14 }}>
-            <div style={{ fontSize:8, color:'#c084fc', letterSpacing:1, marginBottom:8, fontFamily:'monospace', fontWeight:'bold' }}>ENTRY REASON</div>
-            <div style={{ display:'flex', gap:16, flexWrap:'wrap', fontSize:11, fontFamily:'monospace', color:'#94a3b8' }}>
+          <div style={{ background:'#0d1520', border:'1px solid #1a2535', borderRadius:8, padding:'12px 14px', marginBottom:14 }}>
+            <div style={{ fontSize:8, color:'#c084fc', letterSpacing:1, marginBottom:10, fontFamily:'monospace', fontWeight:'bold' }}>ENTRY REASON</div>
+            {pos.pillar_scores && Object.keys(pos.pillar_scores).length > 0 && (
+              <div style={{ marginBottom:12 }}>
+                <div style={{ fontSize:8, color:'#8899aa', marginBottom:6, fontFamily:'monospace', letterSpacing:1 }}>CONVICTION PILLARS</div>
+                <div style={{ display:'flex', gap:12, flexWrap:'wrap' }}>
+                  {[
+                    { key:'p1', label:'P1 Trend' },
+                    { key:'p2', label:'P2 Volume' },
+                    { key:'p3', label:'P3 S/R' },
+                    { key:'p4', label:'P4 Multi-TF' },
+                    { key:'p5', label:'P5 R/R' },
+                  ].map(({ key, label }) => {
+                    const score = pos.pillar_scores[key];
+                    const pColor = score == null ? '#2a4a5a' : score >= 70 ? '#00ff88' : score >= 50 ? '#fbbf24' : '#ff4466';
+                    return (
+                      <div key={key} style={{ textAlign:'center', minWidth:62 }}>
+                        <div style={{ fontSize:8, color:'#8899aa', marginBottom:4, fontFamily:'monospace' }}>{label}</div>
+                        <div style={{ background:'#0a1018', borderRadius:3, height:5, width:62, overflow:'hidden', marginBottom:3 }}>
+                          <div style={{ height:'100%', width:`${score || 0}%`, background:pColor, borderRadius:3, transition:'width 0.4s' }} />
+                        </div>
+                        <div style={{ fontSize:9, color:pColor, fontFamily:'monospace', fontWeight:'bold' }}>{score != null ? `${score}%` : '—'}</div>
+                      </div>
+                    );
+                  })}
+                </div>
+              </div>
+            )}
+            <div style={{ display:'flex', gap:14, flexWrap:'wrap', fontSize:11, fontFamily:'monospace', color:'#94a3b8' }}>
               {pos.conviction > 0 && <span>Conviction: <b style={{color:heatClr(pos.conviction)}}>{pos.conviction}%</b></span>}
+              {pos.tas && pos.tas !== '—' && pos.tas !== '' && <span>TAS: <b style={{color:'#00d4ff'}}>{pos.tas}</b></span>}
+              {pos.entry_market_context?.vix > 0 && (
+                <span>VIX: <b style={{color: pos.entry_market_context.vix > 25 ? '#ff4466' : pos.entry_market_context.vix > 20 ? '#fbbf24' : '#00ff88'}}>{pos.entry_market_context.vix}</b></span>
+              )}
+              {pos.entry_market_context?.spy_change_pct != null && (
+                <span>SPY: <b style={{color: pos.entry_market_context.spy_change_pct >= 0 ? '#00ff88' : '#ff4466'}}>{pos.entry_market_context.spy_change_pct >= 0 ? '+' : ''}{pos.entry_market_context.spy_change_pct}%</b></span>
+              )}
               {pos.atr_at_entry > 0 && <span>ATR: <b style={{color:'#e0e0e0'}}>${fmt(pos.atr_at_entry, 2)}</b></span>}
               {pos.regime && <span>Regime: <b style={{color:'#00d4ff'}}>{pos.regime}</b></span>}
               {pos.sector && <span>Sector: <b style={{color:'#8899aa'}}>{pos.sector}</b></span>}
-              {pos.signal_id && <span style={{color:'#2a4a5a'}}>Signal: {pos.signal_id.slice(0, 8)}</span>}
-              {!pos.conviction && !pos.atr_at_entry && !pos.regime && (
-                <span style={{color:'#2a4a5a'}}>No additional entry context recorded</span>
+              {pos.signal_id && <span style={{color:'#2a4a5a'}}>ID: {pos.signal_id.slice(0,8)}</span>}
+              {!pos.conviction && !pos.atr_at_entry && !pos.regime && !pos.pillar_scores && (
+                <span style={{color:'#2a4a5a'}}>No entry context recorded</span>
               )}
             </div>
           </div>
@@ -466,6 +544,7 @@ export default function PortfolioTab() {
   const [countdown, setCountdown]   = useState(30);
   const [error, setError]           = useState(null);
   const [scanCandidates, setScanCandidates] = useState([]);
+  const [allActions,     setAllActions]     = useState([]);
 
   const load = useCallback(async (silent = false) => {
     if (!silent) setLoading(true);
@@ -476,6 +555,20 @@ export default function PortfolioTab() {
       setError(null);
     } catch (e) { setError(e.message); }
     setLoading(false);
+  }, []);
+
+  const fetchActionLog = useCallback(async () => {
+    try {
+      const r = await fetch(`${API()}/api/signals`);
+      if (!r.ok) return;
+      const d = await r.json();
+      const sigs = [...(d.active || []), ...(d.closed || [])];
+      const actions = sigs.flatMap(s =>
+        (s.action_log || []).map(a => ({ ...a, ticker: s.ticker || a.ticker || '?' }))
+      );
+      actions.sort((a, b) => (b.ts || '').localeCompare(a.ts || ''));
+      setAllActions(actions.slice(0, 50));
+    } catch { /* silent */ }
   }, []);
 
   const fetchCandidates = useCallback(async (excludeTickers = []) => {
@@ -528,6 +621,7 @@ export default function PortfolioTab() {
       setCountdown(30);
       const tickers = (result.portfolio?.open_positions || []).map(p => p.ticker.toUpperCase());
       fetchCandidates(tickers);
+      fetchActionLog();
     } catch (e) { setError(e.message); }
     setChecking(false);
   };
@@ -581,7 +675,7 @@ export default function PortfolioTab() {
     await load();
   };
 
-  useEffect(() => { load(); fetchCandidates([]); }, [load, fetchCandidates]);
+  useEffect(() => { load(); fetchCandidates([]); fetchActionLog(); }, [load, fetchCandidates, fetchActionLog]);
   useEffect(() => {
     if (!autoRefresh) return;
     const timer = setInterval(() => setCountdown(c => { if (c <= 1) { checkPrices(); return 30; } return c - 1; }), 1000);
@@ -667,7 +761,7 @@ export default function PortfolioTab() {
           </div>
         )}
         {openPositions.map(pos => (
-          <PositionCard key={pos.id} pos={pos} onClose={closePos}
+          <PositionCard key={pos.id} pos={pos} onClose={closePos} onRefresh={() => { load(true); fetchActionLog(); }}
             bench={getBenchForPos(pos)} onOpenBench={openBenchAsPosition} />
         ))}
         {Array.from({ length: slots }).map((_, i) => (
@@ -699,6 +793,41 @@ export default function PortfolioTab() {
           </div>
         </div>
       )}
+
+      <div style={{ background:'#0a1018', border:'1px solid #1a2535', borderRadius:10, padding:16, marginTop:20 }}>
+        <div style={{ display:'flex', alignItems:'center', justifyContent:'space-between', marginBottom:4 }}>
+          <div style={{ fontSize:13, fontWeight:'bold', color:'#8899aa', letterSpacing:1 }}>SYSTEM ACTION LOG</div>
+          <button onClick={fetchActionLog}
+            style={{ background:'transparent', border:'1px solid #1a2535', borderRadius:4, padding:'3px 8px', color:'#8899aa', fontSize:10, cursor:'pointer', display:'flex', alignItems:'center', gap:4 }}>
+            <RefreshCw size={10} /> Refresh
+          </button>
+        </div>
+        <div style={{ fontSize:10, color:'#2a4a5a', marginBottom:12, fontFamily:'sans-serif' }}>Last 50 actions across all signals</div>
+        {allActions.length === 0 ? (
+          <div style={{ textAlign:'center', padding:'20px', color:'#2a4a5a', fontSize:12, fontFamily:'monospace' }}>No actions recorded yet.</div>
+        ) : (
+          <div style={{ display:'flex', flexDirection:'column', gap:3 }}>
+            {allActions.map((a, i) => {
+              const act = a.action || '';
+              const col = act.includes('TP') || act === 'TSL_MOVE' || act === 'TRAILING_SL' || act === 'TSL_ACTIVATED'
+                ? '#00ff88'
+                : act.includes('SL_HIT') || act === 'CLOSED' || act === 'STOPPED' || act === 'MOMENTUM_FADE' || act === 'TIMEOUT' || a.category === 'bad'
+                ? '#ff4466'
+                : act === 'OPENED' || act === 'STATE_CHANGE'
+                ? '#00d4ff'
+                : '#8899aa';
+              return (
+                <div key={i} style={{ display:'grid', gridTemplateColumns:'130px 65px 140px 1fr', gap:8, alignItems:'center', fontSize:10, fontFamily:'monospace', borderBottom:'1px solid #060d14', paddingBottom:4, paddingTop:2 }}>
+                  <span style={{ color:'#2a4a5a' }}>{(a.ts || '').slice(0,19).replace('T',' ')}</span>
+                  <span style={{ color:'#e0e0e0', fontWeight:'bold' }}>{a.ticker}</span>
+                  <span style={{ color:col, fontWeight:'bold' }}>{act}</span>
+                  <span style={{ color:'#8899aa', overflow:'hidden', textOverflow:'ellipsis', whiteSpace:'nowrap' }}>{a.detail || ''}</span>
+                </div>
+              );
+            })}
+          </div>
+        )}
+      </div>
     </div>
   );
 }
