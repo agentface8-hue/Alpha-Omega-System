@@ -17,11 +17,12 @@ REPORTS_DIR = SIGNALS_DIR / "reports"
 REPORTS_DIR.mkdir(exist_ok=True)
 
 # ── Regime-based ATR multipliers ─────────────────────────────────────────────
+# v2.2: SL multipliers widened — wider SL = fewer shares, same $500 risk budget
 REGIME_MULTIPLIERS = {
-    "Trending Bull":  {"sl": 0.5, "tp1": 0.75, "tp2": 1.5,  "tp3": 2.5},
-    "Choppy / Range": {"sl": 0.4, "tp1": 0.50, "tp2": 0.9,  "tp3": 1.4},
-    "Trending Bear":  {"sl": 0.4, "tp1": 0.50, "tp2": 1.0,  "tp3": 1.5},
-    "High-Vol Event": {"sl": 0.35,"tp1": 0.40, "tp2": 0.7,  "tp3": 1.0},
+    "Trending Bull":  {"sl": 1.5, "tp1": 0.75, "tp2": 1.5,  "tp3": 2.5},
+    "Choppy / Range": {"sl": 2.0, "tp1": 0.50, "tp2": 0.9,  "tp3": 1.4},
+    "Trending Bear":  {"sl": 1.0, "tp1": 0.50, "tp2": 1.0,  "tp3": 1.5},
+    "High-Vol Event": {"sl": 1.5, "tp1": 0.40, "tp2": 0.7,  "tp3": 1.0},
 }
 _DEFAULT_MULTS  = REGIME_MULTIPLIERS["Trending Bull"]
 MAX_TP3_EXTENSIONS = 3
@@ -476,7 +477,7 @@ def check_signals() -> Dict[str, Any]:
             curr_sl  = s["sl"]
             # Use same ATR multiplier that set the initial SL for this regime
             mults    = s.get("regime_multipliers", _DEFAULT_MULTS)
-            sl_mult  = mults.get("sl", 0.5)
+            sl_mult  = mults.get("sl", 1.5)
             if atr > 0:
                 new_tsl = round(highest - atr * sl_mult, 4)
             else:

@@ -305,6 +305,61 @@ async def get_regime_performance():
     return grp()
 
 
+@app.get("/api/scan/candidates")
+async def scan_candidates(exclude: str = ""):
+    """
+    Return top 10 scan candidates, excluding already-open tickers.
+    Used by the Portfolio BENCH row. Scans the full_scan watchlist.
+    Query param: exclude=CRWD,NET,MRVL  (comma-separated, case-insensitive)
+    """
+    try:
+        from agents.swing_scanner import SwingScanner
+        from core.watchlists import get_watchlist
+
+        excluded = {t.strip().upper() for t in exclude.split(",") if t.strip()} if exclude else set()
+
+        wl      = get_watchlist("full_scan")
+        symbols = [s for s in wl["tickers"] if s.upper() not in excluded]
+
+        scanner = SwingScanner()
+        result  = scanner.scan(symbols)
+
+        raw = [
+            r for r in result.get("results", [])
+            if not r.get("hard_fail")
+            and r.get("conviction_pct", 0) > 0
+            and r.get("ticker", "").upper() not in excluded
+        ]
+        raw.sort(key=lambda x: x.get("conviction_pct", 0), reverse=True)
+
+        candidates = [
+            {
+                "ticker":       r["ticker"],
+                "conviction_pct": r.get("conviction_pct", 0),
+                "heat":         r.get("heat", ""),
+                "trend":        r.get("trend", ""),
+                "regime":       result.get("market_regime", ""),
+                "sector":       r.get("sector", ""),
+                "sl":           r.get("sl", 0),
+                "tp1":          r.get("tp1", 0),
+                "tp2":          r.get("tp2", 0),
+                "tp3":          r.get("tp3", 0),
+                "entry_price":  r.get("last_close", 0),
+            }
+            for r in raw[:10]
+        ]
+
+        return {
+            "candidates":    candidates,
+            "market_regime": result.get("market_regime", ""),
+            "scanned":       len(result.get("results", [])),
+            "excluded":      list(excluded),
+        }
+    except Exception as e:
+        traceback.print_exc()
+        raise HTTPException(status_code=500, detail=str(e))
+
+
 @app.post("/api/autopilot")
 async def run_autopilot(top_n: int = 10, watchlist: str = "full_scan"):
     """

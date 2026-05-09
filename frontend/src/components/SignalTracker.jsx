@@ -58,6 +58,78 @@ const fmt = ts => {
   catch { return ts.slice(11,16) || '-'; }
 };
 
+// ── Sector map (mirrors backend SECTOR_MAP) ───────────────────────────────────
+const SECTOR_MAP = {
+  AAPL:'Tech', MSFT:'Tech', NVDA:'Tech', AMD:'Tech', GOOGL:'Tech', META:'Tech', AMZN:'Tech',
+  TSLA:'Consumer', NFLX:'Consumer', DIS:'Consumer', NKE:'Consumer', SBUX:'Consumer',
+  JPM:'Finance', GS:'Finance', BAC:'Finance', V:'Finance', MA:'Finance', BRK:'Finance',
+  JNJ:'Health', PFE:'Health', UNH:'Health', ABBV:'Health', LLY:'Health', MRK:'Health',
+  XOM:'Energy', CVX:'Energy', COP:'Energy', SLB:'Energy',
+  BA:'Industrials', CAT:'Industrials', HON:'Industrials', GE:'Industrials',
+  CRWD:'Tech', NET:'Tech', MRVL:'Tech', PANW:'Tech', ZS:'Tech', OKTA:'Tech',
+  SHOP:'Tech', SNOW:'Tech', PLTR:'Tech', DDOG:'Tech', GTLB:'Tech',
+  COIN:'Finance', SQ:'Finance', PYPL:'Finance',
+  BTC:'Crypto', ETH:'Crypto', SOL:'Crypto', XRP:'Crypto', ADA:'Crypto',
+};
+const getSector = (ticker, signal = null) =>
+  SECTOR_MAP[(ticker || '').toUpperCase()] ||
+  signal?.entry_snapshot?.sector ||
+  'Other';
+
+// ── Extract SL change history from action_log ────────────────────────────────
+// Filters OPENED, TSL MOVED UP, SL OVERRIDE entries.
+// Enforces only-ascending rule (SL can never go down).
+const extractSLHistory = signal => {
+  const log     = signal.action_log || [];
+  const entries = [];
+
+  // Initial SL from OPENED entry (or original_sl field)
+  const openEntry = log.find(e => e.action === 'OPENED');
+  const origSL    = signal.original_sl || signal.sl;
+  let origVal     = origSL;
+  let origNote    = 'Entry SL';
+
+  if (openEntry) {
+    const m = openEntry.detail.match(/SL \$(\d+\.?\d*)/);
+    if (m) origVal = parseFloat(m[1]);
+    origNote = openEntry.detail.length > 60
+      ? openEntry.detail.slice(0, 58) + '…'
+      : openEntry.detail;
+  }
+  entries.push({ sl: origVal, note: origNote, ts: openEntry?.ts || signal.entry_time, label: 'Original' });
+
+  // TSL ratchets + manual overrides
+  log
+    .filter(e => e.action === 'TSL MOVED UP' || e.action === 'SL OVERRIDE')
+    .forEach(e => {
+      const m = e.detail.match(/→ \$(\d+\.?\d*)/);
+      if (!m) return;
+      const newSL = parseFloat(m[1]);
+      let note = '';
+      if (e.action === 'TSL MOVED UP') {
+        const highM = e.detail.match(/new high \$(\d+\.?\d*)/);
+        note = highM ? `TSL: high $${highM[1]}` : 'TSL ratchet';
+      } else {
+        note = 'Manual SL override';
+      }
+      entries.push({ sl: newSL, note, ts: e.ts, label: null });
+    });
+
+  // Sort chronologically
+  entries.sort((a, b) => (a.ts || '').localeCompare(b.ts || ''));
+
+  // Enforce ascending-only rule
+  let maxSL = -Infinity;
+  const ascending = entries.filter(e => {
+    if (e.sl >= maxSL) { maxSL = e.sl; return true; }
+    return false;
+  });
+
+  // Mark last entry as "Current"
+  if (ascending.length > 1) ascending[ascending.length - 1].label = 'Current';
+  return ascending;
+};
+
 const PillarChart = ({ scores }) => {
   if (!scores || Object.keys(scores).length === 0) return null;
   return (
@@ -277,6 +349,45 @@ const TSLStatusPanel = ({ signal }) => {
   );
 };
 
+// ── SL History Dropdown ──────────────────────────────────────────────────────
+const SLHistoryPanel = ({ signal, entryTime, onClose }) => {
+  const history = extractSLHistory(signal);
+  if (history.length === 0) return null;
+  return (
+    <div style={{ background:'#07101d', borderTop:'1px solid #1a2535', padding:'10px 14px' }}
+      onClick={e => e.stopPropagation()}>
+      <div style={{ display:'flex', justifyContent:'space-between', alignItems:'center', marginBottom:8 }}>
+        <span style={{ fontSize:9, fontWeight:'bold', color:'#c084fc', fontFamily:'sans-serif', letterSpacing:1 }}>SL HISTORY</span>
+        <button onClick={onClose}
+          style={{ background:'transparent', border:'none', color:'#8899aa', cursor:'pointer', fontSize:14, lineHeight:1 }}>×</button>
+      </div>
+      <div style={{ display:'flex', flexDirection:'column', gap:5 }}>
+        {history.map((h, i) => {
+          const isLast   = i === history.length - 1;
+          const rowLabel = h.label || '+' + formatDuration(entryTime, h.ts);
+          return (
+            <div key={i} style={{ display:'grid', gridTemplateColumns:'70px 80px 1fr 60px', gap:8, alignItems:'center',
+              opacity: isLast ? 1 : 0.65 }}>
+              <span style={{ fontSize:9, color: isLast ? '#c084fc' : '#2a4a5a', fontFamily:'sans-serif', fontWeight: isLast ? 'bold' : 'normal' }}>
+                {rowLabel}
+              </span>
+              <span style={{ fontSize:12, fontWeight:'bold', color:'#ff4466', fontFamily:'monospace' }}>
+                ${h.sl.toFixed(2)}
+              </span>
+              <span style={{ fontSize:9, color:'#8899aa', fontFamily:'sans-serif', overflow:'hidden', textOverflow:'ellipsis', whiteSpace:'nowrap' }}>
+                {h.note}
+              </span>
+              <span style={{ fontSize:8, color:'#2a4a5a', fontFamily:'monospace', textAlign:'right' }}>
+                {fmt(h.ts)}
+              </span>
+            </div>
+          );
+        })}
+      </div>
+    </div>
+  );
+};
+
 // ================================================
 const SignalTracker = () => {
   const [data,             setData]             = useState(null);
@@ -293,9 +404,45 @@ const SignalTracker = () => {
   const [expandedSignal,   setExpandedSignal]   = useState(null);
   const [overrideSLFor,    setOverrideSLFor]    = useState(null);
   const [now,              setNow]              = useState(new Date());
+  const [slDropdown,       setSlDropdown]       = useState(null);   // signal id or null
+  const [scanCandidates,   setScanCandidates]   = useState([]);     // bench cache
   const apiUrl = import.meta.env.VITE_API_URL || 'http://127.0.0.1:8000';
 
   useEffect(() => { const t = setInterval(() => setNow(new Date()), 60000); return () => clearInterval(t); }, []);
+
+  // ── Bench candidate helpers ────────────────────────────────────────────────
+  const fetchCandidates = async (activeTickers = []) => {
+    try {
+      const exclude = activeTickers.join(',');
+      const url     = `${apiUrl}/api/scan/candidates${exclude ? `?exclude=${exclude}` : ''}`;
+      const res     = await fetch(url);
+      if (res.ok) {
+        const json = await res.json();
+        setScanCandidates(json.candidates || []);
+      }
+    } catch (e) { console.error('[BENCH] scan failed:', e); }
+  };
+
+  // Returns top 2 bench candidates for a given signal, preferring same sector.
+  const getBenchFor = (signal, candidates) => {
+    if (!candidates || candidates.length === 0) return [];
+    const activeTickers = new Set((data?.active || []).map(s => s.ticker));
+    const available     = candidates.filter(c => !activeTickers.has(c.ticker));
+    const signalSector  = getSector(signal.ticker, signal);
+    const sameSector    = available.filter(c => getSector(c.ticker) === signalSector);
+    const other         = available.filter(c => getSector(c.ticker) !== signalSector);
+    return [...sameSector, ...other].slice(0, 2);
+  };
+
+  const openBenchTicker = async (candidate, e) => {
+    e.stopPropagation();
+    if (!confirm(`Open turbo signal for ${candidate.ticker} (${candidate.conviction_pct}%)?`)) return;
+    try {
+      const res = await fetch(`${apiUrl}/api/signals/turbo/${candidate.ticker}`, { method:'POST' });
+      if (!res.ok) { const err = await res.json(); alert(err.detail || 'Error'); return; }
+      fetchSignals(true);
+    } catch (err) { alert(err.message); }
+  };
 
   const fetchSignals = async (refresh = false) => {
     if (refresh) setRefreshing(true); else setLoading(true);
@@ -304,6 +451,8 @@ const SignalTracker = () => {
       const json = await res.json();
       setData(json);
       if (refresh && autoRefresh) setCountdown(30);
+      // Refresh bench candidates whenever prices are checked
+      if (refresh) fetchCandidates((json.active || []).map(s => s.ticker));
     } catch (e) { console.error(e); }
     setLoading(false); setRefreshing(false);
   };
@@ -349,7 +498,7 @@ const SignalTracker = () => {
     return () => { clearInterval(pi); clearInterval(ti); };
   }, [autoRefresh]);
   useEffect(() => { if (data?.active?.length>0 && !autoRefresh) setAutoRefresh(true); }, [data?.active?.length]);
-  useEffect(() => { fetchSignals(); }, []);
+  useEffect(() => { fetchSignals(); fetchCandidates([]); }, []);
 
   const stats     = data?.stats || {};
   const active    = data?.active || [];
@@ -555,8 +704,18 @@ const SignalTracker = () => {
                     <span style={{ fontSize:11, color:"#94a3b8" }}>${s.entry_price}</span>
                     <span style={{ color:"#2a4a5a" }}>&rarr;</span>
                     <span style={{ fontSize:13, fontWeight:"bold", color:pnlColor(s.pnl_pct) }}>${s.current_price||s.close_price}</span>
-                    <span style={{ fontSize:9, color:s.trailing_sl_active?"#00d4ff":"#ff4466", fontFamily:"sans-serif" }}>SL ${s.sl}{s.trailing_sl_active?" ⟳":""}</span>
-                    <span style={{ fontSize:9, color:s.tp1_hit?"#00ff88":"#8899aa", fontWeight:s.tp1_hit?"bold":"normal", fontFamily:"sans-serif" }}>TP1 ${s.tp1}{s.tp1_hit?" ✓":""}</span>
+                    <span
+                      onClick={e => { e.stopPropagation(); setSlDropdown(slDropdown===s.id?null:s.id); }}
+                      title="Click to see SL history"
+                      style={{ fontSize:9, color:s.trailing_sl_active?"#00d4ff":"#ff4466", fontFamily:"sans-serif", cursor:"pointer", textDecoration:"underline dotted", textUnderlineOffset:2 }}>
+                      SL ${s.sl}{s.trailing_sl_active?" ⟳":""}
+                    </span>
+                    <span
+                      onClick={e => { e.stopPropagation(); setSlDropdown(slDropdown===s.id?null:s.id); }}
+                      title="Click to see SL/target history"
+                      style={{ fontSize:9, color:s.tp1_hit?"#00ff88":"#8899aa", fontWeight:s.tp1_hit?"bold":"normal", fontFamily:"sans-serif", cursor:"pointer", textDecoration:"underline dotted", textUnderlineOffset:2 }}>
+                      TP1 ${s.tp1}{s.tp1_hit?" ✓":""}
+                    </span>
                   </div>
                   {/* P&L */}
                   <div style={{ textAlign:"right" }}>
@@ -597,6 +756,37 @@ const SignalTracker = () => {
                     )}
                   </div>
                 </div>
+
+                {/* SL History Dropdown — click SL or TP1 in the main row to toggle */}
+                {slDropdown===s.id && isOpen && (
+                  <SLHistoryPanel signal={s} entryTime={s.entry_time} onClose={() => setSlDropdown(null)} />
+                )}
+
+                {/* BENCH row — top 2 replacement candidates for this position */}
+                {tab==='active' && isOpen && (() => {
+                  const bench = getBenchFor(s, scanCandidates);
+                  if (bench.length === 0) return null;
+                  return (
+                    <div style={{ borderTop:'1px solid #0d1520', padding:'5px 14px', display:'flex', alignItems:'center', gap:8, background:'rgba(0,212,255,0.025)', flexWrap:'wrap' }}
+                      onClick={e => e.stopPropagation()}>
+                      <span style={{ fontSize:8, color:'#2a4a5a', fontFamily:'sans-serif', fontWeight:'bold', whiteSpace:'nowrap' }}>BENCH →</span>
+                      {bench.map((c, ci) => (
+                        <React.Fragment key={c.ticker}>
+                          <div style={{ display:'flex', alignItems:'center', gap:4 }}>
+                            <span style={{ fontSize:10, fontWeight:'bold', color:'#00d4ff', fontFamily:'monospace' }}>{c.ticker}</span>
+                            <span style={{ fontSize:9, color:'#8899aa', fontFamily:'sans-serif' }}>{c.conviction_pct}%</span>
+                            <span style={{ fontSize:9, color:c.trend==='BULL'?'#00ff88':'#ff4466', fontFamily:'sans-serif' }}>{c.trend||'—'}</span>
+                            <button onClick={e => openBenchTicker(c, e)}
+                              style={{ background:'rgba(192,132,252,0.12)', border:'1px solid #c084fc44', borderRadius:3, padding:'1px 7px', color:'#c084fc', fontSize:8, cursor:'pointer', fontFamily:'sans-serif', fontWeight:'bold' }}>
+                              OPEN
+                            </button>
+                          </div>
+                          {ci < bench.length - 1 && <span style={{ color:'#1a2535', fontSize:10 }}>|</span>}
+                        </React.Fragment>
+                      ))}
+                    </div>
+                  );
+                })()}
 
                 {/* Override SL form -- renders for any active/open signal regardless of scan_data */}
                 {showOverride && isOpen && (
