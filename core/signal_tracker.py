@@ -421,6 +421,27 @@ def create_turbo_signal(symbol: str, asset_type: str = "stock", scan_data: Dict 
             "near_confluence":scan_data.get("near_confluence",False),
         }
 
+    # ── Advisor screening (Sonnet) ────────────────────────────────────────────
+    advisor_result = {"verdict": "APPROVE", "confidence": 50, "concerns": [], "thesis": "", "model": "skipped"}
+    try:
+        _sd_for_advisor = scan_data or {}
+        _sd_for_advisor = dict(_sd_for_advisor)
+        _sd_for_advisor.update({"ticker": sym, "asset_type": asset_type,
+                                 "entry": price, "sl": sl, "tp1": tp1, "tp3": tp3,
+                                 "conviction_pct": conviction, "pillar_scores": pillar_scores, "tas": tas})
+        from core.advisor import screen_signal as _screen
+        advisor_result = _screen(_sd_for_advisor, market_ctx)
+        print(f"  [ADVISOR] {sym}: {advisor_result['verdict']} "
+              f"(conf={advisor_result.get('confidence',0)}%) — {advisor_result.get('thesis','')[:60]}")
+        if advisor_result["verdict"] == "VETO":
+            return {
+                "error": f"Signal VETOED by Advisor: {advisor_result.get('thesis', 'No reason given')}",
+                "advisor": advisor_result,
+                "ticker": sym,
+            }
+    except Exception as _ae:
+        print(f"  [ADVISOR] {sym}: screening failed ({_ae}) — proceeding with APPROVE")
+
     signal = {
         "id":str(uuid.uuid4())[:8],"ticker":sym,"asset_type":asset_type,
         "entry_price":round(price,4),"entry_time":datetime.datetime.utcnow().isoformat(),
@@ -446,11 +467,23 @@ def create_turbo_signal(symbol: str, asset_type: str = "stock", scan_data: Dict 
         "gap_info":None,"slippage_pct":0,"turbo":True,
         "original_sl":sl,"trailing_sl_active":False,"sl_last_updated":None,
         "action_log":[],
+        # Advisor (Sonnet pre-trade screen)
+        "advisor_verdict":    advisor_result.get("verdict", "APPROVE"),
+        "advisor_confidence": advisor_result.get("confidence", 50),
+        "advisor_concerns":   advisor_result.get("concerns", []),
+        "advisor_thesis":     advisor_result.get("thesis", ""),
+        "advisor_model":      advisor_result.get("model", ""),
     }
     _append_action(signal, "OPENED",
         f"Turbo · {regime_str} · ATR ${round(atr_val,2)} · "
         f"SL ${sl:.2f} · TP1 ${tp1:.2f} · TP3 ${tp3:.2f}",
         "neutral")
+    _adv_cat = "profit" if advisor_result.get("verdict")=="APPROVE" else "risk"
+    _adv_detail = advisor_result.get("thesis","") or advisor_result.get("verdict","")
+    if advisor_result.get("concerns"):
+        _adv_detail += " | " + "; ".join(advisor_result["concerns"][:2])
+    _append_action(signal, f"ADVISOR {advisor_result.get('verdict','?')}",
+        _adv_detail[:120], _adv_cat)
 
     active=store.load_active(); active.append(signal); store.save_active(active)
 

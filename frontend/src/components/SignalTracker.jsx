@@ -281,6 +281,23 @@ const OverrideSLForm = ({ signal, onSave, onCancel }) => {
   const newNum = parseFloat(val);
   const direction = !isNaN(newNum) ? (newNum > signal.sl ? "tightening up" : newNum < signal.sl ? "loosening down" : "no change") : "";
   const diff = !isNaN(newNum) ? (newNum - signal.sl).toFixed(2) : "";
+
+  const askOpus = async (signalId) => {
+    const q = (advisorInput[signalId] || '').trim();
+    if (!q) return;
+    setAdvisorReply(r => ({ ...r, [signalId]: { loading: true } }));
+    try {
+      const res = await fetch(`${apiUrl}/api/signals/ask-advisor/${signalId}`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ question: q }),
+      });
+      const data = await res.json();
+      setAdvisorReply(r => ({ ...r, [signalId]: { answer: data.answer, loading: false } }));
+    } catch (e) {
+      setAdvisorReply(r => ({ ...r, [signalId]: { error: String(e), loading: false } }));
+    }
+  };
   return (
     <div style={{ background:"rgba(192,132,252,0.06)", border:"1px solid #c084fc33", borderRadius:8, padding:12, marginTop:10 }}>
       <div style={{ fontSize:10, fontWeight:"bold", color:"#c084fc", fontFamily:"sans-serif", marginBottom:8 }}>OVERRIDE STOP-LOSS</div>
@@ -384,6 +401,23 @@ const TSLStatusPanel = ({ signal }) => {
 const SLHistoryPanel = ({ signal, entryTime, onClose }) => {
   const history = extractSLHistory(signal);
   if (history.length === 0) return null;
+
+  const askOpus = async (signalId) => {
+    const q = (advisorInput[signalId] || '').trim();
+    if (!q) return;
+    setAdvisorReply(r => ({ ...r, [signalId]: { loading: true } }));
+    try {
+      const res = await fetch(`${apiUrl}/api/signals/ask-advisor/${signalId}`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ question: q }),
+      });
+      const data = await res.json();
+      setAdvisorReply(r => ({ ...r, [signalId]: { answer: data.answer, loading: false } }));
+    } catch (e) {
+      setAdvisorReply(r => ({ ...r, [signalId]: { error: String(e), loading: false } }));
+    }
+  };
   return (
     <div style={{ background:'#07101d', borderTop:'1px solid #1a2535', padding:'10px 14px' }}
       onClick={e => e.stopPropagation()}>
@@ -544,6 +578,23 @@ const SignalTracker = () => {
     .sort((a,b) => b.ts.localeCompare(a.ts))
     .slice(0, 50);
 
+
+  const askOpus = async (signalId) => {
+    const q = (advisorInput[signalId] || '').trim();
+    if (!q) return;
+    setAdvisorReply(r => ({ ...r, [signalId]: { loading: true } }));
+    try {
+      const res = await fetch(`${apiUrl}/api/signals/ask-advisor/${signalId}`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ question: q }),
+      });
+      const data = await res.json();
+      setAdvisorReply(r => ({ ...r, [signalId]: { answer: data.answer, loading: false } }));
+    } catch (e) {
+      setAdvisorReply(r => ({ ...r, [signalId]: { error: String(e), loading: false } }));
+    }
+  };
   return (
     <div style={{ background:"#050810", padding:"20px 16px", fontFamily:"'Courier New',monospace", color:"#c9d8e8" }}>
       <style>{`@keyframes st-pulse { 0%,100%{opacity:1} 50%{opacity:0.45} }`}</style>
@@ -723,6 +774,17 @@ const SignalTracker = () => {
                       {s.turbo && <span style={{ fontSize:8, background:"rgba(192,132,252,0.15)", color:"#c084fc", padding:"1px 5px", borderRadius:3, fontFamily:"sans-serif" }}>TURBO</span>}
                       {method==="atr" && <span style={{ fontSize:8, background:"rgba(0,255,136,0.1)", color:"#00ff88", padding:"1px 5px", borderRadius:3, fontFamily:"sans-serif" }}>ATR</span>}
                       {s.trailing_sl_active && <span style={{ fontSize:8, background:"rgba(0,212,255,0.1)", color:"#00d4ff", padding:"1px 5px", borderRadius:3, fontFamily:"sans-serif" }}>TSL</span>}
+                      {s.advisor_verdict && s.advisor_verdict !== 'APPROVE' && (
+                        <span style={{
+                          fontSize:8,
+                          background: s.advisor_verdict==='VETO' ? 'rgba(255,68,102,0.15)' : 'rgba(251,191,36,0.15)',
+                          color:       s.advisor_verdict==='VETO' ? '#ff4466' : '#fbbf24',
+                          padding:'1px 5px', borderRadius:3, fontFamily:'sans-serif',
+                          border: `1px solid ${s.advisor_verdict==='VETO'?'#ff446644':'#fbbf2444'}`,
+                        }}>
+                          {s.advisor_verdict==='VETO' ? '\u26d4 VETOED' : '\u26a0\ufe0f FLAGGED'}
+                        </span>
+                      )}
                     </div>
                     <div style={{ fontSize:9, color:"#2a4a5a", fontFamily:"sans-serif", marginTop:2 }}>{s.entry_time?.slice(0,10)} &middot; {s.entry_session||""}</div>
                   </div>
@@ -900,6 +962,71 @@ const SignalTracker = () => {
                       </div>
                     </div>
 
+
+                    {/* Advisor Panel */}
+                    {(s.advisor_verdict || isOpen) && (
+                      <div style={{ borderTop:'1px solid #1a2535', paddingTop:14, marginTop:4 }}>
+                        <div style={{ fontSize:9, fontWeight:'bold', color:'#c084fc', fontFamily:'sans-serif', marginBottom:8, letterSpacing:1, display:'flex', alignItems:'center', gap:6, justifyContent:'space-between' }}>
+                          <span>&#129302; ADVISOR</span>
+                          {isOpen && (
+                            <button onClick={e => { e.stopPropagation(); setAskOpusOpen(askOpusOpen===s.id?null:s.id); }}
+                              style={{ fontSize:8, background:'rgba(192,132,252,0.12)', border:'1px solid #c084fc44', color:'#c084fc', borderRadius:3, padding:'2px 7px', cursor:'pointer', fontFamily:'sans-serif' }}>
+                              {askOpusOpen===s.id ? 'Close' : 'Ask Opus'}
+                            </button>
+                          )}
+                        </div>
+                        {s.advisor_verdict && (
+                          <div style={{ display:'flex', alignItems:'flex-start', gap:8, marginBottom:8 }}>
+                            <span style={{
+                              fontSize:9, fontWeight:'bold', padding:'2px 7px', borderRadius:3, fontFamily:'sans-serif', whiteSpace:'nowrap',
+                              background: s.advisor_verdict==='APPROVE' ? 'rgba(0,255,136,0.1)' : s.advisor_verdict==='FLAG' ? 'rgba(251,191,36,0.1)' : 'rgba(255,68,102,0.1)',
+                              color:       s.advisor_verdict==='APPROVE' ? '#00ff88'             : s.advisor_verdict==='FLAG' ? '#fbbf24'             : '#ff4466',
+                            }}>
+                              {s.advisor_verdict==='APPROVE' ? '\u2705 APPROVED' : s.advisor_verdict==='FLAG' ? '\u26a0\ufe0f FLAGGED' : '\u26d4 VETOED'}
+                              {s.advisor_confidence ? ` ${s.advisor_confidence}%` : ''}
+                            </span>
+                            {s.advisor_thesis && (
+                              <span style={{ fontSize:9, color:'#8899aa', fontFamily:'sans-serif', lineHeight:1.5, fontStyle:'italic' }}>{s.advisor_thesis}</span>
+                            )}
+                          </div>
+                        )}
+                        {s.advisor_concerns && s.advisor_concerns.length > 0 && (
+                          <div style={{ display:'flex', flexWrap:'wrap', gap:4, marginBottom:8 }}>
+                            {s.advisor_concerns.map((c,i) => (
+                              <span key={i} style={{ fontSize:8, background:'rgba(251,191,36,0.08)', border:'1px solid #fbbf2433', color:'#fbbf24', padding:'2px 6px', borderRadius:3, fontFamily:'sans-serif' }}>{c}</span>
+                            ))}
+                          </div>
+                        )}
+                        {askOpusOpen===s.id && (
+                          <div style={{ marginTop:6 }}>
+                            <div style={{ display:'flex', gap:6 }}>
+                              <input
+                                value={advisorInput[s.id]||''}
+                                onChange={e => setAdvisorInput(v=>({...v,[s.id]:e.target.value}))}
+                                onKeyDown={e => { e.stopPropagation(); if(e.key==='Enter') askOpus(s.id); }}
+                                onClick={e => e.stopPropagation()}
+                                placeholder="Ask Opus anything about this signal..."
+                                style={{ flex:1, background:'#050810', border:'1px solid #c084fc44', borderRadius:4, padding:'5px 8px', color:'#e2e8f0', fontSize:10, fontFamily:'sans-serif', outline:'none' }}
+                              />
+                              <button onClick={e => { e.stopPropagation(); askOpus(s.id); }}
+                                disabled={advisorReply[s.id]?.loading}
+                                style={{ background:'#c084fc22', border:'1px solid #c084fc44', color:'#c084fc', borderRadius:4, padding:'4px 10px', fontSize:9, cursor:'pointer', fontFamily:'sans-serif' }}>
+                                {advisorReply[s.id]?.loading ? '...' : 'Ask'}
+                              </button>
+                            </div>
+                            {advisorReply[s.id]?.answer && (
+                              <div style={{ marginTop:8, background:'rgba(192,132,252,0.06)', border:'1px solid #c084fc22', borderRadius:6, padding:'8px 10px', fontSize:10, color:'#c084fc', fontFamily:'sans-serif', lineHeight:1.6 }}>
+                                <span style={{ fontSize:8, color:'#8899aa', display:'block', marginBottom:4 }}>OPUS SAYS</span>
+                                {advisorReply[s.id].answer}
+                              </div>
+                            )}
+                            {advisorReply[s.id]?.error && (
+                              <div style={{ marginTop:6, fontSize:9, color:'#ff4466', fontFamily:'sans-serif' }}>Error: {advisorReply[s.id].error}</div>
+                            )}
+                          </div>
+                        )}
+                      </div>
+                    )}
                     {/* Per-signal action log -- always renders, shows placeholder for legacy signals */}
                     <div style={{ borderTop:"1px solid #1a2535", paddingTop:14 }}>
                       <div style={{ fontSize:9, fontWeight:"bold", color:"#c084fc", fontFamily:"sans-serif", marginBottom:8, letterSpacing:1, display:"flex", alignItems:"center", gap:6 }}>

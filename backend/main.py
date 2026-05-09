@@ -1,4 +1,4 @@
-from fastapi import FastAPI, HTTPException
+from fastapi import FastAPI, HTTPException, Request
 from fastapi.middleware.cors import CORSMiddleware
 from backend.schemas import AnalysisRequest, AnalysisResponse, ScanRequest, ScanResponse, BacktestRequest
 import traceback
@@ -283,6 +283,28 @@ async def override_sl(signal_id: str, new_sl: float):
     result = override_signal_sl(signal_id, new_sl)
     if not result: raise HTTPException(status_code=404, detail="Signal not found")
     return result
+
+
+@app.post("/api/signals/ask-advisor/{signal_id}")
+async def ask_advisor(signal_id: str, request: Request):
+    """Ask Opus a free-text question about a specific signal."""
+    body = await request.json()
+    question = (body.get("question") or "").strip()
+    if not question:
+        raise HTTPException(status_code=400, detail="question field required")
+    # Find signal in active or closed
+    from core.signal_tracker import get_all_signals
+    all_sigs = get_all_signals()
+    signal = next(
+        (s for s in all_sigs.get("active", []) + all_sigs.get("closed", [])
+         if s.get("id") == signal_id),
+        None
+    )
+    if not signal:
+        raise HTTPException(status_code=404, detail="Signal not found")
+    from core.advisor import ask_opus
+    result = ask_opus(signal, question)
+    return {"signal_id": signal_id, "ticker": signal.get("ticker"), **result}
 
 
 @app.get("/api/signals/report/{signal_id}")
