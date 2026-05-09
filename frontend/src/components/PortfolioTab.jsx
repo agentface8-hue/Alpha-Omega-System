@@ -56,6 +56,77 @@ const reasonColor = (pos) => {
   return pnl >= 0 ? '#00ff88' : '#ff4466';
 };
 
+// ── Sector map (mirrors backend SECTOR_MAP) ─────────────────────────────────────────────
+const SECTOR_MAP_P = {
+  AAPL:'Tech', MSFT:'Tech', NVDA:'Tech', AMD:'Tech', GOOGL:'Tech', META:'Tech', AMZN:'Tech',
+  TSLA:'Consumer', NFLX:'Consumer', DIS:'Consumer', NKE:'Consumer', SBUX:'Consumer',
+  JPM:'Finance', GS:'Finance', BAC:'Finance', V:'Finance', MA:'Finance',
+  JNJ:'Health', PFE:'Health', UNH:'Health', ABBV:'Health', LLY:'Health', MRK:'Health',
+  XOM:'Energy', CVX:'Energy', COP:'Energy', SLB:'Energy',
+  BA:'Industrials', CAT:'Industrials', HON:'Industrials', GE:'Industrials',
+  CRWD:'Tech', NET:'Tech', MRVL:'Tech', PANW:'Tech', ZS:'Tech', OKTA:'Tech',
+  SHOP:'Tech', SNOW:'Tech', PLTR:'Tech', DDOG:'Tech', GTLB:'Tech',
+  COIN:'Finance', SQ:'Finance', PYPL:'Finance',
+  BTC:'Crypto', ETH:'Crypto', SOL:'Crypto', XRP:'Crypto', ADA:'Crypto',
+};
+const getSectorP = ticker => SECTOR_MAP_P[(ticker || '').toUpperCase()] || 'Other';
+
+// ── Extract SL history from portfolio position's trades array ─────────────────
+const extractPortfolioSLHistory = pos => {
+  const trades  = pos.trades || [];
+  const entries = [];
+  const origSL  = pos.sl_original || pos.sl;
+  const entryTrade = trades.find(t => t.type === 'entry');
+  entries.push({ sl: origSL, note: 'Entry SL', ts: entryTrade?.executed_at || pos.entry_date, label: 'Original' });
+  if (pos.tp1_hit) {
+    const t = trades.find(t => t.type === 'partial_tp1');
+    if (t) entries.push({ sl: pos.entry_price, note: 'TP1 hit → SL to breakeven', ts: t.executed_at, label: null });
+  }
+  if (pos.tp2_hit) {
+    const t = trades.find(t => t.type === 'partial_tp2');
+    if (t) entries.push({ sl: pos.tp1, note: 'TP2 hit → SL to TP1', ts: t.executed_at, label: null });
+  }
+  entries.sort((a, b) => (a.ts || '').localeCompare(b.ts || ''));
+  let maxSL = -Infinity;
+  const asc = entries.filter(e => { if (e.sl >= maxSL) { maxSL = e.sl; return true; } return false; });
+  if (asc.length > 1) asc[asc.length - 1].label = 'Current';
+  return asc;
+};
+
+// ── SL History panel ──────────────────────────────────────────────────────────────
+const PortfolioSLHistoryPanel = ({ pos, onClose }) => {
+  const history = extractPortfolioSLHistory(pos);
+  if (history.length === 0) return null;
+  const fmtT = ts => {
+    if (!ts) return '';
+    try { return new Date(ts).toLocaleTimeString([], { hour:'2-digit', minute:'2-digit' }); }
+    catch { return ts.slice(11,16) || ''; }
+  };
+  return (
+    <div style={{ background:'#07101d', borderTop:'1px solid #1a2535', padding:'10px 14px' }}
+      onClick={e => e.stopPropagation()}>
+      <div style={{ display:'flex', justifyContent:'space-between', alignItems:'center', marginBottom:8 }}>
+        <span style={{ fontSize:9, fontWeight:'bold', color:'#c084fc', letterSpacing:1, fontFamily:'monospace' }}>SL HISTORY</span>
+        <button onClick={onClose} style={{ background:'transparent', border:'none', color:'#8899aa', cursor:'pointer', fontSize:14, lineHeight:1 }}>×</button>
+      </div>
+      <div style={{ display:'flex', flexDirection:'column', gap:5 }}>
+        {history.map((h, i) => {
+          const isLast   = i === history.length - 1;
+          const rowLabel = h.label || `+${formatDuration(pos.entry_date, h.ts)}`;
+          return (
+            <div key={i} style={{ display:'grid', gridTemplateColumns:'70px 80px 1fr 60px', gap:8, alignItems:'center', opacity: isLast ? 1 : 0.65 }}>
+              <span style={{ fontSize:9, color: isLast ? '#c084fc' : '#2a4a5a', fontFamily:'monospace', fontWeight: isLast ? 'bold' : 'normal' }}>{rowLabel}</span>
+              <span style={{ fontSize:12, fontWeight:'bold', color:'#ff4466', fontFamily:'monospace' }}>${h.sl.toFixed(2)}</span>
+              <span style={{ fontSize:9, color:'#8899aa', fontFamily:'sans-serif' }}>{h.note}</span>
+              <span style={{ fontSize:8, color:'#2a4a5a', fontFamily:'monospace', textAlign:'right' }}>{fmtT(h.ts)}</span>
+            </div>
+          );
+        })}
+      </div>
+    </div>
+  );
+};
+
 const StatCard = ({ label, value, sub, color, small }) => (
   <div style={{ background:'#0d1a2a', border:'1px solid #1a2535', borderRadius:8, padding:'12px 16px', minWidth:100, textAlign:'center' }}>
     <div style={{ fontSize:9, color:'#8899aa', letterSpacing:1, marginBottom:5, fontFamily:'monospace' }}>{label}</div>
@@ -64,9 +135,10 @@ const StatCard = ({ label, value, sub, color, small }) => (
   </div>
 );
 
-// ── Open position card — clickable, expands full detail panel ──────────────
-const PositionCard = ({ pos, onClose }) => {
+// ── Open position card ───────────────────────────────────────────────────────
+const PositionCard = ({ pos, onClose, bench = [], onOpenBench }) => {
   const [expanded, setExpanded] = useState(false);
+  const [slHistoryOpen, setSlHistoryOpen] = useState(false);
   const pnl       = pos.unrealized_pnl || 0;
   const pnlPct    = pos.unrealized_pnl_pct || 0;
   const entry     = pos.entry_price;
@@ -80,40 +152,26 @@ const PositionCard = ({ pos, onClose }) => {
   const range     = tp1 - sl;
   const progress  = range > 0 ? Math.min(100, Math.max(0, (curr - sl) / range * 100)) : 0;
   const barColor  = pnl >= 0 ? '#00ff88' : '#ff4466';
-
-  // Distances to targets
   const distToSL  = ((curr - sl) / curr * 100).toFixed(2);
   const distToTP1 = ((tp1 - curr) / curr * 100).toFixed(2);
   const distToTP2 = ((tp2 - curr) / curr * 100).toFixed(2);
   const distToTP3 = ((tp3 - curr) / curr * 100).toFixed(2);
   const rr        = range > 0 ? ((tp1 - entry) / (entry - sl)).toFixed(2) : '—';
-
-  // MAE/MFE as %
   const maePct = entry > 0 ? (pos.mae / entry * 100).toFixed(2) : 0;
   const mfePct = entry > 0 ? (pos.mfe / entry * 100).toFixed(2) : 0;
-
-  // Risk status
-  const atRisk = curr <= sl * 1.02;  // within 2% of SL
+  const atRisk  = curr <= sl * 1.02;
   const nearTP1 = curr >= tp1 * 0.98;
 
   return (
     <div style={{
       background: expanded ? '#0c1420' : '#0a1018',
       border: `1px solid ${expanded ? '#c084fc44' : pnl >= 0 ? '#1a3525' : '#351a1a'}`,
-      borderRadius: 10, marginBottom: 10, overflow: 'hidden',
-      transition: 'border-color 0.2s',
+      borderRadius: 10, marginBottom: 10, overflow: 'hidden', transition: 'border-color 0.2s',
     }}>
-      {/* ── Main row — always visible ── */}
-      <div
-        onClick={() => setExpanded(e => !e)}
-        style={{ padding: 14, cursor: 'pointer' }}
-      >
+      <div onClick={() => setExpanded(e => !e)} style={{ padding: 14, cursor: 'pointer' }}>
         <div style={{ display:'flex', justifyContent:'space-between', alignItems:'center', marginBottom:10 }}>
           <div style={{ display:'flex', alignItems:'center', gap:8 }}>
-            {expanded
-              ? <ChevronDown size={13} color="#c084fc" />
-              : <ChevronRight size={13} color="#8899aa" />
-            }
+            {expanded ? <ChevronDown size={13} color='#c084fc' /> : <ChevronRight size={13} color='#8899aa' />}
             <span style={{ fontSize:16, fontWeight:'bold', color:'#e0e0e0', fontFamily:'monospace' }}>{pos.ticker}</span>
             {isPartial && <span style={{ fontSize:9, background:'rgba(251,191,36,0.15)', color:'#fbbf24', borderRadius:4, padding:'2px 6px', border:'1px solid #fbbf24' }}>PARTIAL</span>}
             {pos.tp1_hit && <span style={{ fontSize:9, background:'rgba(0,255,136,0.1)', color:'#00ff88', borderRadius:4, padding:'2px 6px' }}>TP1✓</span>}
@@ -129,35 +187,34 @@ const PositionCard = ({ pos, onClose }) => {
             <span style={{ fontSize:18, fontWeight:'bold', color:clr(pnl), fontFamily:'monospace' }}>
               {pnl >= 0 ? '+' : ''}{fmt(pnl, 0)} <span style={{ fontSize:12 }}>({pct(pnlPct)})</span>
             </span>
-            <button
-              onClick={e => { e.stopPropagation(); onClose(pos.id); }}
+            <button onClick={e => { e.stopPropagation(); onClose(pos.id); }}
               style={{ background:'transparent', border:'1px solid #ff4466', borderRadius:4, padding:'3px 8px', color:'#ff4466', fontSize:10, cursor:'pointer' }}
             >✕ Close</button>
           </div>
         </div>
-
-        {/* Progress bar */}
         <div style={{ position:'relative', height:6, background:'#1a2535', borderRadius:3, marginBottom:10, overflow:'hidden' }}>
           <div style={{ position:'absolute', left:0, top:0, height:'100%', width:`${progress}%`, background:barColor, borderRadius:3, transition:'width 0.5s' }} />
         </div>
-
-        {/* Level grid */}
         <div style={{ display:'grid', gridTemplateColumns:'repeat(6,1fr)', gap:6, fontSize:10, fontFamily:'monospace' }}>
           {[
             { label:'ENTRY', val:`$${fmt(entry,2)}`, color:'#94a3b8' },
             { label:'PRICE', val:`$${fmt(curr,2)}`, color:clr(pnl) },
-            { label:'SL', val:`$${fmt(sl,2)}`, color:'#ff4466' },
+            { label:'SL', val:`$${fmt(sl,2)}`, color:'#ff4466', clickable:true },
             { label:'TP1', val:`$${fmt(tp1,2)}`, color: pos.tp1_hit ? '#00ff88' : '#8899aa' },
             { label:'TP2', val:`$${fmt(tp2,2)}`, color: pos.tp2_hit ? '#00ff88' : '#8899aa' },
             { label:'TP3', val:`$${fmt(tp3,2)}`, color:'#8899aa' },
           ].map(l => (
-            <div key={l.label} style={{ textAlign:'center' }}>
+            <div key={l.label} style={{ textAlign:'center' }}
+              onClick={l.clickable ? e => { e.stopPropagation(); setSlHistoryOpen(o => !o); } : undefined}
+            >
               <div style={{ color:'#8899aa', fontSize:8, marginBottom:2 }}>{l.label}</div>
-              <div style={{ color:l.color, fontWeight:'bold' }}>{l.val}</div>
+              <div style={{ color:l.color, fontWeight:'bold',
+                textDecoration: l.clickable ? 'underline dotted' : 'none',
+                cursor: l.clickable ? 'pointer' : 'default',
+              }}>{l.val}</div>
             </div>
           ))}
         </div>
-
         <div style={{ display:'flex', gap:12, marginTop:8, fontSize:10, color:'#8899aa', fontFamily:'monospace' }}>
           <span>{pos.shares_remaining}/{pos.shares} shares</span>
           <span>Size: ${fmt(pos.position_size, 0)}</span>
@@ -167,12 +224,43 @@ const PositionCard = ({ pos, onClose }) => {
         </div>
       </div>
 
-      {/* ── Expanded detail panel ── */}
+      {slHistoryOpen && <PortfolioSLHistoryPanel pos={pos} onClose={() => setSlHistoryOpen(false)} />}
+
+      {bench.length > 0 && (
+        <React.Fragment>
+          <div style={{ borderTop:'1px solid #0d1a2a', background:'#070c14', padding:'8px 14px', display:'flex', alignItems:'center', gap:8, flexWrap:'wrap' }}>
+            <span style={{ fontSize:8, color:'#2a4a5a', letterSpacing:1, fontFamily:'monospace', fontWeight:'bold', whiteSpace:'nowrap' }}>BENCH</span>
+            {bench.map(c => (
+              <div key={c.ticker} style={{ display:'flex', alignItems:'center', gap:6, background:'#0d1a2a', border:'1px solid #1a2535', borderRadius:6, padding:'4px 10px' }}>
+                <span style={{ fontSize:11, fontWeight:'bold', color:'#e0e0e0', fontFamily:'monospace' }}>{c.ticker}</span>
+                <span style={{ fontSize:9, color: c.conviction_pct >= 75 ? '#00ff88' : '#fbbf24', fontFamily:'monospace' }}>{c.conviction_pct}%</span>
+                {c.sector && <span style={{ fontSize:8, color:'#2a4a5a', fontFamily:'sans-serif' }}>{c.sector}</span>}
+                <button onClick={e => { e.stopPropagation(); onOpenBench && onOpenBench(c); }}
+                  style={{ background:'linear-gradient(135deg,#00ff88,#00bb66)', border:'none', borderRadius:4, padding:'2px 8px', color:'#000', fontSize:9, fontWeight:'bold', cursor:'pointer' }}>
+                  OPEN
+                </button>
+              </div>
+            ))}
+          </div>
+        </React.Fragment>
+      )}
+
       {expanded && (
         <div style={{ borderTop:'1px solid #1a2535', padding:'14px', background:'#080c14' }}>
+          <div style={{ background:'#0d1520', border:'1px solid #1a2535', borderRadius:8, padding:'10px 14px', marginBottom:14 }}>
+            <div style={{ fontSize:8, color:'#c084fc', letterSpacing:1, marginBottom:8, fontFamily:'monospace', fontWeight:'bold' }}>ENTRY REASON</div>
+            <div style={{ display:'flex', gap:16, flexWrap:'wrap', fontSize:11, fontFamily:'monospace', color:'#94a3b8' }}>
+              {pos.conviction > 0 && <span>Conviction: <b style={{color:heatClr(pos.conviction)}}>{pos.conviction}%</b></span>}
+              {pos.atr_at_entry > 0 && <span>ATR: <b style={{color:'#e0e0e0'}}>${fmt(pos.atr_at_entry, 2)}</b></span>}
+              {pos.regime && <span>Regime: <b style={{color:'#00d4ff'}}>{pos.regime}</b></span>}
+              {pos.sector && <span>Sector: <b style={{color:'#8899aa'}}>{pos.sector}</b></span>}
+              {pos.signal_id && <span style={{color:'#2a4a5a'}}>Signal: {pos.signal_id.slice(0, 8)}</span>}
+              {!pos.conviction && !pos.atr_at_entry && !pos.regime && (
+                <span style={{color:'#2a4a5a'}}>No additional entry context recorded</span>
+              )}
+            </div>
+          </div>
           <div style={{ display:'grid', gridTemplateColumns:'1fr 1fr 1fr', gap:14 }}>
-
-            {/* Panel 1 — Target distances */}
             <div style={{ background:'#0d1520', border:'1px solid #1a2535', borderRadius:8, padding:'12px 14px' }}>
               <div style={{ fontSize:8, color:'#c084fc', letterSpacing:1, marginBottom:10, fontFamily:'monospace', fontWeight:'bold' }}>TARGET DISTANCES</div>
               <div style={{ fontSize:11, fontFamily:'monospace', lineHeight:2 }}>
@@ -202,8 +290,6 @@ const PositionCard = ({ pos, onClose }) => {
                 </div>
               </div>
             </div>
-
-            {/* Panel 2 — Position stats */}
             <div style={{ background:'#0d1520', border:'1px solid #1a2535', borderRadius:8, padding:'12px 14px' }}>
               <div style={{ fontSize:8, color:'#c084fc', letterSpacing:1, marginBottom:10, fontFamily:'monospace', fontWeight:'bold' }}>POSITION STATS</div>
               <div style={{ fontSize:11, fontFamily:'monospace', lineHeight:2, color:'#94a3b8' }}>
@@ -216,13 +302,9 @@ const PositionCard = ({ pos, onClose }) => {
                 <div>MAE: <b style={{color:'#ff4466'}}>{maePct}%</b> · MFE: <b style={{color:'#00ff88'}}>+{mfePct}%</b></div>
               </div>
             </div>
-
-            {/* Panel 3 — Trade log */}
             <div style={{ background:'#0d1520', border:'1px solid #1a2535', borderRadius:8, padding:'12px 14px' }}>
               <div style={{ fontSize:8, color:'#c084fc', letterSpacing:1, marginBottom:10, fontFamily:'monospace', fontWeight:'bold' }}>TRADE LOG</div>
-              {(pos.trades || []).length === 0 && (
-                <div style={{ fontSize:10, color:'#2a4a5a' }}>No trades recorded</div>
-              )}
+              {(pos.trades || []).length === 0 && <div style={{ fontSize:10, color:'#2a4a5a' }}>No trades recorded</div>}
               {(pos.trades || []).map((t, i) => (
                 <div key={i} style={{ fontSize:10, fontFamily:'monospace', lineHeight:1.8, borderBottom:'1px solid #0d1520', paddingBottom:4, marginBottom:4 }}>
                   <div style={{ display:'flex', justifyContent:'space-between' }}>
@@ -247,7 +329,7 @@ const PositionCard = ({ pos, onClose }) => {
   );
 };
 
-// ── Closed trade row — clickable, expands full detail panel ───────────────
+// ── Closed trade row ───────────────────────────────────────────────────────────────
 const ClosedRow = ({ pos }) => {
   const [expanded, setExpanded] = useState(false);
   const pnl       = pos.realized_pnl || 0;
@@ -257,16 +339,14 @@ const ClosedRow = ({ pos }) => {
   const fullReason = buildCloseReason(pos);
   const rColor    = reasonColor(pos);
   const isWin     = pnl >= 0;
-
   return (
     <>
-      <tr
-        onClick={() => setExpanded(e => !e)}
+      <tr onClick={() => setExpanded(e => !e)}
         style={{ borderBottom: expanded ? 'none' : '1px solid #0d1a2a', cursor:'pointer', background: expanded ? '#0d1520' : 'transparent' }}
       >
         <td style={{ padding:'8px 6px', color:'#e0e0e0', fontWeight:'bold', fontFamily:'monospace' }}>
           <span style={{ display:'inline-flex', alignItems:'center', gap:4 }}>
-            {expanded ? <ChevronDown size={10} color="#8899aa" /> : <ChevronRight size={10} color="#8899aa" />}
+            {expanded ? <ChevronDown size={10} color='#8899aa' /> : <ChevronRight size={10} color='#8899aa' />}
             {pos.ticker}
           </span>
         </td>
@@ -277,7 +357,7 @@ const ClosedRow = ({ pos }) => {
         <td style={{ padding:'8px 6px', textAlign:'right', color:clr(pnlPct) }}>{pct(pnlPct)}</td>
         <td style={{ padding:'8px 6px', textAlign:'right', color:'#8899aa', fontSize:10 }}>
           <span style={{ display:'inline-flex', alignItems:'center', gap:3 }}>
-            <Clock size={9} color="#2a4a5a" /> {duration}
+            <Clock size={9} color='#2a4a5a' /> {duration}
           </span>
         </td>
         <td style={{ padding:'8px 6px', textAlign:'left', fontSize:10 }}>
@@ -335,6 +415,7 @@ export default function PortfolioTab() {
   const [autoRefresh, setAutoRefresh] = useState(true);
   const [countdown, setCountdown]   = useState(30);
   const [error, setError]           = useState(null);
+  const [scanCandidates, setScanCandidates] = useState([]);
 
   const load = useCallback(async (silent = false) => {
     if (!silent) setLoading(true);
@@ -347,6 +428,46 @@ export default function PortfolioTab() {
     setLoading(false);
   }, []);
 
+  const fetchCandidates = useCallback(async (excludeTickers = []) => {
+    try {
+      const exc = excludeTickers.filter(Boolean).join(',');
+      const url = exc
+        ? `${API()}/api/scan/candidates?exclude=${encodeURIComponent(exc)}`
+        : `${API()}/api/scan/candidates`;
+      const r = await fetch(url);
+      if (!r.ok) return;
+      const d = await r.json();
+      setScanCandidates(d.candidates || []);
+    } catch (e) { /* silent — bench is non-critical */ }
+  }, []);
+
+  const getBenchForPos = (pos) => {
+    const activeTickers = (data?.open_positions || []).map(p => p.ticker.toUpperCase());
+    const pool = scanCandidates.filter(c => !activeTickers.includes(c.ticker.toUpperCase()));
+    const sector = getSectorP(pos.ticker);
+    const sameS  = pool.filter(c => getSectorP(c.ticker) === sector);
+    const others = pool.filter(c => getSectorP(c.ticker) !== sector);
+    return [...sameS, ...others].slice(0, 2);
+  };
+
+  const openBenchAsPosition = async (candidate) => {
+    setLoading(true);
+    try {
+      const r = await fetch(`${API()}/api/portfolio/open`, {
+        method: 'POST', headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          ticker: candidate.ticker, entry_price: candidate.entry_price,
+          sl: candidate.sl, tp1: candidate.tp1, tp2: candidate.tp2, tp3: candidate.tp3,
+          conviction: candidate.conviction_pct, asset_type: 'stock',
+        }),
+      });
+      const result = await r.json();
+      if (result.error) setError(result.error);
+      else { await load(); }
+    } catch (e) { setError(e.message); }
+    setLoading(false);
+  };
+
   const checkPrices = async () => {
     setChecking(true);
     try {
@@ -355,6 +476,8 @@ export default function PortfolioTab() {
       const result = await r.json();
       setData(result.portfolio);
       setCountdown(30);
+      const tickers = (result.portfolio?.open_positions || []).map(p => p.ticker.toUpperCase());
+      fetchCandidates(tickers);
     } catch (e) { setError(e.message); }
     setChecking(false);
   };
@@ -408,7 +531,7 @@ export default function PortfolioTab() {
     await load();
   };
 
-  useEffect(() => { load(); }, [load]);
+  useEffect(() => { load(); fetchCandidates([]); }, [load, fetchCandidates]);
   useEffect(() => {
     if (!autoRefresh) return;
     const timer = setInterval(() => setCountdown(c => { if (c <= 1) { checkPrices(); return 30; } return c - 1; }), 1000);
@@ -424,8 +547,6 @@ export default function PortfolioTab() {
 
   return (
     <div style={{ padding:20, fontFamily:"'Inter',sans-serif", color:'#e0e0e0', maxWidth:1200, margin:'0 auto' }}>
-
-      {/* Header */}
       <div style={{ display:'flex', alignItems:'center', justifyContent:'space-between', marginBottom:20 }}>
         <div style={{ display:'flex', alignItems:'center', gap:12 }}>
           <div style={{ background:'linear-gradient(135deg,#00d4ff,#0088cc)', borderRadius:10, padding:10, display:'flex' }}>
@@ -457,30 +578,26 @@ export default function PortfolioTab() {
         </div>
       )}
 
-      {/* Stats */}
       <div style={{ display:'flex', gap:10, marginBottom:20, flexWrap:'wrap' }}>
-        <StatCard label="TOTAL VALUE"  value={usd(s.total_value)}  color='#00d4ff' />
-        <StatCard label="CASH"         value={usd(s.cash)}          color='#7ee8ff' sub={`${slots} slot${slots!==1?'s':''} open`} />
-        <StatCard label="TOTAL P&L"    value={`${totalPnl>=0?'+':''}${fmt(totalPnl,0)}`} color={clr(totalPnl)} sub={pct(s.total_pnl_pct||0)} />
-        <StatCard label="UNREALIZED"   value={`${(s.total_unrealized_pnl||0)>=0?'+':''}${fmt(s.total_unrealized_pnl||0,0)}`} color={clr(s.total_unrealized_pnl||0)} />
-        <StatCard label="REALIZED"     value={`${(s.total_realized_pnl||0)>=0?'+':''}${fmt(s.total_realized_pnl||0,0)}`} color={clr(s.total_realized_pnl||0)} />
-        <StatCard label="OPEN"         value={s.open_count||0}      sub="positions" color='#fbbf24' />
-        <StatCard label="WIN RATE"     value={`${s.win_rate||0}%`}  sub={`${s.total_closed||0} closed`} color={s.win_rate>=60?'#00ff88':s.win_rate>=40?'#fbbf24':'#ff4466'} />
+        <StatCard label='TOTAL VALUE'  value={usd(s.total_value)}  color='#00d4ff' />
+        <StatCard label='CASH'         value={usd(s.cash)}          color='#7ee8ff' sub={`${slots} slot${slots!==1?'s':''} open`} />
+        <StatCard label='TOTAL P&L'    value={`${totalPnl>=0?'+':''}${fmt(totalPnl,0)}`} color={clr(totalPnl)} sub={pct(s.total_pnl_pct||0)} />
+        <StatCard label='UNREALIZED'   value={`${(s.total_unrealized_pnl||0)>=0?'+':''}${fmt(s.total_unrealized_pnl||0,0)}`} color={clr(s.total_unrealized_pnl||0)} />
+        <StatCard label='REALIZED'     value={`${(s.total_realized_pnl||0)>=0?'+':''}${fmt(s.total_realized_pnl||0,0)}`} color={clr(s.total_realized_pnl||0)} />
+        <StatCard label='OPEN'         value={s.open_count||0}      sub='positions' color='#fbbf24' />
+        <StatCard label='WIN RATE'     value={`${s.win_rate||0}%`}  sub={`${s.total_closed||0} closed`} color={s.win_rate>=60?'#00ff88':s.win_rate>=40?'#fbbf24':'#ff4466'} />
       </div>
 
-      {/* Positions */}
       <div style={{ background:'#0a1018', border:'1px solid #1a2535', borderRadius:10, padding:16, marginBottom:20 }}>
         <div style={{ display:'flex', justifyContent:'space-between', alignItems:'center', marginBottom:8 }}>
           <div>
-            <div style={{ fontSize:13, fontWeight:'bold', color:'#00d4ff', letterSpacing:1 }}>
-              POSITIONS — {openPositions.length}/{maxPositions} SLOTS USED
-            </div>
+            <div style={{ fontSize:13, fontWeight:'bold', color:'#00d4ff', letterSpacing:1 }}>POSITIONS — {openPositions.length}/{maxPositions} SLOTS USED</div>
             <div style={{ fontSize:10, color:'#2a4a5a', marginTop:2, fontFamily:'sans-serif' }}>Click any position to expand details</div>
           </div>
           <div style={{ display:'flex', gap:8 }}>
             <input value={openTicker} onChange={e => setOpenTicker(e.target.value.toUpperCase())}
               onKeyDown={e => e.key==='Enter' && openFromScan()}
-              placeholder="TICKER" maxLength={6}
+              placeholder='TICKER' maxLength={6}
               style={{ width:90, background:'#0d1a2a', border:'1px solid #1a2535', borderRadius:6, padding:'6px 10px', color:'#e0e0e0', fontSize:13, fontFamily:'monospace', letterSpacing:2, textAlign:'center' }} />
             <button onClick={openFromScan} disabled={loading || !openTicker.trim()}
               style={{ background:'linear-gradient(135deg,#00ff88,#00bb66)', border:'none', borderRadius:6, padding:'6px 14px', color:'#000', fontSize:12, fontWeight:'bold', cursor:'pointer', display:'flex', alignItems:'center', gap:5 }}>
@@ -492,14 +609,16 @@ export default function PortfolioTab() {
             </button>
           </div>
         </div>
-
-        {loading && <div style={{ padding:10, color:'#fbbf24', fontSize:11, fontFamily:'monospace' }}>⏳ Processing...</div>}
+        {loading && <div style={{ padding:10, color:'#fbbf24', fontSize:11, fontFamily:'monospace' }}>⧑ Processing...</div>}
         {openPositions.length === 0 && !loading && (
           <div style={{ textAlign:'center', padding:'30px 20px', color:'#8899aa', fontSize:12 }}>
             No open positions. Enter a ticker or click AUTO-FILL to start.
           </div>
         )}
-        {openPositions.map(pos => <PositionCard key={pos.id} pos={pos} onClose={closePos} />)}
+        {openPositions.map(pos => (
+          <PositionCard key={pos.id} pos={pos} onClose={closePos}
+            bench={getBenchForPos(pos)} onOpenBench={openBenchAsPosition} />
+        ))}
         {Array.from({ length: slots }).map((_, i) => (
           <div key={i} style={{ border:'1px dashed #1a2535', borderRadius:10, padding:14, marginBottom:10, textAlign:'center', color:'#1a2535', fontSize:12 }}>
             — empty slot {openPositions.length + i + 1} —
@@ -507,7 +626,6 @@ export default function PortfolioTab() {
         ))}
       </div>
 
-      {/* Trade log */}
       {closedPositions.length > 0 && (
         <div style={{ background:'#0a1018', border:'1px solid #1a2535', borderRadius:10, padding:16 }}>
           <div style={{ fontSize:13, fontWeight:'bold', color:'#94a3b8', marginBottom:4, letterSpacing:1 }}>
