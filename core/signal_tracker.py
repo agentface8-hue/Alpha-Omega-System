@@ -257,6 +257,11 @@ def _detect_gap_fill(signal: Dict, current_price: float, prev_close: float) -> D
 # ══════════════════════════════════════════════════════════════
 
 def record_signal(scan_result: Dict[str, Any], asset_type: str = "stock") -> List[Dict]:
+    if asset_type == "stock":
+        _mstatus = _is_us_market_open()
+        if not _mstatus["market_open"]:
+            print(f"  [SESSION BLOCK] record_signal blocked — session={_mstatus['session']}")
+            return []
     active=store.load_active(); active_tickers={s["ticker"] for s in active}
     new_signals=[]; market_ctx=_fetch_market_context()
     for r in scan_result.get("results",[]):
@@ -307,6 +312,11 @@ def create_turbo_signal(symbol: str, asset_type: str = "stock", scan_data: Dict 
     """Regime-aware ATR targets. v2.2: full autonomy — no human needed after launch."""
     sym    = symbol.upper()
     lookup = f"{sym}-USD" if asset_type=="crypto" and not sym.endswith("-USD") else sym
+
+    if asset_type == "stock":
+        _mstatus = _is_us_market_open()
+        if not _mstatus["market_open"]:
+            return {"error": f"Signal blocked — market is not in regular session ({_mstatus['session']})", "session": _mstatus["session"]}
 
     price_data = _fetch_live_price(sym, asset_type)
     if not price_data["valid"]:
@@ -880,30 +890,4 @@ def _calc_stats(closed: List[Dict]) -> Dict[str, Any]:
     wins=[s for s in closed if s["pnl_pct"]>0]; losses=[s for s in closed if s["pnl_pct"]<=0]
     timeouts=[s for s in closed if s["status"]=="TIMEOUT"]
     tp1_hits=[s for s in closed if s.get("tp1_hit")]; tp2_hits=[s for s in closed if s.get("tp2_hit")]
-    pnls=[s["pnl_pct"] for s in closed]; bars=[s.get("bars_held",0) for s in closed]
-    maes=[s.get("mae_pct",0) for s in closed]; mfes=[s.get("mfe_pct",0) for s in closed]
-    trailing=[s for s in closed if s.get("trailing_active")]
-    ext_total=sum(s.get("tp3_extensions",0) for s in closed)
-    fade_closes=[s for s in closed if s.get("status")=="MOMENTUM_FADE"]
-    gp=sum(s["pnl_pct"] for s in wins) if wins else 0
-    gl=abs(sum(s["pnl_pct"] for s in losses)) if losses else 0.01
-    gap_trades=[s for s in closed if s.get("gap_info")]
-    return {
-        "total_closed":len(closed),"wins":len(wins),"losses":len(losses),"timeouts":len(timeouts),
-        "win_rate":round(len(wins)/len(closed)*100,1) if closed else 0,
-        "avg_pnl":round(sum(pnls)/len(pnls),2) if pnls else 0,
-        "best_trade":round(max(pnls),2) if pnls else 0,"worst_trade":round(min(pnls),2) if pnls else 0,
-        "avg_bars_held":round(sum(bars)/len(bars),1) if bars else 0,
-        "tp1_hit_rate":round(len(tp1_hits)/len(closed)*100,1) if closed else 0,
-        "tp2_hit_rate":round(len(tp2_hits)/len(closed)*100,1) if closed else 0,
-        "avg_mae":round(sum(maes)/len(maes),2) if maes else 0,
-        "avg_mfe":round(sum(mfes)/len(mfes),2) if mfes else 0,
-        "profit_factor":round(gp/gl,2) if gl>0 else 0,
-        "total_gap_slippage":round(sum(abs(s.get("slippage_pct",0)) for s in gap_trades),2),
-        "gap_affected_trades":len(gap_trades),
-        "avg_conviction_winners":round(sum(s.get("conviction",0) for s in wins)/len(wins),1) if wins else 0,
-        "avg_conviction_losers":round(sum(s.get("conviction",0) for s in losses)/len(losses),1) if losses else 0,
-        "trailing_tp_trades":len(trailing),
-        "avg_tp3_extensions":round(ext_total/len(closed),2) if closed else 0,
-        "momentum_fade_closes":len(fade_closes),
-    }
+  

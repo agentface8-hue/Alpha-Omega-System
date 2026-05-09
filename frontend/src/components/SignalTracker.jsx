@@ -506,7 +506,7 @@ const SignalTracker = () => {
     setAutopilotLoading(true); setAutopilotResult(null);
     try {
       const res = await fetch(`${apiUrl}/api/autopilot`, { method:'POST' });
-      if (!res.ok) throw new Error(await res.text());
+      if (!res.ok) { const e = await res.json().catch(()=>({detail:'Autopilot error'})); alert('Autopilot error: '+(e.detail||e.error||JSON.stringify(e))); return; }
       const d = await res.json(); setAutopilotResult(d); setAutoRefresh(true); fetchSignals(true);
     } catch(e) { alert('Autopilot error: '+e.message); }
     setAutopilotLoading(false);
@@ -515,7 +515,7 @@ const SignalTracker = () => {
     setCryptoLoading(true); setAutopilotResult(null);
     try {
       const res = await fetch(`${apiUrl}/api/autopilot/crypto`, { method:'POST' });
-      if (!res.ok) throw new Error(await res.text());
+      if (!res.ok) { const e = await res.json().catch(()=>({detail:'Crypto autopilot error'})); alert('Crypto autopilot error: '+(e.detail||e.error||JSON.stringify(e))); return; }
       const d = await res.json(); setAutopilotResult(d); setAutoRefresh(true); fetchSignals(true);
     } catch(e) { alert('Crypto autopilot error: '+e.message); }
     setCryptoLoading(false);
