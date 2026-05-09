@@ -1,5 +1,5 @@
 # ALPHA-OMEGA SYSTEM — MASTER KNOWLEDGE BASE
-# Last Updated: 2026-02-27
+# Last Updated: 2026-05-09
 # Location: C:\Users\asus\Alpha-Omega-System\MASTER-KNOWLEDGE.md
 
 ## WHAT IS THIS FILE?
@@ -155,6 +155,16 @@ C:\Users\asus\Alpha-Omega-System\
 | GET | /api/signals/reports | List all case reports |
 | GET | /api/signals/regime-performance | Performance breakdown by market regime |
 
+
+### Portfolio System (SEPARATE from Signal Tracker)
+| Method | Endpoint | Description |
+|--------|----------|-------------|
+| GET | /api/portfolio | All open + closed positions + stats |
+| POST | /api/portfolio/open | Open a new position |
+| POST | /api/portfolio/close/{id} | Close a position |
+| GET | /api/portfolio/candidates | Bench candidates from scan |
+| POST | /api/signals/override-sl/{id} | Override stop-loss on a signal |
+
 ### Auto-Pilot
 | Method | Endpoint | Description |
 |--------|----------|-------------|
@@ -169,6 +179,7 @@ C:\Users\asus\Alpha-Omega-System\
 | Swing Scan v4.4 | ScanDashboard.jsx | Scan watchlist, see conviction rankings |
 | Backtester | BacktestDashboard.jsx | Run backtests, view results |
 | Signal Tracker | SignalTracker.jsx | ⭐ Live paper trading dashboard |
+| Portfolio | PortfolioTab.jsx | Position management, Entry Reason, Override SL, Action Log |
 
 ### Signal Tracker UI Features (v2.0):
 - Market session indicator (premarket/regular/afterhours/closed with color)
@@ -255,6 +266,38 @@ Contains: full entry/exit context, performance metrics, auto-analysis (SL review
 - Render (backend hosting, free tier — ephemeral storage!)
 - GitHub (2 remotes: origin + vercel)
 
+
+## ⚠️ CRITICAL ARCHITECTURE: SIGNAL TRACKER vs PORTFOLIO ARE SEPARATE SYSTEMS
+
+These are TWO COMPLETELY INDEPENDENT storage systems. Do NOT confuse them.
+
+| | Signal Tracker | Portfolio |
+|---|---|---|
+| Core file | `core/signal_tracker.py` | `core/portfolio_manager.py` |
+| API | `/api/signals` | `/api/portfolio` |
+| Storage | `signals/active_signals.json` + Supabase | `signals/portfolio.json` |
+| Purpose | Paper-trade signals, ATR targets, audit trail | Position management, P&L, shares/risk sizing |
+| Created by | `create_turbo_signal()` or autopilot | `open_position()` manually or from scan |
+
+### Key consequence
+Portfolio positions do NOT automatically inherit Signal Tracker fields.
+Fields like `pillar_scores`, `tas`, `entry_market_context` must be explicitly passed
+to `open_position()` — they are NOT copied from the signal record.
+
+```python
+# WRONG — portfolio position won't have pillar data
+open_position(ticker, entry, sl, tp1, tp2, tp3, conviction)
+
+# CORRECT — pass the extra context explicitly
+open_position(ticker, entry, sl, tp1, tp2, tp3, conviction,
+              pillar_scores=scan_data.get("pillar_scores", {}),
+              tas=scan_data.get("tas", ""),
+              entry_market_context=scan_data.get("market_context", {}))
+```
+
+Legacy positions (opened before this fix) show an italic placeholder
+instead of pillar bars in the Portfolio UI.
+
 ## 9. CRITICAL NOTES
 
 ### Render Ephemeral Storage ⚠️
@@ -263,10 +306,11 @@ Render free tier wipes files on redeploy. This means:
 - Case reports in `signals/reports/` get DELETED
 - **TODO**: Migrate signal storage to Supabase or persistent volume
 
-### yfinance Delay
-- Free tier has 15-20 minute delay on stock prices
-- Crypto is near-realtime
-- Signal tracker has staleness detection built in
+### Price Feed Priority
+- **Alpha Vantage** (primary): real-time stock quotes via GLOBAL_QUOTE endpoint
+- **yfinance** (fallback): kicks in automatically if AV rate-limited or key missing
+- Crypto: CURRENCY_EXCHANGE_RATE endpoint (near-realtime)
+- Staleness detection built into signal tracker
 
 ### Git Remote (single remote now)
 ```
@@ -274,13 +318,19 @@ origin  → github.com/agentface8-hue/Alpha-Omega-System  (Render + Vercel)
 ```
 One push deploys everything. No more dual remotes.
 
-### API Keys (.env)
+### API Keys (.env + Render dashboard)
 ```
-GOOGLE_API_KEY=...      # Gemini for agents
-ANTHROPIC_API_KEY=...   # Claude fallback
-SUPABASE_URL=...        # Database (if used)
-SUPABASE_ANON_KEY=...   # Database (if used)
+GOOGLE_API_KEY=...           # Gemini for agents
+ANTHROPIC_API_KEY=...        # Claude fallback
+SUPABASE_URL=...             # Persistent storage
+SUPABASE_ANON_KEY=...        # Persistent storage
+TELEGRAM_TOKEN=...           # @AlphaOmegaCEO_bot
+TELEGRAM_PERSONAL_CHAT_ID=...
+TELEGRAM_GROUP_CHAT_ID=...
+ALPHA_VANTAGE_API_KEY=...    # Real-time stock prices (primary, yfinance is fallback)
+GITHUB_TOKEN=...
 ```
+All keys must be set in Render dashboard — the .env file is NOT read in production.
 
 ## 10. EVOLUTION HISTORY
 
@@ -302,7 +352,7 @@ SUPABASE_ANON_KEY=...   # Database (if used)
 - Auto-Pilot (stocks + crypto)
 - Auto-refresh with countdown
 
-### v3.1 — Signal Tracker v2.0 (Feb 27, 2026) ← CURRENT
+### v3.1 — Signal Tracker v2.0 (Feb 27, 2026)
 - 15 critical gaps fixed (see SIGNAL-TRACKER-V2.md)
 - Full audit trail with 79 data points per entry
 - ATR-based targets
@@ -313,21 +363,34 @@ SUPABASE_ANON_KEY=...   # Database (if used)
 - Price staleness detection
 - Market hours awareness
 
+### v4.0 — Portfolio System + Live Alerts (May 2026) ← CURRENT
+- Portfolio tab with position management (open/close/override SL)
+- Entry Reason panel with 5 pillar bars, TAS, VIX, SPY per position
+- Supabase migration (signal_store.py — Supabase-first, JSON fallback)
+- Alpha Vantage real-time pricing (yfinance fallback)
+- Afterhours session block — stocks cannot enter outside regular hours
+- Telegram alerts fully wired: signal created, TP1/2/3, TSL move, SL hit,
+  momentum fade auto-close, TP3 extended, manual close, state change (RUNNING/DEVELOPING/PROTECTING/EXIT)
+- @AlphaOmegaCEO_bot AI agent — natural language commands via Telegram
+- Phase 1 conviction rescan (observe-only badges: RUNNING/DEVELOPING/PROTECTING/EXIT)
+
 ## 11. KNOWN ISSUES & TODO
 
-### Bugs
-- [ ] Render ephemeral storage — signals lost on redeploy
-- [ ] yfinance 15min delay on stocks (staleness detection mitigates)
-- [ ] Frontend occasionally doesn't show signals on cold load (Render free tier spins down)
+### Known Bugs
+- [ ] Render free tier cold start — first request after 15 min takes 30-60s to respond
+- [x] ~~Render ephemeral storage~~ — signals now use Supabase with JSON fallback
+- [x] ~~yfinance 15min delay~~ — Alpha Vantage real-time pricing now primary
 
 ### Roadmap
-- [ ] Migrate signal storage to Supabase (persistent)
-- [ ] Add chart screenshots to case reports (matplotlib)
-- [ ] Stock scanner during market hours only
+- [x] ~~Migrate signal storage to Supabase (persistent)~~ — done (signal_store.py)
+- [x] ~~Webhook alerts (Telegram/Discord) on TP/SL hits~~ — fully wired in all signal events
+- [x] ~~Stock scanner during market hours only~~ — afterhours session block in place
+- [ ] Dynamic TP management Phase 2 (score drives TP/SL adjustments, EXIT auto-closes)
+- [ ] Advisor tool — Opus reviews conviction before trade executes
+- [ ] Claude Managed Agents (Dreaming, Outcomes grading, multi-agent)
+- [ ] Chart screenshots in case reports (matplotlib at entry/exit)
+- [ ] Portfolio-level analytics (correlation, sector exposure, drawdown by regime)
 - [ ] Historical signal replay
-- [ ] Portfolio-level analytics (correlation, sector exposure)
-- [ ] Webhook alerts (Telegram/Discord) on TP/SL hits
-- [ ] Multi-strategy support (not just turbo)
 
 ## 12. HOW TO RUN LOCALLY
 
