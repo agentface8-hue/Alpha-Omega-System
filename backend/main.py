@@ -1227,3 +1227,170 @@ async def run_signal_council(signal_id: str, request: Request):
             break
     store.save_active(active)
     return result
+
+
+# ═══════════════════════════════════════════════════════════════════
+# SIGNAL REPLAY — re-simulate a closed signal with current system settings
+# ═══════════════════════════════════════════════════════════════════
+
+@app.post("/api/signals/replay/{signal_id}")
+async def replay_signal(signal_id: str):
+    """
+    Re-simulate a closed signal through historical OHLC data using the
+    current TSL + Dynamic TP Phase 2 logic. Read-only — never touches live data.
+    """
+    try:
+        import math, datetime as _dt
+        import numpy as np
+        import yfinance as yf
+        from core import signal_store as store
+
+        # 1. Load the closed signal
+        closed = store.load_closed()
+        signal = next((s for s in closed if s.get("id") == signal_id), None)
+        if not signal:
+            raise HTTPException(status_code=404, detail=f"Signal {signal_id} not found in closed signals")
+
+        ticker     = signal.get("ticker", "")
+        asset_type = signal.get("asset_type", "stock")
+        entry_price = float(signal.get("entry_price", 0))
+        if entry_price <= 0:
+            raise HTTPException(status_code=400, detail="Signal has no valid entry_price")
+
+        entry_time  = signal.get("entry_time", "")[:10]
+        closed_at   = signal.get("closed_at", "")[:10]
+        atr_at_entry = float(signal.get("atr_at_entry", 0))
+        orig_sl      = float(signal.get("sl", 0)) or float(signal.get("original_sl", 0))
+        tp1_orig     = float(signal.get("tp1", 0))
+        tp2_orig     = float(signal.get("tp2", 0))
+        tp3_orig     = float(signal.get("tp3", 0))
+
+        if atr_at_entry <= 0:
+            # Estimate ATR from the price (1% proxy)
+            atr_at_entry = round(entry_price * 0.01, 4)
+
+        # 2. Fetch historical OHLC: entry date + 30-day buffer beyond closed_at
+        sym = ticker
+        if asset_type == "crypto" and not sym.endswith("-USD"):
+            sym += "-USD"
+        try:
+            close_dt  = _dt.datetime.fromisoformat(closed_at)
+        except Exception:
+            close_dt  = _dt.datetime.utcnow()
+        end_fetch = (close_dt + _dt.timedelta(days=35)).strftime("%Y-%m-%d")
+        df = yf.download(sym, start=entry_time, end=end_fetch, progress=False, auto_adjust=True)
+        if df is None or df.empty:
+            raise HTTPException(status_code=502, detail=f"No historical data for {sym}")
+
+        closes = df["Close"].squeeze()
+        dates  = [str(d)[:10] for d in df.index]
+
+        # 3. Replay simulation
+        sl   = orig_sl if orig_sl > 0 else round(entry_price - atr_at_entry * 1.5, 4)
+        tp1  = tp1_orig if tp1_orig > 0 else round(entry_price + atr_at_entry * 0.75, 4)
+        tp2  = tp2_orig if tp2_orig > 0 else round(entry_price + atr_at_entry * 1.5,  4)
+        tp3  = tp3_orig if tp3_orig > 0 else round(entry_price + atr_at_entry * 2.5,  4)
+
+        highest  = entry_price
+        tp1_hit  = False
+        tp2_hit  = False
+        exit_reason = "TIMEOUT"
+        exit_pnl    = 0.0
+        exit_day    = 0
+        price_series = []
+        events       = []
+
+        for day_idx, (date, close) in enumerate(zip(dates, closes)):
+            price = float(close)
+            if day_idx >= 30:
+                exit_reason = "TIMEOUT"
+                exit_pnl    = round((price - entry_price) / entry_price * 100, 2)
+                exit_day    = day_idx
+                events.append({"date": date, "type": "TIMEOUT", "detail": f"30-day limit · exit ${price:.2f}"})
+                price_series.append({"date": date, "close": round(price, 4), "sl": round(sl, 4), "tp1": round(tp1, 4)})
+                break
+
+            # Update high-water mark
+            if price > highest:
+                highest = price
+
+            # ── TSL (1.5×ATR, floored at entry) ──────────────────────────
+            tsl_level = round(highest - atr_at_entry * 1.5, 4)
+            tsl_level = max(tsl_level, entry_price)
+            if tsl_level > sl:
+                old_sl = sl
+                sl = tsl_level
+                events.append({"date": date, "type": "TSL_MOVE", "detail": f"TSL ${old_sl:.2f} → ${sl:.2f} (1.5×ATR)"})
+
+            # ── Dynamic TP Phase 2 — RUNNING state only ───────────────────
+            pnl_now = (price - entry_price) / entry_price * 100
+            if pnl_now > 0:  # only push in profit
+                new_tp1 = round(price + atr_at_entry * 1.0, 4)
+                new_tp2 = round(price + atr_at_entry * 2.0, 4)
+                if new_tp1 > tp1 and not tp1_hit:
+                    tp1 = new_tp1
+                    events.append({"date": date, "type": "DTP", "detail": f"TP1 pushed → ${tp1:.2f}"})
+                if new_tp2 > tp2 and not tp2_hit:
+                    tp2 = new_tp2
+
+            # ── SL hit ────────────────────────────────────────────────────
+            if price <= sl:
+                exit_reason = "STOPPED_OUT"
+                exit_pnl    = round((sl - entry_price) / entry_price * 100, 2)
+                exit_day    = day_idx
+                events.append({"date": date, "type": "SL_HIT", "detail": f"SL hit @ ${sl:.2f} · PnL {exit_pnl:+.2f}%"})
+                price_series.append({"date": date, "close": round(price, 4), "sl": round(sl, 4), "tp1": round(tp1, 4)})
+                break
+
+            # ── TP hits ───────────────────────────────────────────────────
+            if price >= tp3:
+                exit_reason = "TP3_HIT"
+                exit_pnl    = round((tp3 - entry_price) / entry_price * 100, 2)
+                exit_day    = day_idx
+                events.append({"date": date, "type": "TP3_HIT", "detail": f"TP3 hit @ ${tp3:.2f} · PnL {exit_pnl:+.2f}%"})
+                price_series.append({"date": date, "close": round(price, 4), "sl": round(sl, 4), "tp1": round(tp1, 4)})
+                break
+            if price >= tp2 and not tp2_hit:
+                tp2_hit = True
+                events.append({"date": date, "type": "TP2_HIT", "detail": f"TP2 hit @ ${tp2:.2f}"})
+            if price >= tp1 and not tp1_hit:
+                tp1_hit = True
+                events.append({"date": date, "type": "TP1_HIT", "detail": f"TP1 hit @ ${tp1:.2f}"})
+
+            price_series.append({"date": date, "close": round(price, 4), "sl": round(sl, 4), "tp1": round(tp1, 4)})
+        else:
+            # Loop exhausted without break
+            if price_series:
+                last_price = price_series[-1]["close"]
+                exit_pnl   = round((last_price - entry_price) / entry_price * 100, 2)
+                exit_day   = len(price_series)
+                exit_reason = "TIMEOUT"
+
+        # 4. Original result
+        orig_pnl   = float(signal.get("pnl_pct", 0))
+        orig_reason = signal.get("status", signal.get("close_reason", "UNKNOWN"))
+        orig_bars  = int(signal.get("bars_held", 0))
+
+        return {
+            "signal_id": signal_id,
+            "ticker":    ticker,
+            "original": {
+                "exit_reason": orig_reason,
+                "pnl_pct":     orig_pnl,
+                "hold_days":   orig_bars,
+            },
+            "replay": {
+                "exit_reason": exit_reason,
+                "pnl_pct":     exit_pnl,
+                "hold_days":   exit_day,
+            },
+            "improvement_pct": round(exit_pnl - orig_pnl, 2),
+            "price_series":    price_series[:60],   # cap at 60 points for chart
+            "events":          events,
+        }
+
+    except HTTPException:
+        raise
+    except Exception as e:
+        traceback.print_exc()
+        raise HTTPException(status_code=500, detail=str(e))

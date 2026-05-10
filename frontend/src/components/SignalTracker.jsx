@@ -511,6 +511,9 @@ const SignalTracker = () => {
   // Agent Council state
   const [councilOpen,      setCouncilOpen]      = useState(null);   // signal id or null
   const [councilLoading,   setCouncilLoading]   = useState({});     // { [signalId]: bool }
+  // Replay state
+  const [replayData,    setReplayData]    = useState({});  // { [signalId]: result }
+  const [replayLoading, setReplayLoading] = useState({});  // { [signalId]: bool }
   const apiUrl = import.meta.env.VITE_API_URL || 'http://127.0.0.1:8000';
 
   useEffect(() => { const t = setInterval(() => setNow(new Date()), 60000); return () => clearInterval(t); }, []);
@@ -649,6 +652,18 @@ const SignalTracker = () => {
     } catch (e) {
       setAdvisorReply(r => ({ ...r, [signalId]: { error: String(e), loading: false } }));
     }
+  };
+
+  const runReplay = async (signalId) => {
+    setReplayLoading(prev => ({ ...prev, [signalId]: true }));
+    try {
+      const res = await fetch(`${apiUrl}/api/signals/replay/${signalId}`, { method: 'POST' });
+      if (res.ok) {
+        const result = await res.json();
+        setReplayData(prev => ({ ...prev, [signalId]: result }));
+      }
+    } catch(e) { console.error('Replay error:', e); }
+    setReplayLoading(prev => ({ ...prev, [signalId]: false }));
   };
 
   const runCouncil = async (signalId) => {
@@ -1108,17 +1123,76 @@ const SignalTracker = () => {
                       </div>
                     )}
 
-                    {/* Price Chart — closed trades */}
-                    {!isOpen && s.chart_url && (
-                      <div style={{ marginTop:14, background:"#080d16", border:"1px solid #1a2535", borderRadius:6, padding:"10px 14px" }}>
-                        <div style={{ fontSize:9, fontWeight:"bold", color:"#00d4ff", fontFamily:"sans-serif", letterSpacing:1, marginBottom:8 }}>📈 TRADE CHART</div>
-                        <img
-                          src={s.chart_url}
-                          alt={`${s.ticker} trade chart`}
-                          onClick={() => window.open(s.chart_url, '_blank')}
-                          style={{ width:"100%", maxWidth:640, borderRadius:4, cursor:"pointer", border:"1px solid #1a2535", display:"block" }}
-                          title="Click to open full size"
-                        />
+                    {/* Price Chart + Replay — closed trades */}
+                    {!isOpen && (s.chart_url || true) && (
+                      <div style={{ marginTop:14 }}>
+                        {s.chart_url && (
+                          <div style={{ background:"#080d16", border:"1px solid #1a2535", borderRadius:6, padding:"10px 14px", marginBottom:8 }}>
+                            <div style={{ display:"flex", alignItems:"center", justifyContent:"space-between", marginBottom:8 }}>
+                              <div style={{ fontSize:9, fontWeight:"bold", color:"#00d4ff", fontFamily:"sans-serif", letterSpacing:1 }}>📈 TRADE CHART</div>
+                              <button
+                                onClick={e => { e.stopPropagation(); runReplay(s.id); }}
+                                disabled={replayLoading[s.id]}
+                                style={{ fontSize:8, background:"rgba(192,132,252,0.12)", border:"1px solid #c084fc44", color:"#c084fc", borderRadius:3, padding:"2px 8px", cursor:"pointer", fontFamily:"sans-serif", opacity: replayLoading[s.id] ? 0.5 : 1 }}>
+                                {replayLoading[s.id] ? "Replaying…" : "⟳ Replay"}
+                              </button>
+                            </div>
+                            <img
+                              src={s.chart_url}
+                              alt={`${s.ticker} trade chart`}
+                              onClick={() => window.open(s.chart_url, '_blank')}
+                              style={{ width:"100%", maxWidth:640, borderRadius:4, cursor:"pointer", border:"1px solid #1a2535", display:"block" }}
+                              title="Click to open full size"
+                            />
+                          </div>
+                        )}
+                        {!s.chart_url && !isOpen && (
+                          <div style={{ display:"flex", justifyContent:"flex-end", marginBottom:6 }}>
+                            <button
+                              onClick={e => { e.stopPropagation(); runReplay(s.id); }}
+                              disabled={replayLoading[s.id]}
+                              style={{ fontSize:8, background:"rgba(192,132,252,0.12)", border:"1px solid #c084fc44", color:"#c084fc", borderRadius:3, padding:"3px 10px", cursor:"pointer", fontFamily:"sans-serif", opacity: replayLoading[s.id] ? 0.5 : 1 }}>
+                              {replayLoading[s.id] ? "Replaying…" : "⟳ Replay signal"}
+                            </button>
+                          </div>
+                        )}
+                        {replayData[s.id] && (() => {
+                          const rp = replayData[s.id];
+                          const improved = rp.improvement_pct > 0;
+                          const deltaColor = improved ? '#00ff88' : rp.improvement_pct < 0 ? '#ff4466' : '#8899aa';
+                          return (
+                            <div style={{ background:"#080d16", border:`1px solid ${deltaColor}44`, borderRadius:6, padding:"12px 14px" }}>
+                              <div style={{ fontSize:9, fontWeight:"bold", color:"#c084fc", fontFamily:"sans-serif", letterSpacing:1, marginBottom:10 }}>⟳ REPLAY RESULT</div>
+                              {/* Side-by-side comparison */}
+                              <div style={{ display:"grid", gridTemplateColumns:"1fr 1fr", gap:10, marginBottom:12 }}>
+                                <div style={{ background:"#050810", borderRadius:5, padding:"8px 12px", border:"1px solid #1a2535" }}>
+                                  <div style={{ fontSize:8, color:"#8899aa", fontFamily:"sans-serif", letterSpacing:1, marginBottom:5 }}>ORIGINAL</div>
+                                  <div style={{ fontSize:14, fontWeight:"bold", color: rp.original.pnl_pct >= 0 ? '#00ff88' : '#ff4466', fontFamily:"monospace" }}>{rp.original.pnl_pct >= 0 ? '+' : ''}{rp.original.pnl_pct}%</div>
+                                  <div style={{ fontSize:9, color:"#8899aa", fontFamily:"sans-serif", marginTop:3 }}>{rp.original.exit_reason} · {rp.original.hold_days}d</div>
+                                </div>
+                                <div style={{ background:"#050810", borderRadius:5, padding:"8px 12px", border:`1px solid ${deltaColor}44` }}>
+                                  <div style={{ fontSize:8, color:"#8899aa", fontFamily:"sans-serif", letterSpacing:1, marginBottom:5 }}>REPLAY</div>
+                                  <div style={{ fontSize:14, fontWeight:"bold", color: rp.replay.pnl_pct >= 0 ? '#00ff88' : '#ff4466', fontFamily:"monospace" }}>{rp.replay.pnl_pct >= 0 ? '+' : ''}{rp.replay.pnl_pct}%</div>
+                                  <div style={{ fontSize:9, color:"#8899aa", fontFamily:"sans-serif", marginTop:3 }}>{rp.replay.exit_reason} · {rp.replay.hold_days}d</div>
+                                </div>
+                              </div>
+                              {/* Delta */}
+                              <div style={{ textAlign:"center", marginBottom:12, fontSize:12, fontWeight:"bold", color:deltaColor, fontFamily:"monospace" }}>
+                                {improved ? '▲' : rp.improvement_pct < 0 ? '▼' : '—'} {rp.improvement_pct >= 0 ? '+' : ''}{rp.improvement_pct}% vs original
+                              </div>
+                              {/* Events log */}
+                              {rp.events?.length > 0 && (
+                                <div style={{ fontSize:8, color:"#8899aa", fontFamily:"monospace", lineHeight:1.8 }}>
+                                  {rp.events.slice(0,8).map((ev, i) => (
+                                    <div key={i} style={{ color: ev.type==='SL_HIT'?'#ff4466': ev.type.includes('TP')?'#00ff88': ev.type==='TSL_MOVE'?'#f97316':'#8899aa' }}>
+                                      {ev.date} · {ev.type} · {ev.detail}
+                                    </div>
+                                  ))}
+                                </div>
+                              )}
+                            </div>
+                          );
+                        })()}
                       </div>
                     )}
 
