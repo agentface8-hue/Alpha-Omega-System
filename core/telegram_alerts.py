@@ -173,3 +173,31 @@ def alert_state_change(signal: dict, old_state: str, new_state: str, score: floa
         f"\U0001f4e5 Entry: ${entry} | Now: ${price:.2f}\n"
         f"\U0001f550 {datetime.utcnow().strftime('%H:%M UTC')}"
     )
+
+
+def alert_outcome_graded(signal: dict, outcome: dict):
+    ticker  = signal.get("ticker", "?")
+    pnl_pct = signal.get("pnl_pct", 0)
+    grade   = outcome.get("grade", "?")
+    lesson  = outcome.get("lesson", "")[:140]
+    improvement = outcome.get("improvement", "")[:100]
+    conv_acc = outcome.get("conviction_accuracy", "CALIBRATED")
+    was_right = outcome.get("was_conviction_right")
+    grade_emoji = {
+        "A": "\U0001f947",
+        "B": "\U0001f948",
+        "C": "\U0001f949",
+        "D": "⚠️",
+        "F": "❌",
+    }.get(grade, "\U0001f4ca")
+    pnl_e = "\U0001f4c8" if pnl_pct >= 0 else "\U0001f4c9"
+    conv_e = "✅" if was_right else "❌"
+    return _send(
+        f"{grade_emoji} <b>TRADE GRADED — {ticker}</b>\n"
+        f"━━━━━━━━━━━━━━━━━━\n"
+        f"Grade: <b>{grade}</b>  |  {pnl_e} P&L: <b>{'+' if pnl_pct>=0 else ''}{pnl_pct:.1f}%</b>\n"
+        f"Conviction: {conv_e} ({conv_acc})\n"
+        f"\U0001f4da Lesson: {lesson}\n"
+        f"\U0001f527 Fix: {improvement}\n"
+        f"\U0001f550 {datetime.utcnow().strftime('%H:%M UTC')}"
+    )

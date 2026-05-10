@@ -282,6 +282,21 @@ const OverrideSLForm = ({ signal, onSave, onCancel }) => {
   const direction = !isNaN(newNum) ? (newNum > signal.sl ? "tightening up" : newNum < signal.sl ? "loosening down" : "no change") : "";
   const diff = !isNaN(newNum) ? (newNum - signal.sl).toFixed(2) : "";
 
+  const fetchDreamLog = async () => {
+    try {
+      const res = await fetch(`${apiUrl}/api/dreams/latest?limit=5`);
+      const data = await res.json();
+      setDreamLog(data.dreams || []);
+    } catch(e) { /* silent */ }
+  };
+
+  const runDreamCycle = async () => {
+    try {
+      await fetch(`${apiUrl}/api/dreams/run`, { method:'POST', headers:{'Content-Type':'application/json'}, body: JSON.stringify({force:true}) });
+      setTimeout(fetchDreamLog, 3000);
+    } catch(e) { /* silent */ }
+  };
+
   const askOpus = async (signalId) => {
     const q = (advisorInput[signalId] || '').trim();
     if (!q) return;
@@ -402,6 +417,21 @@ const SLHistoryPanel = ({ signal, entryTime, onClose }) => {
   const history = extractSLHistory(signal);
   if (history.length === 0) return null;
 
+  const fetchDreamLog = async () => {
+    try {
+      const res = await fetch(`${apiUrl}/api/dreams/latest?limit=5`);
+      const data = await res.json();
+      setDreamLog(data.dreams || []);
+    } catch(e) { /* silent */ }
+  };
+
+  const runDreamCycle = async () => {
+    try {
+      await fetch(`${apiUrl}/api/dreams/run`, { method:'POST', headers:{'Content-Type':'application/json'}, body: JSON.stringify({force:true}) });
+      setTimeout(fetchDreamLog, 3000);
+    } catch(e) { /* silent */ }
+  };
+
   const askOpus = async (signalId) => {
     const q = (advisorInput[signalId] || '').trim();
     if (!q) return;
@@ -471,6 +501,16 @@ const SignalTracker = () => {
   const [now,              setNow]              = useState(new Date());
   const [slDropdown,       setSlDropdown]       = useState(null);   // signal id or null
   const [scanCandidates,   setScanCandidates]   = useState([]);     // bench cache
+  // Advisor / Opus state
+  const [advisorInput,     setAdvisorInput]     = useState({});     // { [signalId]: string }
+  const [advisorReply,     setAdvisorReply]     = useState({});     // { [signalId]: {answer,loading,error} }
+  const [askOpusOpen,      setAskOpusOpen]      = useState(null);   // signal id or null
+  // Dream log state
+  const [dreamLog,         setDreamLog]         = useState([]);
+  const [dreamOpen,        setDreamOpen]        = useState(false);
+  // Agent Council state
+  const [councilOpen,      setCouncilOpen]      = useState(null);   // signal id or null
+  const [councilLoading,   setCouncilLoading]   = useState({});     // { [signalId]: bool }
   const apiUrl = import.meta.env.VITE_API_URL || 'http://127.0.0.1:8000';
 
   useEffect(() => { const t = setInterval(() => setNow(new Date()), 60000); return () => clearInterval(t); }, []);
@@ -579,6 +619,21 @@ const SignalTracker = () => {
     .slice(0, 50);
 
 
+  const fetchDreamLog = async () => {
+    try {
+      const res = await fetch(`${apiUrl}/api/dreams/latest?limit=5`);
+      const data = await res.json();
+      setDreamLog(data.dreams || []);
+    } catch(e) { /* silent */ }
+  };
+
+  const runDreamCycle = async () => {
+    try {
+      await fetch(`${apiUrl}/api/dreams/run`, { method:'POST', headers:{'Content-Type':'application/json'}, body: JSON.stringify({force:true}) });
+      setTimeout(fetchDreamLog, 3000);
+    } catch(e) { /* silent */ }
+  };
+
   const askOpus = async (signalId) => {
     const q = (advisorInput[signalId] || '').trim();
     if (!q) return;
@@ -595,6 +650,40 @@ const SignalTracker = () => {
       setAdvisorReply(r => ({ ...r, [signalId]: { error: String(e), loading: false } }));
     }
   };
+
+  const runCouncil = async (signalId) => {
+    setCouncilLoading(l => ({ ...l, [signalId]: true }));
+    setCouncilOpen(signalId);
+    try {
+      const res = await fetch(`${apiUrl}/api/signals/council/${signalId}`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+      });
+      const result = await res.json();
+      // Merge council result into local signal data so it renders immediately
+      setData(prev => {
+        if (!prev) return prev;
+        const patch = s => s.id === signalId ? {
+          ...s,
+          council_verdict:       result.verdict,
+          council_reasoning:     result.reasoning,
+          council_key_factor:    result.key_factor,
+          council_size_guidance: result.size_guidance,
+          council_bull_case:     result.bull_case,
+          council_bear_case:     result.bear_case,
+          council_bull_reasons:  result.bull_reasons || [],
+          council_bear_risks:    result.bear_risks   || [],
+          council_bull_conf:     result.bull_confidence,
+          council_bear_conf:     result.bear_confidence,
+        } : s;
+        return { ...prev, active: (prev.active||[]).map(patch) };
+      });
+    } catch (e) {
+      console.error('[COUNCIL]', e);
+    }
+    setCouncilLoading(l => ({ ...l, [signalId]: false }));
+  };
+
   return (
     <div style={{ background:"#050810", padding:"20px 16px", fontFamily:"'Courier New',monospace", color:"#c9d8e8" }}>
       <style>{`@keyframes st-pulse { 0%,100%{opacity:1} 50%{opacity:0.45} }`}</style>
@@ -785,6 +874,23 @@ const SignalTracker = () => {
                           {s.advisor_verdict==='VETO' ? '\u26d4 VETOED' : '\u26a0\ufe0f FLAGGED'}
                         </span>
                       )}
+                      {!isOpen && s.outcome_grade && (() => {
+                        const gc = {A:'#00ff88',B:'#00d4ff',C:'#fbbf24',D:'#f97316',F:'#ff4466'};
+                        const gb = {A:'rgba(0,255,136,0.13)',B:'rgba(0,212,255,0.12)',C:'rgba(251,191,36,0.12)',D:'rgba(249,115,22,0.14)',F:'rgba(255,68,102,0.14)'};
+                        const ge = {A:'\ud83e\udd47',B:'\ud83e\udd48',C:'\ud83e\udd49',D:'\u26a0\ufe0f',F:'\u274c'};
+                        const g = s.outcome_grade;
+                        return (
+                          <span title={s.outcome_lesson||''} style={{
+                            fontSize:8, fontWeight:'bold', cursor:'default',
+                            background:gb[g]||'rgba(255,255,255,0.08)',
+                            color:gc[g]||'#94a3b8',
+                            padding:'1px 6px', borderRadius:3, fontFamily:'sans-serif',
+                            border:`1px solid ${(gc[g]||'#94a3b8')}44`,
+                          }}>
+                            {ge[g]||''} {g}
+                          </span>
+                        );
+                      })()}
                     </div>
                     <div style={{ fontSize:9, color:"#2a4a5a", fontFamily:"sans-serif", marginTop:2 }}>{s.entry_time?.slice(0,10)} &middot; {s.entry_session||""}</div>
                   </div>
@@ -963,6 +1069,39 @@ const SignalTracker = () => {
                     </div>
 
 
+                    {/* Outcomes Grader Panel — closed signals only */}
+                    {!isOpen && s.outcome_grade && (
+                      <div style={{ marginTop:14, background:"#080d16", border:"1px solid #1a2535", borderRadius:6, padding:"10px 14px" }}>
+                        <div style={{ fontSize:9, fontWeight:"bold", color:"#c084fc", fontFamily:"sans-serif", letterSpacing:1, marginBottom:8 }}>TRADE GRADE — AI REVIEW</div>
+                        <div style={{ display:"flex", alignItems:"center", gap:10, marginBottom:8 }}>
+                          {(() => {
+                            const gc={A:'#00ff88',B:'#00d4ff',C:'#fbbf24',D:'#f97316',F:'#ff4466'};
+                            const ge={A:'🥇',B:'🥈',C:'🥉',D:'⚠️',F:'❌'};
+                            const g=s.outcome_grade;
+                            return (
+                              <span style={{ fontSize:22, fontWeight:'bold', color:gc[g]||'#94a3b8', fontFamily:'monospace' }}>
+                                {ge[g]||''} {g}
+                              </span>
+                            );
+                          })()}
+                          <div style={{ fontSize:10, color:"#94a3b8", fontFamily:"sans-serif", lineHeight:1.6 }}>
+                            <div>{s.was_conviction_right===true?'✅ Conviction was RIGHT':s.was_conviction_right===false?'❌ Conviction was WRONG':'—'}</div>
+                            <div style={{color:"#8899aa"}}>{s.conviction_accuracy||''}</div>
+                          </div>
+                        </div>
+                        {s.outcome_lesson && (
+                          <div style={{ fontSize:10, color:"#e2e8f0", fontFamily:"sans-serif", lineHeight:1.6, marginBottom:6, background:"#0a1420", borderRadius:4, padding:"6px 10px", borderLeft:"3px solid #c084fc" }}>
+                            📚 {s.outcome_lesson}
+                          </div>
+                        )}
+                        {s.outcome_improvement && s.outcome_improvement !== 'None — execution was correct' && (
+                          <div style={{ fontSize:9, color:"#8899aa", fontFamily:"sans-serif", lineHeight:1.5, fontStyle:'italic' }}>
+                            🔧 {s.outcome_improvement}
+                          </div>
+                        )}
+                      </div>
+                    )}
+
                     {/* Advisor Panel */}
                     {(s.advisor_verdict || isOpen) && (
                       <div style={{ borderTop:'1px solid #1a2535', paddingTop:14, marginTop:4 }}>
@@ -1027,6 +1166,64 @@ const SignalTracker = () => {
                         )}
                       </div>
                     )}
+                    {/* Agent Council Panel — active signals with conviction >= 70 */}
+                    {isOpen && s.conviction >= 70 && (
+                      <div style={{ borderTop:'1px solid #1a2535', paddingTop:14, marginTop:4 }}>
+                        <div style={{ fontSize:9, fontWeight:'bold', color:'#c084fc', fontFamily:'sans-serif', marginBottom:8, letterSpacing:1, display:'flex', alignItems:'center', gap:6, justifyContent:'space-between' }}>
+                          <span>⚖️ AGENT COUNCIL</span>
+                          <button
+                            onClick={e => { e.stopPropagation(); if (!s.council_verdict) runCouncil(s.id); else setCouncilOpen(councilOpen===s.id?null:s.id); }}
+                            disabled={councilLoading[s.id]}
+                            style={{ fontSize:8, background:'rgba(192,132,252,0.12)', border:'1px solid #c084fc44', color:'#c084fc', borderRadius:3, padding:'2px 8px', cursor:'pointer', fontFamily:'sans-serif' }}>
+                            {councilLoading[s.id] ? 'Debating...' : s.council_verdict ? (councilOpen===s.id ? 'Hide' : 'Show') : 'Run Council'}
+                          </button>
+                        </div>
+                        {s.council_verdict && (councilOpen===s.id || councilLoading[s.id]) && (
+                          <div>
+                            {/* Verdict banner */}
+                            <div style={{ display:'flex', alignItems:'center', gap:8, marginBottom:10, background:'#080d16', borderRadius:6, padding:'8px 12px' }}>
+                              <span style={{
+                                fontSize:10, fontWeight:'bold', padding:'3px 8px', borderRadius:4, fontFamily:'sans-serif',
+                                background: s.council_verdict==='PROCEED_STRONG'?'rgba(0,255,136,0.15)':s.council_verdict==='PROCEED_CAUTIOUS'?'rgba(0,212,255,0.12)':s.council_verdict==='HOLD'?'rgba(251,191,36,0.12)':'rgba(255,68,102,0.15)',
+                                color:      s.council_verdict==='PROCEED_STRONG'?'#00ff88':s.council_verdict==='PROCEED_CAUTIOUS'?'#00d4ff':s.council_verdict==='HOLD'?'#fbbf24':'#ff4466',
+                              }}>
+                                {{'PROCEED_STRONG':'🟢 PROCEED STRONG','PROCEED_CAUTIOUS':'🔵 CAUTIOUS','HOLD':'🟡 HOLD','VETO':'🔴 VETO'}[s.council_verdict]||s.council_verdict}
+                              </span>
+                              {s.council_size_guidance && (
+                                <span style={{ fontSize:9, color:'#8899aa', fontFamily:'sans-serif' }}>Size: <b style={{color:'#e2e8f0'}}>{s.council_size_guidance}</b></span>
+                              )}
+                            </div>
+                            {/* Moderator reasoning */}
+                            {s.council_reasoning && (
+                              <div style={{ fontSize:10, color:'#e2e8f0', fontFamily:'sans-serif', lineHeight:1.6, marginBottom:10, background:'rgba(192,132,252,0.05)', borderLeft:'3px solid #c084fc44', borderRadius:4, padding:'6px 10px' }}>
+                                {s.council_reasoning}
+                              </div>
+                            )}
+                            {/* Bull vs Bear debate */}
+                            <div style={{ display:'grid', gridTemplateColumns:'1fr 1fr', gap:8, marginBottom:8 }}>
+                              <div style={{ background:'rgba(0,255,136,0.05)', border:'1px solid #00ff8822', borderRadius:6, padding:'8px 10px' }}>
+                                <div style={{ fontSize:8, fontWeight:'bold', color:'#00ff88', fontFamily:'sans-serif', marginBottom:5, letterSpacing:1 }}>🐂 BULL ({s.council_bull_conf||'?'}%)</div>
+                                <div style={{ fontSize:9, color:'#94a3b8', fontFamily:'sans-serif', lineHeight:1.5, marginBottom:6 }}>{s.council_bull_case||''}</div>
+                                {(s.council_bull_reasons||[]).map((r,i) => (
+                                  <div key={i} style={{ fontSize:8, color:'#00ff8899', fontFamily:'sans-serif', marginTop:2 }}>✓ {r}</div>
+                                ))}
+                              </div>
+                              <div style={{ background:'rgba(255,68,102,0.05)', border:'1px solid #ff446622', borderRadius:6, padding:'8px 10px' }}>
+                                <div style={{ fontSize:8, fontWeight:'bold', color:'#ff4466', fontFamily:'sans-serif', marginBottom:5, letterSpacing:1 }}>🐻 BEAR ({s.council_bear_conf||'?'}%)</div>
+                                <div style={{ fontSize:9, color:'#94a3b8', fontFamily:'sans-serif', lineHeight:1.5, marginBottom:6 }}>{s.council_bear_case||''}</div>
+                                {(s.council_bear_risks||[]).map((r,i) => (
+                                  <div key={i} style={{ fontSize:8, color:'#ff446699', fontFamily:'sans-serif', marginTop:2 }}>⚠ {r}</div>
+                                ))}
+                              </div>
+                            </div>
+                            {s.council_key_factor && (
+                              <div style={{ fontSize:9, color:'#8899aa', fontFamily:'sans-serif', fontStyle:'italic' }}>🔑 Key factor: {s.council_key_factor}</div>
+                            )}
+                          </div>
+                        )}
+                      </div>
+                    )}
+
                     {/* Per-signal action log -- always renders, shows placeholder for legacy signals */}
                     <div style={{ borderTop:"1px solid #1a2535", paddingTop:14 }}>
                       <div style={{ fontSize:9, fontWeight:"bold", color:"#c084fc", fontFamily:"sans-serif", marginBottom:8, letterSpacing:1, display:"flex", alignItems:"center", gap:6 }}>
@@ -1042,38 +1239,58 @@ const SignalTracker = () => {
         </div>
       )}
 
-      {/* SYSTEM ACTION LOG -- global feed, all signals */}
-      <div style={{ marginTop:32, background:"#0a0f18", border:"1px solid #1a2535", borderRadius:12, overflow:"hidden" }}>
-        <div style={{ display:"flex", alignItems:"center", justifyContent:"space-between", padding:"12px 16px", borderBottom:"1px solid #1a2535", background:"#080c14" }}>
+
+
+      {/* DREAM LOG */}
+      <div style={{ marginTop:24, background:"#0a0f18", border:"1px solid #1a2535", borderRadius:12, overflow:"hidden" }}>
+        <div
+          onClick={() => { setDreamOpen(o=>!o); if(!dreamOpen) fetchDreamLog(); }}
+          style={{ padding:"12px 16px", cursor:"pointer", display:"flex", justifyContent:"space-between", alignItems:"center", userSelect:"none" }}>
           <div style={{ display:"flex", alignItems:"center", gap:8 }}>
-            <Zap size={14} color="#c084fc" />
-            <span style={{ fontSize:12, fontWeight:"bold", color:"#c084fc", fontFamily:"sans-serif", letterSpacing:1 }}>SYSTEM ACTION LOG</span>
-            <span style={{ fontSize:9, color:"#2a4a5a", fontFamily:"sans-serif" }}>last {Math.min(globalLog.length,50)} events &middot; all signals</span>
+            <span style={{ fontSize:16 }}>&#128173;</span>
+            <span style={{ fontSize:10, fontWeight:"bold", color:"#c084fc", fontFamily:"sans-serif", letterSpacing:1 }}>DREAM LOG</span>
+            <span style={{ fontSize:8, color:"#4a6a8a", fontFamily:"sans-serif" }}>background market analysis</span>
           </div>
-          <div style={{ display:"flex", gap:12, fontSize:9, fontFamily:"sans-serif" }}>
-            <span style={{color:"#00ff88"}}>&#9679; profit</span>
-            <span style={{color:"#ff4466"}}>&#9679; risk</span>
-            <span style={{color:"#00d4ff"}}>&#9679; neutral</span>
+          <div style={{ display:"flex", alignItems:"center", gap:8 }}>
+            <button onClick={e => { e.stopPropagation(); runDreamCycle(); }}
+              style={{ fontSize:8, background:"rgba(192,132,252,0.1)", border:"1px solid #c084fc33", color:"#c084fc", borderRadius:3, padding:"2px 7px", cursor:"pointer", fontFamily:"sans-serif" }}>
+              Run Now
+            </button>
+            <span style={{ fontSize:10, color:"#2a4a5a" }}>{dreamOpen ? "▲" : "▼"}</span>
           </div>
         </div>
-        {globalLog.length===0 ? (
-          <div style={{ padding:"30px", textAlign:"center", color:"#8899aa", fontFamily:"sans-serif", fontSize:12 }}>
-            No actions recorded yet &#8212; start a signal to begin logging
-          </div>
-        ) : (
-          <div style={{ maxHeight:400, overflowY:"auto" }}>
-            {globalLog.map((e,i) => (
-              <div key={i} style={{ display:"grid", gridTemplateColumns:"52px 58px 130px 1fr", padding:"7px 16px", borderBottom:"1px solid #0d1520", alignItems:"center", background:i%2===0?"transparent":"rgba(255,255,255,0.01)" }}>
-                <span style={{ fontSize:9, color:"#2a4a5a", fontFamily:"monospace" }}>{fmt(e.ts)}</span>
-                <span style={{ fontSize:10, fontWeight:"bold", color:e.category==="profit"?"#00ff88":e.category==="risk"?"#ff4466":"#00d4ff", fontFamily:"monospace" }}>{e.ticker||"-"}</span>
-                <span style={{ fontSize:9, fontWeight:"bold", color:actionColor(e.category), fontFamily:"monospace", background:`${actionColor(e.category)}12`, padding:"1px 6px", borderRadius:3, overflow:"hidden", textOverflow:"ellipsis", whiteSpace:"nowrap" }}>{e.action}</span>
-                <span style={{ fontSize:9, color:"#8899aa", fontFamily:"sans-serif", paddingLeft:10 }}>{e.detail}</span>
-              </div>
-            ))}
+        {dreamOpen && (
+          <div style={{ borderTop:"1px solid #1a2535", padding:"12px 16px" }}>
+            {dreamLog.length === 0
+              ? <div style={{ fontSize:10, color:"#4a6a8a", fontFamily:"sans-serif" }}>No dreams yet. Click Run Now to trigger a cycle.</div>
+              : dreamLog.map((d, i) => {
+                const edgeColor = d.edge_level==='HIGH'?'#ff4466':d.edge_level==='MEDIUM'?'#fbbf24':'#4a6a8a';
+                return (
+                  <div key={i} style={{ marginBottom:12, paddingBottom:12, borderBottom: i<dreamLog.length-1?'1px solid #1a2535':'none' }}>
+                    <div style={{ display:'flex', alignItems:'center', gap:8, marginBottom:4 }}>
+                      <span style={{ fontSize:9, fontWeight:'bold', color:edgeColor, background:edgeColor+'18', padding:'1px 6px', borderRadius:3, fontFamily:'sans-serif' }}>{d.edge_level}</span>
+                      {d.top_ticker && <span style={{ fontSize:10, fontWeight:'bold', color:'#00d4ff' }}>{d.top_ticker}</span>}
+                      <span style={{ fontSize:8, color:'#4a6a8a', fontFamily:'sans-serif' }}>{d.action}</span>
+                      <span style={{ fontSize:8, color:'#2a4a5a', fontFamily:'sans-serif', marginLeft:'auto' }}>{d.ts ? d.ts.slice(0,16).replace('T',' ')+' UTC' : ''}</span>
+                    </div>
+                    <div style={{ fontSize:9, color:'#94a3b8', fontFamily:'sans-serif', lineHeight:1.5, marginBottom:4 }}>{d.analysis}</div>
+                    {d.key_risk && <div style={{ fontSize:9, color:'#fbbf24', fontFamily:'sans-serif' }}>&#9888;&#65039; {d.key_risk}</div>}
+                  </div>
+                );
+              })
+            }
           </div>
         )}
       </div>
 
+
+      {/* GLOBAL ACTION LOG */}
+      <div style={{ marginTop:24, background:"#0a0f18", border:"1px solid #1a2535", borderRadius:12, padding:"14px 16px" }}>
+        <div style={{ fontSize:9, fontWeight:"bold", color:"#c084fc", fontFamily:"sans-serif", marginBottom:10, letterSpacing:1, display:"flex", alignItems:"center", gap:6 }}>
+          <Activity size={10} /> GLOBAL TRADE LOG &#8212; ALL SIGNALS
+        </div>
+        <SignalActionLog log={globalLog} />
+      </div>
     </div>
   );
 };

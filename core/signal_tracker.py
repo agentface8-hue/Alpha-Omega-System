@@ -442,6 +442,22 @@ def create_turbo_signal(symbol: str, asset_type: str = "stock", scan_data: Dict 
     except Exception as _ae:
         print(f"  [ADVISOR] {sym}: screening failed ({_ae}) — proceeding with APPROVE")
 
+    # Council (Bull/Bear/Opus Moderator) — runs for conviction >= 70%
+    council_result = None
+    try:
+        from core.advisor import run_council_screen as _council
+        council_result = _council(_sd_for_advisor, market_ctx)
+        if council_result:
+            print(f"  [COUNCIL] {sym}: {council_result.get('verdict','?')} — {council_result.get('key_factor','')[:60]}")
+            if council_result.get("verdict") == "VETO":
+                return {
+                    "error": f"Signal VETOED by Council: {council_result.get('reasoning','')[:120]}",
+                    "council": council_result,
+                    "ticker": sym,
+                }
+    except Exception as _ce:
+        print(f"  [COUNCIL] {sym}: council failed ({_ce}) — skipping")
+
     signal = {
         "id":str(uuid.uuid4())[:8],"ticker":sym,"asset_type":asset_type,
         "entry_price":round(price,4),"entry_time":datetime.datetime.utcnow().isoformat(),
@@ -473,6 +489,17 @@ def create_turbo_signal(symbol: str, asset_type: str = "stock", scan_data: Dict 
         "advisor_concerns":   advisor_result.get("concerns", []),
         "advisor_thesis":     advisor_result.get("thesis", ""),
         "advisor_model":      advisor_result.get("model", ""),
+        # Council (Bull/Bear/Opus Moderator — only for conviction >= 70%)
+        "council_verdict":      council_result.get("verdict")      if council_result else None,
+        "council_reasoning":    council_result.get("reasoning")    if council_result else None,
+        "council_key_factor":   council_result.get("key_factor")   if council_result else None,
+        "council_size_guidance":council_result.get("size_guidance")if council_result else None,
+        "council_bull_case":    council_result.get("bull_case")    if council_result else None,
+        "council_bear_case":    council_result.get("bear_case")    if council_result else None,
+        "council_bull_reasons": council_result.get("bull_reasons") if council_result else [],
+        "council_bear_risks":   council_result.get("bear_risks")   if council_result else [],
+        "council_bull_conf":    council_result.get("bull_confidence") if council_result else None,
+        "council_bear_conf":    council_result.get("bear_confidence") if council_result else None,
     }
     _append_action(signal, "OPENED",
         f"Turbo · {regime_str} · ATR ${round(atr_val,2)} · "
@@ -484,6 +511,13 @@ def create_turbo_signal(symbol: str, asset_type: str = "stock", scan_data: Dict 
         _adv_detail += " | " + "; ".join(advisor_result["concerns"][:2])
     _append_action(signal, f"ADVISOR {advisor_result.get('verdict','?')}",
         _adv_detail[:120], _adv_cat)
+    if council_result:
+        _c_verdict = council_result.get("verdict", "?")
+        _c_cat = "profit" if _c_verdict == "PROCEED_STRONG" else "risk" if _c_verdict in ("HOLD","VETO") else "neutral"
+        _c_detail = council_result.get("key_factor", "")[:100]
+        _c_size = council_result.get("size_guidance", "")
+        _append_action(signal, f"COUNCIL {_c_verdict}",
+            f"{_c_detail} | Size: {_c_size}", _c_cat)
 
     active=store.load_active(); active.append(signal); store.save_active(active)
 
@@ -789,6 +823,13 @@ def check_signals() -> Dict[str, Any]:
 
     closed.extend(newly_closed)
     store.save_active(still_active); store.save_closed(closed)
+    # Grade auto-closed signals in background (non-blocking)
+    for _nc in newly_closed:
+        try:
+            from core.outcomes_grader import grade_outcome
+            grade_outcome(_nc)
+        except Exception as _ge:
+            print(f"  [GRADER] could not launch grader for {_nc.get('ticker','?')}: {_ge}")
     return {"active":still_active,"recently_closed":newly_closed,
             "closed":closed,"stats":_calc_stats(closed),
             "market_status":market_status,"warnings":warnings}
@@ -912,6 +953,12 @@ def close_signal(signal_id: str, reason: str = "manual") -> Optional[Dict]:
             from core.telegram_alerts import alert_signal_closed
             alert_signal_closed(target,reason,target.get("close_price",0))
         except: pass
+    if target:
+        try:
+            from core.outcomes_grader import grade_outcome
+            grade_outcome(target)  # non-blocking daemon thread
+        except Exception as _ge:
+            print(f"  [GRADER] could not launch grader for {target.get('ticker','?')}: {_ge}")
     return target
 
 

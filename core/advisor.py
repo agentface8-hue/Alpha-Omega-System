@@ -190,6 +190,92 @@ def screen_signal(scan_data: Dict, market_context: Dict) -> Dict[str, Any]:
         }
 
 
+def run_council_screen(scan_data: Dict, market_context: Dict) -> Optional[Dict[str, Any]]:
+    """
+    Run the Bull/Bear/Moderator council for high-conviction signals (>= 70%).
+    Returns the council result dict, or None if conviction is below threshold.
+    Always returns gracefully — never raises.
+    """
+    conv = scan_data.get("conviction_pct") or scan_data.get("conviction", 0)
+    try:
+        conv_f = float(conv)
+    except (TypeError, ValueError):
+        conv_f = 0
+
+    if conv_f < 70:
+        logger.debug(f"[ADVISOR] Council skipped — conviction {conv_f}% < 70%")
+        return None
+
+    ticker = scan_data.get("ticker", "?")
+    logger.info(f"[ADVISOR] Launching council for {ticker} (conviction {conv_f}%)")
+    try:
+        from core.agent_council import run_council, _send_council_alert
+        result = run_council(scan_data, market_context)
+        # Send Telegram alert for strong verdicts
+        if result.get("verdict") in ("VETO", "PROCEED_STRONG"):
+            _send_council_alert(ticker, result)
+        return result
+    except Exception as e:
+        logger.warning(f"[ADVISOR] Council failed for {ticker}: {e}")
+        return {
+            "verdict": "PROCEED_CAUTIOUS",
+            "reasoning": f"Council unavailable: {str(e)[:80]}",
+            "key_factor": "System error",
+            "size_guidance": "HALF",
+            "bull_case": "", "bull_reasons": [], "bull_confidence": 50,
+            "bear_case": "", "bear_risks":   [], "bear_confidence": 50,
+            "error": str(e),
+        }
+
+
+def ask_opus(signal: Dict, question: str) -> Dict[str, Any]:
+    """
+    Opus 4.6 on-demand deep oracle. Called explicitly by the trader.
+    Reads full signal context and answers the trader's specific question.
+
+    Returns:
+        {
+            "answer": str,
+            "model":  str,
+            "error":  str  (only on failure)
+        }
+    """
+    if not question or not question.strip():
+        return {"answer": "Please ask a specific question about this signal.", "model": OPUS_MODEL}
+
+    try:
+        client = _get_client()
+        prompt = _build_opus_prompt(signal, question.strip())
+        msg = client.messages.create(
+            model=OPUS_MODEL,
+            max_tokens=250,
+            system=_OPUS_SYSTEM,
+            messages=[{"role": "user", "content": prompt}],
+        )
+        return {
+            "answer": msg.content[0].text.strip(),
+            "model":  OPUS_MODEL,
+        }
+
+    except Exception as e:
+        logger.error(f"[ADVISOR] ask_opus failed: {e}")
+        return {
+            "answer": f"Opus unavailable: {str(e)[:120]}",
+            "model":  OPUS_MODEL,
+            "error":  str(e),
+        }
+}")
+        return {
+            "verdict": "PROCEED_CAUTIOUS",
+            "reasoning": f"Council unavailable: {str(e)[:80]}",
+            "key_factor": "System error",
+            "size_guidance": "HALF",
+            "bull_case": "", "bull_reasons": [], "bull_confidence": 50,
+            "bear_case": "", "bear_risks":   [], "bear_confidence": 50,
+            "error": str(e),
+        }
+
+
 def ask_opus(signal: Dict, question: str) -> Dict[str, Any]:
     """
     Opus 4.6 on-demand deep oracle. Called explicitly by the trader.

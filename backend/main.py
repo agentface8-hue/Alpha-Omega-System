@@ -1041,3 +1041,56 @@ async def agent_status():
             "agent_running":threads.get("telegram_agent",False),
             "learning_running":threads.get("learning_loop",False),
             "active_threads":list(threads.keys())}
+
+
+# ── Dreaming Agent ────────────────────────────────────────────────────────────
+@app.get("/api/dreams/latest")
+async def get_dream_log(limit: int = 10):
+    from core.dreaming_agent import load_dream_log
+    return {"dreams": load_dream_log(limit=limit)}
+
+@app.post("/api/dreams/run")
+async def trigger_dream_cycle(request: Request):
+    body  = await request.json() if request.headers.get("content-type","").startswith("application/json") else {}
+    force = body.get("force", False)
+    from core.dreaming_agent import run_dream_cycle
+    return run_dream_cycle(force=force)
+
+
+# ── Outcomes Grader ───────────────────────────────────────────────────────────
+@app.get("/api/outcomes/summary")
+async def get_outcomes_summary():
+    from core.outcomes_grader import load_outcomes_summary
+    return load_outcomes_summary()
+
+
+# ── Agent Council ─────────────────────────────────────────────────────────────
+@app.post("/api/signals/council/{signal_id}")
+async def run_signal_council(signal_id: str, request: Request):
+    from core import signal_store as store
+    active = store.load_active()
+    signal = next((s for s in active if s.get("id") == signal_id), None)
+    if not signal:
+        raise HTTPException(status_code=404, detail=f"Signal {signal_id} not found")
+    from core.agent_council import run_council
+    from core.signal_tracker import _fetch_market_context
+    try:
+        ctx = _fetch_market_context()
+    except Exception:
+        ctx = {}
+    result = run_council(signal, ctx)
+    for s in active:
+        if s.get("id") == signal_id:
+            s["council_verdict"]       = result.get("verdict")
+            s["council_reasoning"]     = result.get("reasoning")
+            s["council_key_factor"]    = result.get("key_factor")
+            s["council_size_guidance"] = result.get("size_guidance")
+            s["council_bull_case"]     = result.get("bull_case")
+            s["council_bear_case"]     = result.get("bear_case")
+            s["council_bull_reasons"]  = result.get("bull_reasons", [])
+            s["council_bear_risks"]    = result.get("bear_risks", [])
+            s["council_bull_conf"]     = result.get("bull_confidence")
+            s["council_bear_conf"]     = result.get("bear_confidence")
+            break
+    store.save_active(active)
+    return result
