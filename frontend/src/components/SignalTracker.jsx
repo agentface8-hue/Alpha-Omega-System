@@ -905,6 +905,12 @@ const SignalTracker = () => {
                         <TradeStateBadge state={s.trade_state} />
                       </div>
                     )}
+                    {isOpen && s.dynamic_tp_active && s.trade_state === 'RUNNING' && (
+                      <div style={{ fontSize:7, fontWeight:"bold", color:"#00ff88", background:"rgba(0,255,136,0.1)", border:"1px solid #00ff8833", borderRadius:3, padding:"1px 5px", fontFamily:"sans-serif", marginTop:3, textAlign:"center" }}>Dynamic TP active</div>
+                    )}
+                    {isOpen && s.partial_exit_suggested && (
+                      <div style={{ fontSize:7, fontWeight:"bold", color:"#f97316", background:"rgba(249,115,22,0.1)", border:"1px solid #f9731633", borderRadius:3, padding:"1px 5px", fontFamily:"sans-serif", marginTop:2, textAlign:"center" }}>&#9888; Partial exit suggested</div>
+                    )}
                   </div>
                   {/* Price */}
                   <div style={{ display:"flex", gap:12, alignItems:"center", flexWrap:"wrap" }}>
@@ -1273,7 +1279,6 @@ const SignalTracker = () => {
                       <span style={{ fontSize:8, color:'#4a6a8a', fontFamily:'sans-serif' }}>{d.action}</span>
                       <span style={{ fontSize:8, color:'#2a4a5a', fontFamily:'sans-serif', marginLeft:'auto' }}>{d.ts ? d.ts.slice(0,16).replace('T',' ')+' UTC' : ''}</span>
                     </div>
-                    <div style={{ fontSize:9, color:'#94a3b8', fontFamily:'sans-serif', lineHeight:1.5, marginBottom:4 }}>{d.analysis}</div>
                     {d.key_risk && <div style={{ fontSize:9, color:'#fbbf24', fontFamily:'sans-serif' }}>&#9888;&#65039; {d.key_risk}</div>}
                   </div>
                 );

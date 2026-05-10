@@ -717,8 +717,80 @@ def check_signals() -> Dict[str, Any]:
         except Exception as _e:
             print(f"  [RESCAN] {sym}: rescan failed ({_e}), keeping previous state")
 
-        # ── Close conditions ─────────────────────────────────────────────────
+        # ── Close conditions (and Dynamic TP Phase 2) ────────────────────────
         is_turbo=s.get("turbo",False); should_close=False; close_status=""; close_reason=""
+
+        # ── Dynamic TP Phase 2 — conviction-driven TP/SL adjustments ─────────
+        try:
+            _dtp_state = s.get("trade_state")
+            _atr = s.get("atr_at_entry", 0)
+            if _dtp_state and _atr > 0:
+                if _dtp_state == "RUNNING":
+                    # Push TPs forward — never backward
+                    _new_tp1 = round(price + _atr * 1.0, 4)
+                    _new_tp2 = round(price + _atr * 2.0, 4)
+                    _tp_pushed = False
+                    if _new_tp1 > s.get("tp1", 0) and not s.get("tp1_hit"):
+                        s["tp1"] = _new_tp1
+                        s["dynamic_tp_active"] = True
+                        _tp_pushed = True
+                    if _new_tp2 > s.get("tp2", 0) and not s.get("tp2_hit"):
+                        s["tp2"] = _new_tp2
+                        s["dynamic_tp_active"] = True
+                        _tp_pushed = True
+                    if _tp_pushed:
+                        _append_action(s, "DYNAMIC TP PUSHED",
+                            f"TP1→${s['tp1']:.2f}  TP2→${s['tp2']:.2f}  (RUNNING·score {s.get('live_score',0):.0f}%)",
+                            "profit")
+
+                elif _dtp_state == "PROTECTING":
+                    # Tighten TSL to highest - 0.75×ATR
+                    _tight_sl = round(s.get("highest_price", price) - _atr * 0.75, 4)
+                    _tight_sl = max(_tight_sl, s.get("entry_price", 0))
+                    if _tight_sl > s.get("sl", 0):
+                        _old_sl_p = s["sl"]
+                        s["sl"] = _tight_sl
+                        s["trailing_sl_active"] = True
+                        _append_action(s, "SL TIGHTENED",
+                            f"PROTECTING · SL ${_old_sl_p:.2f} → ${_tight_sl:.2f}  (0.75×ATR)",
+                            "neutral")
+                        try:
+                            from core.telegram_alerts import alert_trailing_sl_update
+                            alert_trailing_sl_update(s, _old_sl_p, _tight_sl, s.get("highest_price", price))
+                        except Exception:
+                            pass
+                    if not s.get("tp1_hit"):
+                        s["partial_exit_suggested"] = True
+
+                elif _dtp_state == "EXIT":
+                    if s.get("pnl_pct", 0) > 5.0:
+                        # Profitable > 5% — tighten SL, let TSL handle exit
+                        _exit_tight_sl = round(s.get("highest_price", price) - _atr * 0.5, 4)
+                        _exit_tight_sl = max(_exit_tight_sl, s.get("entry_price", 0))
+                        if _exit_tight_sl > s.get("sl", 0):
+                            _old_sl_e = s["sl"]
+                            s["sl"] = _exit_tight_sl
+                            s["trailing_sl_active"] = True
+                            _append_action(s, "SL TIGHTENED",
+                                f"EXIT state, PnL {s['pnl_pct']:.1f}%>5% · SL ${_old_sl_e:.2f} → ${_exit_tight_sl:.2f}",
+                                "neutral")
+                    else:
+                        # Auto-close via normal close flow
+                        close_status = "AUTO_CLOSE_CONVICTION"
+                        close_reason = "Auto-close: conviction score below threshold"
+                        s["close_price"] = round(price, 4)
+                        should_close = True
+                        _append_action(s, "AUTO-CLOSED",
+                            f"Conviction {s.get('live_score',0):.0f}% below threshold · EXIT state",
+                            "risk")
+                        try:
+                            from core.telegram_alerts import alert_signal_closed
+                            alert_signal_closed(s, close_reason, price)
+                        except Exception:
+                            pass
+                        print(f"  [DTP] {sym}: AUTO-CLOSED — conviction {s.get('live_score',0):.0f}%")
+        except Exception as _dtp_e:
+            print(f"  [DTP] {sym}: dynamic TP error ({_dtp_e}), continuing")
 
         if price<=s["sl"]:
             close_status="STOPPED_OUT"
