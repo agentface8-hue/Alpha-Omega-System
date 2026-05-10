@@ -471,18 +471,7 @@ const PositionCard = ({ pos, onClose, onRefresh, bench = [], onOpenBench }) => {
 
 // ── Closed trade row ───────────────────────────────────────────────────────────────
 const ClosedRow = ({ pos }) => {
-  const [expanded,      setExpanded]      = useState(false);
-  const [replayData,    setReplayData]    = useState(null);
-  const [replayLoading, setReplayLoading] = useState(false);
-  const apiUrl = import.meta.env.VITE_API_URL || 'http://127.0.0.1:8000';
-  const runReplay = async () => {
-    setReplayLoading(true);
-    try {
-      const res = await fetch(`${apiUrl}/api/signals/replay/${pos.id}`, { method: 'POST' });
-      if (res.ok) setReplayData(await res.json());
-    } catch(e) { console.error('Replay:', e); }
-    setReplayLoading(false);
-  };
+  const [expanded, setExpanded] = useState(false);
   const pnl       = pos.realized_pnl || 0;
   const pnlPct    = pos.position_size > 0 ? (pnl / pos.position_size * 100) : 0;
   const lastTrade = (pos.trades || []).slice(-1)[0] || {};
@@ -551,57 +540,19 @@ const ClosedRow = ({ pos }) => {
                 ))}
               </div>
             </div>
-            {/* Price chart + Replay */}
-            <div style={{ marginTop:12 }}>
-              {pos.chart_url && (
-                <div style={{ marginBottom:8 }}>
-                  <div style={{ display:'flex', alignItems:'center', justifyContent:'space-between', marginBottom:6 }}>
-                    <div style={{ fontSize:8, color:'#00d4ff', letterSpacing:1, fontFamily:'monospace' }}>📈 TRADE CHART</div>
-                    <button onClick={e => { e.stopPropagation(); runReplay(); }} disabled={replayLoading}
-                      style={{ fontSize:8, background:'rgba(192,132,252,0.12)', border:'1px solid #c084fc44', color:'#c084fc', borderRadius:3, padding:'2px 8px', cursor:'pointer', fontFamily:'sans-serif', opacity:replayLoading?0.5:1 }}>
-                      {replayLoading ? 'Replaying…' : '⟳ Replay'}
-                    </button>
-                  </div>
-                  <img src={pos.chart_url} alt={`${pos.ticker} trade chart`}
-                    onClick={() => window.open(pos.chart_url, '_blank')}
-                    style={{ width:'100%', maxWidth:640, borderRadius:4, cursor:'pointer', border:'1px solid #1a2535', display:'block' }}
-                    title="Click to open full size" />
-                </div>
-              )}
-              {!pos.chart_url && (
-                <div style={{ display:'flex', justifyContent:'flex-end' }}>
-                  <button onClick={e => { e.stopPropagation(); runReplay(); }} disabled={replayLoading}
-                    style={{ fontSize:8, background:'rgba(192,132,252,0.12)', border:'1px solid #c084fc44', color:'#c084fc', borderRadius:3, padding:'3px 10px', cursor:'pointer', fontFamily:'sans-serif', opacity:replayLoading?0.5:1 }}>
-                    {replayLoading ? 'Replaying…' : '⟳ Replay signal'}
-                  </button>
-                </div>
-              )}
-              {replayData && (() => {
-                const rp = replayData;
-                const imp = rp.improvement_pct;
-                const dc = imp > 0 ? '#00ff88' : imp < 0 ? '#ff4466' : '#8899aa';
-                return (
-                  <div style={{ marginTop:8, background:'#080d16', border:`1px solid ${dc}44`, borderRadius:6, padding:'10px 14px' }}>
-                    <div style={{ fontSize:9, fontWeight:'bold', color:'#c084fc', fontFamily:'sans-serif', letterSpacing:1, marginBottom:8 }}>⟳ REPLAY RESULT</div>
-                    <div style={{ display:'grid', gridTemplateColumns:'1fr 1fr', gap:8, marginBottom:8 }}>
-                      <div style={{ background:'#050810', borderRadius:5, padding:'7px 10px', border:'1px solid #1a2535' }}>
-                        <div style={{ fontSize:8, color:'#8899aa', fontFamily:'sans-serif', marginBottom:3 }}>ORIGINAL</div>
-                        <div style={{ fontSize:13, fontWeight:'bold', color: rp.original.pnl_pct >= 0 ? '#00ff88' : '#ff4466', fontFamily:'monospace' }}>{rp.original.pnl_pct >= 0 ? '+' : ''}{rp.original.pnl_pct}%</div>
-                        <div style={{ fontSize:8, color:'#8899aa', fontFamily:'sans-serif' }}>{rp.original.exit_reason} · {rp.original.hold_days}d</div>
-                      </div>
-                      <div style={{ background:'#050810', borderRadius:5, padding:'7px 10px', border:`1px solid ${dc}44` }}>
-                        <div style={{ fontSize:8, color:'#8899aa', fontFamily:'sans-serif', marginBottom:3 }}>REPLAY</div>
-                        <div style={{ fontSize:13, fontWeight:'bold', color: rp.replay.pnl_pct >= 0 ? '#00ff88' : '#ff4466', fontFamily:'monospace' }}>{rp.replay.pnl_pct >= 0 ? '+' : ''}{rp.replay.pnl_pct}%</div>
-                        <div style={{ fontSize:8, color:'#8899aa', fontFamily:'sans-serif' }}>{rp.replay.exit_reason} · {rp.replay.hold_days}d</div>
-                      </div>
-                    </div>
-                    <div style={{ textAlign:'center', fontSize:11, fontWeight:'bold', color:dc, fontFamily:'monospace' }}>
-                      {imp > 0 ? '▲' : imp < 0 ? '▼' : '—'} {imp >= 0 ? '+' : ''}{imp}% vs original
-                    </div>
-                  </div>
-                );
-              })()}
-            </div>
+            {/* Price chart thumbnail — only shown if chart_url exists */}
+            {pos.chart_url && (
+              <div style={{ marginTop:12 }}>
+                <div style={{ fontSize:8, color:'#00d4ff', letterSpacing:1, marginBottom:6, fontFamily:'monospace' }}>📈 TRADE CHART</div>
+                <img
+                  src={pos.chart_url}
+                  alt={`${pos.ticker} trade chart`}
+                  onClick={() => window.open(pos.chart_url, '_blank')}
+                  style={{ width:'100%', maxWidth:640, borderRadius:4, cursor:'pointer', border:'1px solid #1a2535', display:'block' }}
+                  title="Click to open full size"
+                />
+              </div>
+            )}
           </td>
         </tr>
       )}
