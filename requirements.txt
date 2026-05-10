@@ -16,3 +16,6 @@ uvicorn
 supabase
 requests
 anthropic
+
+matplotlib
+pillow

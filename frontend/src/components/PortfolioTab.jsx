@@ -237,6 +237,12 @@ const PositionCard = ({ pos, onClose, onRefresh, bench = [], onOpenBench }) => {
             {pos.partial_exit_suggested && (
               <span style={{ fontSize:8, fontWeight:'bold', color:'#f97316', background:'rgba(249,115,22,0.1)', border:'1px solid #f9731633', borderRadius:3, padding:'1px 5px', fontFamily:'sans-serif' }}>&#9888; Partial exit</span>
             )}
+            {pos.dynamic_tp_active && pos.trade_state === 'RUNNING' && (
+              <span style={{ fontSize:8, fontWeight:'bold', color:'#00ff88', background:'rgba(0,255,136,0.1)', border:'1px solid #00ff8833', borderRadius:3, padding:'1px 5px', fontFamily:'sans-serif' }}>Dynamic TP</span>
+            )}
+            {pos.partial_exit_suggested && (
+              <span style={{ fontSize:8, fontWeight:'bold', color:'#f97316', background:'rgba(249,115,22,0.1)', border:'1px solid #f9731633', borderRadius:3, padding:'1px 5px', fontFamily:'sans-serif' }}>&#9888; Partial exit</span>
+            )}
             <span style={{ fontSize:9, color:'#00d4ff', display:'flex', alignItems:'center', gap:3, background:'rgba(0,212,255,0.08)', borderRadius:4, padding:'2px 6px' }}>
               <Clock size={9} /> {duration}
             </span>
@@ -534,6 +540,19 @@ const ClosedRow = ({ pos }) => {
                 ))}
               </div>
             </div>
+            {/* Price chart thumbnail — only shown if chart_url exists */}
+            {pos.chart_url && (
+              <div style={{ marginTop:12 }}>
+                <div style={{ fontSize:8, color:'#00d4ff', letterSpacing:1, marginBottom:6, fontFamily:'monospace' }}>📈 TRADE CHART</div>
+                <img
+                  src={pos.chart_url}
+                  alt={`${pos.ticker} trade chart`}
+                  onClick={() => window.open(pos.chart_url, '_blank')}
+                  style={{ width:'100%', maxWidth:640, borderRadius:4, cursor:'pointer', border:'1px solid #1a2535', display:'block' }}
+                  title="Click to open full size"
+                />
+              </div>
+            )}
           </td>
         </tr>
       )}

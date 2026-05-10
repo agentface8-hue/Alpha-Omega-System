@@ -913,9 +913,21 @@ def check_signals() -> Dict[str, Any]:
 
 def _save_case_report(signal: Dict):
     try:
+        # ── Generate price chart (non-blocking — failure never stops report) ──
+        chart_url = None
+        try:
+            from core.chart_generator import generate_signal_chart
+            chart_url = generate_signal_chart(signal)
+            if chart_url:
+                signal["chart_url"] = chart_url
+                print(f"  [CHART] {signal.get('ticker','?')}: chart ready → {chart_url[:60]}...")
+        except Exception as _ce:
+            print(f"  [CHART] {signal.get('ticker','?')}: chart generation skipped ({_ce})")
+
         report={
             "report_version":"2.2","generated_at":datetime.datetime.utcnow().isoformat(),
             "signal_id":signal["id"],"ticker":signal["ticker"],"asset_type":signal["asset_type"],
+            "chart_url": chart_url,
             "entry":{"price":signal["entry_price"],"time":signal["entry_time"],
                      "session":signal.get("entry_session","unknown"),"conviction":signal["conviction"],
                      "heat":signal["heat"],"pillar_scores":signal["pillar_scores"],
@@ -1120,7 +1132,7 @@ def _calc_stats(closed: List[Dict]) -> Dict[str, Any]:
         "tp2_hit_rate":round(len(tp2_hits)/len(closed)*100,1) if closed else 0,
         "avg_mae":round(sum(maes)/len(maes),2) if maes else 0,
         "avg_mfe":round(sum(mfes)/len(mfes),2) if mfes else 0,
-        "profit_factor":round(gp/gl,2) if gl>0 else 0,
+                "profit_factor":round(gp/gl,2) if gl>0 else 0,
         "total_gap_slippage":round(sum(abs(s.get("slippage_pct",0)) for s in gap_trades),2),
         "gap_affected_trades":len(gap_trades),
         "avg_conviction_winners":round(sum(s.get("conviction",0) for s in wins)/len(wins),1) if wins else 0,

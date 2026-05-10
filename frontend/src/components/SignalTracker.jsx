@@ -1108,6 +1108,20 @@ const SignalTracker = () => {
                       </div>
                     )}
 
+                    {/* Price Chart — closed trades */}
+                    {!isOpen && s.chart_url && (
+                      <div style={{ marginTop:14, background:"#080d16", border:"1px solid #1a2535", borderRadius:6, padding:"10px 14px" }}>
+                        <div style={{ fontSize:9, fontWeight:"bold", color:"#00d4ff", fontFamily:"sans-serif", letterSpacing:1, marginBottom:8 }}>📈 TRADE CHART</div>
+                        <img
+                          src={s.chart_url}
+                          alt={`${s.ticker} trade chart`}
+                          onClick={() => window.open(s.chart_url, '_blank')}
+                          style={{ width:"100%", maxWidth:640, borderRadius:4, cursor:"pointer", border:"1px solid #1a2535", display:"block" }}
+                          title="Click to open full size"
+                        />
+                      </div>
+                    )}
+
                     {/* Advisor Panel */}
                     {(s.advisor_verdict || isOpen) && (
                       <div style={{ borderTop:'1px solid #1a2535', paddingTop:14, marginTop:4 }}>
