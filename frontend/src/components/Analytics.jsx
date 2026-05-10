@@ -1,5 +1,6 @@
 import { useState, useEffect } from 'react';
 import { TrendingUp, TrendingDown, Target, Activity, BarChart3, AlertTriangle } from 'lucide-react';
+import { BarChart, Bar, XAxis, YAxis, Tooltip, ResponsiveContainer, Cell } from 'recharts';
 
 const API = import.meta.env.VITE_API_URL || 'http://127.0.0.1:8000';
 
@@ -25,24 +26,67 @@ const BarRow = ({ label, pct, count, color }) => (
   </div>
 );
 
+// Breakdown table for regime / sector / session
+const BreakdownTable = ({ title, data }) => {
+  if (!data || Object.keys(data).length === 0) return null;
+  return (
+    <div style={{ background:'#080c14', border:'1px solid #1a2535', borderRadius:10, padding:'16px 20px' }}>
+      <div style={{ color:'#2a4a5a', fontSize:9, letterSpacing:2, fontFamily:'sans-serif', marginBottom:12 }}>{title}</div>
+      <table style={{ width:'100%', borderCollapse:'collapse', fontSize:10, fontFamily:'monospace' }}>
+        <thead>
+          <tr style={{ borderBottom:'1px solid #1a2535' }}>
+            <th style={{ textAlign:'left',  color:'#3a5060', padding:'4px 8px 6px 0', fontWeight:'normal', letterSpacing:1 }}>GROUP</th>
+            <th style={{ textAlign:'right', color:'#3a5060', padding:'4px 8px 6px', fontWeight:'normal' }}>WINS</th>
+            <th style={{ textAlign:'right', color:'#3a5060', padding:'4px 8px 6px', fontWeight:'normal' }}>LOSSES</th>
+            {data[Object.keys(data)[0]]?.avg_pnl !== undefined && (
+              <th style={{ textAlign:'right', color:'#3a5060', padding:'4px 0 6px 8px', fontWeight:'normal' }}>AVG P&L</th>
+            )}
+          </tr>
+        </thead>
+        <tbody>
+          {Object.entries(data).map(([key, d]) => {
+            const total = (d.wins || 0) + (d.losses || 0);
+            const wr = total ? Math.round(d.wins / total * 100) : 0;
+            return (
+              <tr key={key} style={{ borderBottom:'1px solid #0d1520' }}>
+                <td style={{ color:'#94a3b8', padding:'5px 8px 5px 0' }}>{key}</td>
+                <td style={{ textAlign:'right', color:'#00ff88', padding:'5px 8px' }}>{d.wins || 0}</td>
+                <td style={{ textAlign:'right', color:'#ff4466', padding:'5px 8px' }}>{d.losses || 0}</td>
+                {d.avg_pnl !== undefined && (
+                  <td style={{ textAlign:'right', color: d.avg_pnl >= 0 ? '#00ff88' : '#ff4466', padding:'5px 0 5px 8px', fontWeight:'bold' }}>
+                    {d.avg_pnl >= 0 ? '+' : ''}{d.avg_pnl}%
+                  </td>
+                )}
+              </tr>
+            );
+          })}
+        </tbody>
+      </table>
+    </div>
+  );
+};
+
 const Analytics = () => {
-  const [data, setData]     = useState(null);
-  const [risk, setRisk]     = useState(null);
-  const [source, setSource] = useState(null);
+  const [data, setData]       = useState(null);
+  const [risk, setRisk]       = useState(null);
+  const [source, setSource]   = useState(null);
+  const [port, setPort]       = useState(null);   // /api/analytics/portfolio
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
     const load = async () => {
       setLoading(true);
       try {
-        const [perfRes, riskRes, srcRes] = await Promise.all([
+        const [perfRes, riskRes, srcRes, portRes] = await Promise.all([
           fetch(`${API}/api/analytics/performance`),
           fetch(`${API}/api/portfolio/risk`),
           fetch(`${API}/api/data/source`),
+          fetch(`${API}/api/analytics/portfolio`),
         ]);
         if (perfRes.ok) setData(await perfRes.json());
         if (riskRes.ok) setRisk(await riskRes.json());
         if (srcRes.ok)  setSource(await srcRes.json());
+        if (portRes.ok) setPort(await portRes.json());
       } catch(e) { console.error(e); }
       setLoading(false);
     };
@@ -89,7 +133,6 @@ const Analytics = () => {
                   {risk.risk_level}
                 </div>
               </div>
-
               <div style={{ display:'flex', gap:12, flexWrap:'wrap', marginBottom:14 }}>
                 <StatBox label="OPEN SIGNALS" value={risk.signals} color="#c9d8e8" />
                 <StatBox label="WORST CASE" value={`${risk.worst_case_loss_pct}%`}
@@ -99,7 +142,6 @@ const Analytics = () => {
                     color={cnt >= 3 ? '#ff4466' : cnt === 2 ? '#fbbf24' : '#00ff88'} sub="signals" />
                 ))}
               </div>
-
               {risk.warnings?.length > 0 && (
                 <div style={{ display:'flex', flexDirection:'column', gap:5 }}>
                   {risk.warnings.map((w, i) => (
@@ -111,17 +153,87 @@ const Analytics = () => {
             </div>
           )}
 
-          {/* ── Performance Stats ── */}
+          {/* ── Portfolio-level analytics (new) ── */}
+          {port && port.total_signals > 0 && (
+            <>
+              {/* Summary cards */}
+              <div style={{ background:'#080c14', border:'1px solid #1a2535', borderRadius:10, padding:'16px 20px' }}>
+                <div style={{ color:'#2a4a5a', fontSize:9, letterSpacing:2, fontFamily:'sans-serif', marginBottom:14 }}>PORTFOLIO SUMMARY</div>
+                <div style={{ display:'flex', gap:10, flexWrap:'wrap', marginBottom:12 }}>
+                  <StatBox label="WIN RATE"      value={`${port.win_rate}%`}
+                    color={port.win_rate >= 55 ? '#00ff88' : port.win_rate >= 45 ? '#fbbf24' : '#ff4466'} />
+                  <StatBox label="PROFIT FACTOR" value={port.profit_factor}
+                    color={port.profit_factor >= 1.5 ? '#00ff88' : port.profit_factor >= 1 ? '#fbbf24' : '#ff4466'}
+                    sub=">1.5 = excellent" />
+                  <StatBox label="SHARPE RATIO"  value={port.sharpe_ratio}
+                    color={port.sharpe_ratio >= 1 ? '#00ff88' : port.sharpe_ratio >= 0 ? '#fbbf24' : '#ff4466'}
+                    sub="annualised" />
+                  <StatBox label="MAX DRAWDOWN"  value={`${port.max_drawdown_pct}%`}
+                    color={port.max_drawdown_pct > -10 ? '#fbbf24' : '#ff4466'} sub="equity curve" />
+                  <StatBox label="AVG HOLD"      value={`${port.avg_hold_days}d`}  color="#00d4ff" />
+                  <StatBox label="AVG P&L"       value={`${port.avg_pnl_pct >= 0 ? '+' : ''}${port.avg_pnl_pct}%`}
+                    color={port.avg_pnl_pct >= 0 ? '#00ff88' : '#ff4466'} />
+                </div>
+                {/* Best / Worst trade */}
+                <div style={{ display:'flex', gap:10 }}>
+                  {port.best_trade && (
+                    <div style={{ flex:1, background:'rgba(0,255,136,0.05)', border:'1px solid #00ff8822', borderRadius:6, padding:'8px 12px' }}>
+                      <div style={{ fontSize:8, color:'#00ff88', letterSpacing:1, fontFamily:'sans-serif', marginBottom:4 }}>🏆 BEST TRADE</div>
+                      <span style={{ fontSize:13, fontWeight:'bold', color:'#00ff88', fontFamily:'monospace' }}>{port.best_trade.ticker}</span>
+                      <span style={{ fontSize:11, color:'#00ff88', fontFamily:'monospace', marginLeft:8 }}>+{port.best_trade.pnl_pct}%</span>
+                      <div style={{ fontSize:9, color:'#2a4a5a', marginTop:2, fontFamily:'sans-serif' }}>{port.best_trade.date}</div>
+                    </div>
+                  )}
+                  {port.worst_trade && (
+                    <div style={{ flex:1, background:'rgba(255,68,102,0.05)', border:'1px solid #ff446622', borderRadius:6, padding:'8px 12px' }}>
+                      <div style={{ fontSize:8, color:'#ff4466', letterSpacing:1, fontFamily:'sans-serif', marginBottom:4 }}>⚠️ WORST TRADE</div>
+                      <span style={{ fontSize:13, fontWeight:'bold', color:'#ff4466', fontFamily:'monospace' }}>{port.worst_trade.ticker}</span>
+                      <span style={{ fontSize:11, color:'#ff4466', fontFamily:'monospace', marginLeft:8 }}>{port.worst_trade.pnl_pct}%</span>
+                      <div style={{ fontSize:9, color:'#2a4a5a', marginTop:2, fontFamily:'sans-serif' }}>{port.worst_trade.date}</div>
+                    </div>
+                  )}
+                </div>
+              </div>
+
+              {/* Monthly P&L bar chart */}
+              {port.monthly_pnl?.length > 0 && (
+                <div style={{ background:'#080c14', border:'1px solid #1a2535', borderRadius:10, padding:'16px 20px' }}>
+                  <div style={{ color:'#2a4a5a', fontSize:9, letterSpacing:2, fontFamily:'sans-serif', marginBottom:14 }}>MONTHLY P&L (%)</div>
+                  <ResponsiveContainer width="100%" height={160}>
+                    <BarChart data={port.monthly_pnl} margin={{ top:0, right:0, left:-20, bottom:0 }}>
+                      <XAxis dataKey="month" tick={{ fill:'#3a5060', fontSize:9 }} axisLine={false} tickLine={false} />
+                      <YAxis tick={{ fill:'#3a5060', fontSize:9 }} axisLine={false} tickLine={false} />
+                      <Tooltip
+                        contentStyle={{ background:'#0a0f18', border:'1px solid #1a2535', borderRadius:6, fontSize:10 }}
+                        labelStyle={{ color:'#94a3b8' }}
+                        formatter={(v) => [`${v >= 0 ? '+' : ''}${v}%`, 'P&L']}
+                      />
+                      <Bar dataKey="pnl" radius={[3,3,0,0]}>
+                        {port.monthly_pnl.map((entry, i) => (
+                          <Cell key={i} fill={entry.pnl >= 0 ? '#00ff88' : '#ff4466'} />
+                        ))}
+                      </Bar>
+                    </BarChart>
+                  </ResponsiveContainer>
+                </div>
+              )}
+
+              {/* Breakdown tables */}
+              <BreakdownTable title="BY MARKET REGIME" data={port.by_regime} />
+              <BreakdownTable title="BY SECTOR" data={port.by_sector} />
+              <BreakdownTable title="BY SESSION" data={port.by_session} />
+            </>
+          )}
+
+          {/* ── Performance Stats (existing) ── */}
           {data?.total > 0 ? (
             <>
               <div style={{ background:'#080c14', border:'1px solid #1a2535', borderRadius:10, padding:'16px 20px' }}>
-                <div style={{ color:'#2a4a5a', fontSize:9, letterSpacing:2, fontFamily:'sans-serif', marginBottom:14 }}>OVERALL PERFORMANCE</div>
+                <div style={{ color:'#2a4a5a', fontSize:9, letterSpacing:2, fontFamily:'sans-serif', marginBottom:14 }}>DETAILED PERFORMANCE</div>
                 <div style={{ display:'flex', gap:10, flexWrap:'wrap' }}>
                   <StatBox label="TOTAL TRADES"   value={data.total}          color="#c9d8e8" />
-                  <StatBox label="WIN RATE"        value={`${data.win_rate}%`} color={data.win_rate >= 55 ? '#00ff88' : data.win_rate >= 45 ? '#fbbf24' : '#ff4466'} />
                   <StatBox label="AVG WIN"         value={`+${data.avg_win_pct}%`}  color="#00ff88" />
                   <StatBox label="AVG LOSS"        value={`${data.avg_loss_pct}%`}  color="#ff4466" />
-                  <StatBox label="PROFIT FACTOR"   value={data.profit_factor}  color={data.profit_factor >= 1.5 ? '#00ff88' : data.profit_factor >= 1 ? '#fbbf24' : '#ff4466'} sub=">1.5 = excellent" />
                   <StatBox label="TP1 HIT RATE"    value={`${data.tp1_hit_rate}%`}  color="#00d4ff" />
                   <StatBox label="STOPPED OUT"     value={`${data.stopped_out_rate}%`} color="#ff4466" />
                   <StatBox label="AVG MFE"         value={`+${data.avg_mfe_pct}%`} color="#00ff88" sub="best unrealized" />
@@ -143,7 +255,7 @@ const Analytics = () => {
                 </div>
               )}
 
-              {/* Regime breakdown */}
+              {/* Regime breakdown (existing) */}
               {Object.keys(data.regime_breakdown||{}).length > 0 && (
                 <div style={{ background:'#080c14', border:'1px solid #1a2535', borderRadius:10, padding:'16px 20px' }}>
                   <div style={{ color:'#2a4a5a', fontSize:9, letterSpacing:2, fontFamily:'sans-serif', marginBottom:14 }}>

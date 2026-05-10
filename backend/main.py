@@ -825,6 +825,139 @@ async def analytics_performance():
         traceback.print_exc(); raise HTTPException(status_code=500, detail=str(e))
 
 
+
+@app.get("/api/analytics/portfolio")
+async def analytics_portfolio():
+    """
+    Portfolio-level analytics: Sharpe, drawdown, sector/session/monthly breakdown.
+    Complements /api/analytics/performance with richer metrics.
+    """
+    try:
+        import math
+        from core import signal_store as store
+        closed = store.load_closed()
+        if not closed:
+            return {"total_signals": 0, "message": "No closed signals yet."}
+
+        total = len(closed)
+        wins   = [s for s in closed if s.get("pnl_pct", 0) > 0]
+        losses = [s for s in closed if s.get("pnl_pct", 0) <= 0]
+        pnls   = [s.get("pnl_pct", 0) for s in closed]
+
+        win_rate    = round(len(wins) / total * 100, 1) if total else 0
+        avg_pnl_pct = round(sum(pnls) / total, 2) if total else 0
+        gp = sum(s["pnl_pct"] for s in wins)  if wins   else 0
+        gl = abs(sum(s["pnl_pct"] for s in losses)) if losses else 0.01
+        profit_factor = round(gp / gl, 2)
+
+        # Avg hold days
+        hold_days = []
+        for s in closed:
+            try:
+                import datetime as _dt
+                e = _dt.datetime.fromisoformat(s["entry_time"])
+                c = _dt.datetime.fromisoformat(s["closed_at"])
+                hold_days.append((c - e).total_seconds() / 86400)
+            except Exception:
+                pass
+        avg_hold_days = round(sum(hold_days) / len(hold_days), 1) if hold_days else 0
+
+        # Sharpe ratio (daily P&L series, risk-free = 0)
+        import numpy as np
+        pnl_arr = np.array(pnls, dtype=float)
+        sharpe = round(float(pnl_arr.mean() / pnl_arr.std()) * math.sqrt(252), 2) \
+                 if len(pnl_arr) > 1 and pnl_arr.std() > 0 else 0.0
+
+        # Max drawdown (cumulative P&L equity curve)
+        cumulative = np.cumsum(pnl_arr)
+        peak = np.maximum.accumulate(cumulative)
+        drawdown = cumulative - peak
+        max_drawdown_pct = round(float(drawdown.min()), 2) if len(drawdown) else 0.0
+
+        # Best / Worst trade
+        best  = max(closed, key=lambda s: s.get("pnl_pct", 0))
+        worst = min(closed, key=lambda s: s.get("pnl_pct", 0))
+        best_trade  = {"ticker": best["ticker"],  "pnl_pct": best.get("pnl_pct", 0),  "date": (best.get("closed_at","")[:10])}
+        worst_trade = {"ticker": worst["ticker"], "pnl_pct": worst.get("pnl_pct", 0), "date": (worst.get("closed_at","")[:10])}
+
+        # By regime
+        by_regime = {}
+        for s in closed:
+            reg = (s.get("entry_market_context") or {}).get("regime") or s.get("regime", "Unknown")
+            if reg not in by_regime:
+                by_regime[reg] = {"wins": 0, "losses": 0, "pnls": []}
+            by_regime[reg]["pnls"].append(s.get("pnl_pct", 0))
+            if s.get("pnl_pct", 0) > 0:
+                by_regime[reg]["wins"] += 1
+            else:
+                by_regime[reg]["losses"] += 1
+        for reg in by_regime:
+            d = by_regime[reg]
+            d["avg_pnl"] = round(sum(d["pnls"]) / len(d["pnls"]), 2) if d["pnls"] else 0
+            del d["pnls"]
+
+        # By sector
+        by_sector = {}
+        for s in closed:
+            sec = SECTOR_MAP.get(s.get("ticker", "").upper(), "Other")
+            if sec not in by_sector:
+                by_sector[sec] = {"wins": 0, "losses": 0, "pnls": []}
+            by_sector[sec]["pnls"].append(s.get("pnl_pct", 0))
+            if s.get("pnl_pct", 0) > 0:
+                by_sector[sec]["wins"] += 1
+            else:
+                by_sector[sec]["losses"] += 1
+        for sec in by_sector:
+            d = by_sector[sec]
+            d["avg_pnl"] = round(sum(d["pnls"]) / len(d["pnls"]), 2) if d["pnls"] else 0
+            del d["pnls"]
+
+        # By session
+        by_session = {}
+        for s in closed:
+            sess = s.get("entry_session", "unknown")
+            if sess not in by_session:
+                by_session[sess] = {"wins": 0, "losses": 0}
+            if s.get("pnl_pct", 0) > 0:
+                by_session[sess]["wins"] += 1
+            else:
+                by_session[sess]["losses"] += 1
+
+        # Monthly P&L
+        monthly = {}
+        for s in closed:
+            month = (s.get("closed_at", "") or "")[:7]
+            if not month:
+                continue
+            if month not in monthly:
+                monthly[month] = {"pnl": 0.0, "trades": 0}
+            monthly[month]["pnl"]    += s.get("pnl_pct", 0)
+            monthly[month]["trades"] += 1
+        monthly_pnl = sorted(
+            [{"month": m, "pnl": round(d["pnl"], 2), "trades": d["trades"]}
+             for m, d in monthly.items()],
+            key=lambda x: x["month"]
+        )
+
+        return {
+            "total_signals":    total,
+            "win_rate":         win_rate,
+            "avg_pnl_pct":      avg_pnl_pct,
+            "avg_hold_days":    avg_hold_days,
+            "profit_factor":    profit_factor,
+            "sharpe_ratio":     sharpe,
+            "max_drawdown_pct": max_drawdown_pct,
+            "best_trade":       best_trade,
+            "worst_trade":      worst_trade,
+            "by_regime":        by_regime,
+            "by_sector":        by_sector,
+            "by_session":       by_session,
+            "monthly_pnl":      monthly_pnl,
+        }
+    except Exception as e:
+        traceback.print_exc(); raise HTTPException(status_code=500, detail=str(e))
+
+
 # ═══════════════════════════════════════════════════════════════════
 # REAL-TIME DATA — Alpaca (optional, falls back to yfinance)
 # ═══════════════════════════════════════════════════════════════════
