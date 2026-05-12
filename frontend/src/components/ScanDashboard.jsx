@@ -51,6 +51,7 @@ const PillarBar = ({ scores }) => {
 const ScanDashboard = () => {
   const [tickers, setTickers] = useState('AAPL, NVDA, TSLA, AMD, MSFT');
   const [loading, setLoading] = useState(false);
+  const [progress, setProgress] = useState('');
   const [data, setData] = useState(null);
   const [error, setError] = useState(null);
   const [expanded, setExpanded] = useState(new Set());
@@ -97,24 +98,47 @@ const ScanDashboard = () => {
     setLoading(true);
     setError(null);
     setData(null);
+    setProgress('Starting scan...');
     const symbols = tickers.split(',').map(s => s.trim().toUpperCase()).filter(Boolean);
+    const apiUrl = import.meta.env.VITE_API_URL || 'http://127.0.0.1:8000';
     try {
-      const apiUrl = import.meta.env.VITE_API_URL || 'http://127.0.0.1:8000';
-      const res = await fetch(`${apiUrl}/api/scan`, {
+      // Step 1 — start the job
+      const startRes = await fetch(`${apiUrl}/api/scan`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ symbols })
       });
-      if (!res.ok) throw new Error(`API error ${res.status}`);
-      const json = await res.json();
-      setData(json);
-      // Auto-expand top 3
-      const top3 = (json.results || []).filter(r => !r.hard_fail).slice(0,3).map(r => r.ticker);
-      setExpanded(new Set(top3));
+      if (!startRes.ok) throw new Error(`API error ${startRes.status}`);
+      const { job_id } = await startRes.json();
+
+      // Step 2 — poll for completion every 2 seconds
+      await new Promise((resolve, reject) => {
+        const poll = async () => {
+          try {
+            const statusRes = await fetch(`${apiUrl}/api/scan/status/${job_id}`);
+            if (!statusRes.ok) throw new Error(`Status error ${statusRes.status}`);
+            const job = await statusRes.json();
+            setProgress(job.progress || '');
+            if (job.status === 'complete') {
+              const json = job.results;
+              setData(json);
+              const top3 = (json.results || []).filter(r => !r.hard_fail).slice(0,3).map(r => r.ticker);
+              setExpanded(new Set(top3));
+              resolve();
+            } else if (job.status === 'error') {
+              reject(new Error(job.error || 'Scan failed'));
+            } else {
+              setTimeout(poll, 2000);
+            }
+          } catch (e) { reject(e); }
+        };
+        poll();
+      });
     } catch (e) {
       setError(e.message);
     }
     setLoading(false);
+    setProgress('');
   };
 
   const toggleExpand = (ticker) => {
@@ -223,7 +247,7 @@ const ScanDashboard = () => {
         />
         <button onClick={runScan} disabled={loading} style={{ background:"linear-gradient(135deg,#0d2040,#0a1628)", border:"1px solid #1e3a5a", color:"#00d4ff", fontSize:11, fontWeight:"bold", padding:"7px 16px", borderRadius:6, cursor:loading?"wait":"pointer", fontFamily:"sans-serif", display:"flex", alignItems:"center", gap:6 }}>
           {loading ? <RefreshCw size={14} className="spin" /> : <Search size={14} />}
-          {loading ? 'SCANNING...' : 'RUN SCAN'}
+          {loading ? (progress || 'SCANNING...') : 'RUN SCAN'}
         </button>
       </div>
 

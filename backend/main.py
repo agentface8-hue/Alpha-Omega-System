@@ -4,6 +4,74 @@ from backend.schemas import AnalysisRequest, AnalysisResponse, ScanRequest, Scan
 import traceback
 import random
 import time
+import uuid
+import threading
+from typing import Dict, Any
+
+# ── In-memory async scan job store ──────────────────────────────────────────
+scan_jobs: Dict[str, Any] = {}
+
+
+def _run_scan_background(job_id: str, symbols: list):
+    """Background thread: runs scan per-ticker so we can report real progress."""
+    try:
+        from core.market_data import fetch_market_regime, fetch_ticker_data
+        from core.conviction_engine import score_ticker
+        n = len(symbols)
+        scan_jobs[job_id]["progress"] = f"0/{n} stocks scanned"
+
+        regime = fetch_market_regime()
+        results = []
+        for i, sym in enumerate(symbols):
+            scan_jobs[job_id]["progress"] = f"{i}/{n} stocks scanned"
+            raw = score_ticker(fetch_ticker_data(sym), regime)
+            results.append(raw)
+            scan_jobs[job_id]["progress"] = f"{i + 1}/{n} stocks scanned"
+
+        # Sort: non-fails by conviction desc, then hard-fails
+        non_fails = sorted([r for r in results if not r["hard_fail"]],
+                           key=lambda x: x["conviction_pct"], reverse=True)
+        fails = [r for r in results if r["hard_fail"]]
+        sorted_results = non_fails + fails
+
+        # Trade plans for top 3 (same logic as run_scan)
+        for r in sorted_results[:3]:
+            if not r["hard_fail"]:
+                r["plan"] = (
+                    f"Entry: decisive close ${r['entry_low']}-${r['entry_high']} in final 30min. "
+                    f"SL: ${r['sl']} (ATR triple-guard). "
+                    f"TP1: ${r['tp1']} (exit 40%, move SL to BE). "
+                    f"TP2: ${r['tp2']} (exit 45%). R:R {r.get('rr', '?')}:1."
+                )
+
+        spy_chg = regime.get("spy_change_pct", 0)
+        direction = "up" if spy_chg > 0 else "down"
+        header = (
+            f"SPY {direction} {abs(spy_chg)}% at ${regime.get('spy_close', 0)}. "
+            f"VIX at {regime['vix']} — {regime['regime']} regime. "
+            f"Min R:R requirement: {regime['min_rr']}:1."
+        )
+        final = {
+            "market_header": header,
+            "market_regime": regime["regime"],
+            "vix_estimate": regime["vix"],
+            "results": sorted_results,
+        }
+        try:
+            from core.trade_journal import log_scan
+            log_scan(final)
+        except Exception as je:
+            print(f"[JOURNAL] Log failed: {je}")
+
+        scan_jobs[job_id]["status"] = "complete"
+        scan_jobs[job_id]["results"] = final
+        scan_jobs[job_id]["progress"] = f"{n}/{n} stocks scanned"
+
+    except Exception as e:
+        traceback.print_exc()
+        scan_jobs[job_id]["status"] = "error"
+        scan_jobs[job_id]["error"] = str(e)
+        scan_jobs[job_id]["progress"] = "scan failed"
 
 app = FastAPI(title="Alpha-Omega API")
 
@@ -136,36 +204,38 @@ async def analyze_stock(request: AnalysisRequest):
         raise HTTPException(status_code=500, detail=str(e))
 
 
-@app.post("/api/scan", response_model=ScanResponse)
+@app.post("/api/scan")
 async def scan_stocks(request: ScanRequest):
-    try:
-        symbols = [s.upper().strip() for s in request.symbols if s.strip()]
-        if not symbols:
-            raise HTTPException(status_code=400, detail="No symbols provided")
-        if len(symbols) > 30:
-            raise HTTPException(status_code=400, detail="Maximum 30 tickers per scan")
-        from agents.swing_scanner import SwingScanner
-        scanner = SwingScanner()
-        result = scanner.scan(symbols)
-        try:
-            from core.trade_journal import log_scan
-            log_scan(result)
-        except Exception as je:
-            print(f"[JOURNAL] Log failed: {je}")
-        if "error" in result and not result.get("results"):
-            raise HTTPException(status_code=500, detail=result["error"])
-        return ScanResponse(
-            market_header=result.get("market_header", ""),
-            market_regime=result.get("market_regime", ""),
-            vix_estimate=result.get("vix_estimate", 0),
-            results=result.get("results", []),
-            error=result.get("error"),
-        )
-    except HTTPException:
-        raise
-    except Exception as e:
-        traceback.print_exc()
-        raise HTTPException(status_code=500, detail=str(e))
+    """Start a scan job and return immediately with a job_id for polling."""
+    symbols = [s.upper().strip() for s in request.symbols if s.strip()]
+    if not symbols:
+        raise HTTPException(status_code=400, detail="No symbols provided")
+    if len(symbols) > 30:
+        raise HTTPException(status_code=400, detail="Maximum 30 tickers per scan")
+    job_id = f"scan_{uuid.uuid4().hex[:8]}"
+    scan_jobs[job_id] = {
+        "status": "running",
+        "progress": f"0/{len(symbols)} stocks scanned",
+        "results": None,
+        "error": None,
+    }
+    t = threading.Thread(target=_run_scan_background, args=(job_id, symbols), daemon=True)
+    t.start()
+    return {"job_id": job_id, "status": "running"}
+
+
+@app.get("/api/scan/status/{job_id}")
+async def scan_status(job_id: str):
+    """Poll for scan job completion."""
+    job = scan_jobs.get(job_id)
+    if not job:
+        raise HTTPException(status_code=404, detail="Job not found")
+    return {
+        "status": job["status"],
+        "progress": job["progress"],
+        "results": job.get("results"),
+        "error": job.get("error"),
+    }
 
 
 @app.post("/api/prices")
