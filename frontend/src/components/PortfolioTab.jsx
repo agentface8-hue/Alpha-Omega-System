@@ -220,6 +220,9 @@ const PositionCard = ({ pos, onClose, onRefresh, bench = [], onOpenBench }) => {
           <div style={{ display:'flex', alignItems:'center', gap:8 }}>
             {expanded ? <ChevronDown size={13} color='#c084fc' /> : <ChevronRight size={13} color='#8899aa' />}
             <span style={{ fontSize:16, fontWeight:'bold', color:'#e0e0e0', fontFamily:'monospace' }}>{pos.ticker}</span>
+            {/* Current price + delay indicator */}
+            <span style={{ fontSize:13, fontWeight:'bold', color:clr(pnl), fontFamily:'monospace' }}>${fmt(curr, 2)}</span>
+            <span title="~15min delayed (yfinance — no Alpaca key)" style={{ fontSize:8, fontWeight:'bold', color:'#fbbf24', background:'rgba(251,191,36,0.12)', border:'1px solid rgba(251,191,36,0.3)', borderRadius:3, padding:'1px 5px', fontFamily:'sans-serif', cursor:'default', letterSpacing:0.5 }}>D</span>
             {isPartial && <span style={{ fontSize:9, background:'rgba(251,191,36,0.15)', color:'#fbbf24', borderRadius:4, padding:'2px 6px', border:'1px solid #fbbf24' }}>PARTIAL</span>}
             {pos.tp1_hit && <span style={{ fontSize:9, background:'rgba(0,255,136,0.1)', color:'#00ff88', borderRadius:4, padding:'2px 6px' }}>TP1✓</span>}
             {pos.tp2_hit && <span style={{ fontSize:9, background:'rgba(0,255,136,0.15)', color:'#00ff88', borderRadius:4, padding:'2px 6px' }}>TP2✓</span>}
