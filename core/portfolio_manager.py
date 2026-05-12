@@ -79,7 +79,19 @@ def open_position(ticker: str, entry_price: float, sl: float,
             return {"error": f"Insufficient cash (need ${min_size:.2f}, have ${state['cash']:.0f})"}
 
     now          = datetime.datetime.utcnow().isoformat()
-    atr_at_entry = round((entry_price - sl) * 2, 4)  # ATR estimate for trailing TP
+    # Real 14-day ATR via yfinance
+    atr_at_entry = 0.0
+    try:
+        import pandas as pd
+        _hist = yf.Ticker(ticker.upper()).history(period="30d", interval="1d")
+        if not _hist.empty and len(_hist) >= 14:
+            _h, _l, _cp = _hist["High"], _hist["Low"], _hist["Close"].shift(1)
+            _tr = pd.concat([_h - _l, (_h - _cp).abs(), (_l - _cp).abs()], axis=1).max(axis=1)
+            atr_at_entry = round(float(_tr.rolling(14).mean().iloc[-1]), 4)
+    except Exception:
+        pass
+    if atr_at_entry <= 0:
+        atr_at_entry = round((entry_price - sl) * 2, 4)  # fallback if fetch fails
 
     pos = {
         "id": str(uuid.uuid4()), "ticker": ticker.upper(), "status": "open",

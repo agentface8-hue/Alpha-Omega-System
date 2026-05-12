@@ -166,6 +166,67 @@ const StatCard = ({ label, value, sub, color, small }) => (
   </div>
 );
 
+// ── Price level graph (SVG ruler: SL → Entry → curr → TP1 → TP2 → TP3) ─────
+const PriceLevelGraph = ({ entry, sl, curr, tp1, tp2, tp3, pnl }) => {
+  const W = 560, H = 88, PAD = 32;
+  const allP = [sl, entry, curr, tp1, tp2, tp3].filter(v => v > 0 && isFinite(v));
+  if (allP.length < 3) return null;
+  const minP = Math.min(...allP) * 0.997;
+  const maxP = Math.max(...allP) * 1.003;
+  const span = maxP - minP || 1;
+  const toX  = p => PAD + ((p - minP) / span) * (W - 2 * PAD);
+
+  const MID = 44;
+  const G = '#00ff88', R = '#ff4466', GRAY = '#94a3b8';
+  const pColor = pnl >= 0 ? G : R;
+
+  // Sort levels by price so alternating above/below avoids label collision
+  const rawLevels = [
+    { price: sl,    label: 'SL',    color: R,        priceStr: `$${sl.toFixed(2)}` },
+    { price: entry, label: 'Entry', color: GRAY,     priceStr: `$${entry.toFixed(2)}` },
+    { price: tp1,   label: 'TP1',   color: '#7cb8ff', priceStr: `$${tp1.toFixed(2)}` },
+    { price: tp2,   label: 'TP2',   color: '#4aef9f', priceStr: `$${tp2.toFixed(2)}` },
+    { price: tp3,   label: 'TP3',   color: G,        priceStr: `$${tp3.toFixed(2)}` },
+  ].filter(l => l.price > 0).sort((a, b) => a.price - b.price);
+
+  // Alternate above/below by sorted index so close labels don't clash
+  const levels = rawLevels.map((l, i) => ({ ...l, side: i % 2 === 0 ? 'above' : 'below' }));
+
+  const sx = toX(sl), ex = toX(entry), mx = toX(Math.max(tp1, tp2, tp3));
+  const cx = toX(curr);
+
+  return (
+    <div style={{ width:'100%', background:'#060c16', borderRadius:7, padding:'8px 6px 4px', marginBottom:12, border:'1px solid #1a2535' }}>
+      <div style={{ fontSize:8, color:'#8899aa', letterSpacing:1, fontFamily:'monospace', marginBottom:2, marginLeft:6 }}>PRICE LEVELS</div>
+      <svg viewBox={`0 0 ${W} ${H}`} style={{ width:'100%', height:H, display:'block', overflow:'visible' }} preserveAspectRatio="xMidYMid meet">
+        {/* Zone fills */}
+        <rect x={sx} y={MID-2} width={Math.max(0, ex - sx)} height={4} fill={R} opacity={0.25} rx={2}/>
+        <rect x={ex} y={MID-2} width={Math.max(0, mx - ex)} height={4} fill={G} opacity={0.18} rx={2}/>
+        {/* Baseline */}
+        <line x1={PAD - 6} y1={MID} x2={W - PAD + 6} y2={MID} stroke="#1a2535" strokeWidth={1.5}/>
+
+        {/* Level ticks + labels */}
+        {levels.map(({ price, label, color, priceStr, side }) => {
+          const lx = toX(price);
+          const above = side === 'above';
+          return (
+            <g key={label}>
+              <line x1={lx} y1={MID - 9} x2={lx} y2={MID + 9} stroke={color} strokeWidth={1.5}/>
+              <text x={lx} y={above ? MID - 13 : MID + 20} textAnchor="middle" fill={color} fontSize={8} fontFamily="monospace" fontWeight="bold">{label}</text>
+              <text x={lx} y={above ? MID - 22 : MID + 30} textAnchor="middle" fill={color} fontSize={7} fontFamily="monospace">{priceStr}</text>
+            </g>
+          );
+        })}
+
+        {/* Current price — downward triangle pointer */}
+        <polygon points={`${cx-6},${MID-14} ${cx+6},${MID-14} ${cx},${MID-4}`} fill={pColor} opacity={0.95}/>
+        <line x1={cx} y1={MID-4} x2={cx} y2={MID+4} stroke={pColor} strokeWidth={2}/>
+        <text x={cx} y={MID-18} textAnchor="middle" fill={pColor} fontSize={8.5} fontFamily="monospace" fontWeight="bold">${curr.toFixed(2)}</text>
+      </svg>
+    </div>
+  );
+};
+
 // ── Open position card ───────────────────────────────────────────────────────
 const PositionCard = ({ pos, onClose, onRefresh, bench = [], onOpenBench }) => {
   const [expanded, setExpanded] = useState(false);
@@ -223,6 +284,7 @@ const PositionCard = ({ pos, onClose, onRefresh, bench = [], onOpenBench }) => {
             {/* Current price + delay indicator */}
             <span style={{ fontSize:13, fontWeight:'bold', color:clr(pnl), fontFamily:'monospace' }}>${fmt(curr, 2)}</span>
             <span title="~15min delayed (yfinance — no Alpaca key)" style={{ fontSize:8, fontWeight:'bold', color:'#fbbf24', background:'rgba(251,191,36,0.12)', border:'1px solid rgba(251,191,36,0.3)', borderRadius:3, padding:'1px 5px', fontFamily:'sans-serif', cursor:'default', letterSpacing:0.5 }}>D</span>
+            {pos.atr_at_entry > 0 && <span title="14-day Average True Range at position entry" style={{ fontSize:9, color:'#00d4ff', fontFamily:'monospace', background:'rgba(0,212,255,0.08)', borderRadius:3, padding:'1px 6px', border:'1px solid rgba(0,212,255,0.2)' }}>ATR ${fmt(pos.atr_at_entry, 2)}</span>}
             {isPartial && <span style={{ fontSize:9, background:'rgba(251,191,36,0.15)', color:'#fbbf24', borderRadius:4, padding:'2px 6px', border:'1px solid #fbbf24' }}>PARTIAL</span>}
             {pos.tp1_hit && <span style={{ fontSize:9, background:'rgba(0,255,136,0.1)', color:'#00ff88', borderRadius:4, padding:'2px 6px' }}>TP1✓</span>}
             {pos.tp2_hit && <span style={{ fontSize:9, background:'rgba(0,255,136,0.15)', color:'#00ff88', borderRadius:4, padding:'2px 6px' }}>TP2✓</span>}
@@ -357,6 +419,7 @@ const PositionCard = ({ pos, onClose, onRefresh, bench = [], onOpenBench }) => {
 
       {expanded && (
         <div style={{ borderTop:'1px solid #1a2535', padding:'14px', background:'#080c14' }}>
+          <PriceLevelGraph entry={entry} sl={sl} curr={curr} tp1={tp1} tp2={tp2} tp3={tp3} pnl={pnl} />
           <div style={{ background:'#0d1520', border:'1px solid #1a2535', borderRadius:8, padding:'12px 14px', marginBottom:14 }}>
             <div style={{ fontSize:8, color:'#c084fc', letterSpacing:1, marginBottom:10, fontFamily:'monospace', fontWeight:'bold' }}>ENTRY REASON</div>
             {pos.pillar_scores && Object.keys(pos.pillar_scores).length > 0 && (
