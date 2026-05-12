@@ -1,5 +1,5 @@
 import React, { useState } from 'react';
-import { Search, RefreshCw, Flame, BarChart2 } from 'lucide-react';
+import { Search, RefreshCw, Flame, BarChart2, Zap, TrendingUp } from 'lucide-react';
 
 // ── Color helpers (from SwingTrader v4.3) ──
 const convColor = p => p >= 75 ? "#00ff88" : p >= 60 ? "#fbbf24" : p >= 45 ? "#94a3b8" : "#ff4466";
@@ -58,7 +58,10 @@ const ScanDashboard = () => {
   const [watchlists, setWatchlists] = useState(null);
   const [sectorHeat, setSectorHeat] = useState(null);
   const [heatLoading, setHeatLoading] = useState(false);
-  const [activeSector, setActiveSector] = useState(null);
+  const [activeSector, setActiveSector]   = useState(null);
+  const [sectorRanking, setSectorRanking] = useState(null);
+  const [rankLoading, setRankLoading]     = useState(false);
+  const [smartScanLoading, setSmartScanLoading] = useState(false);
 
   // Fetch watchlists on mount
   React.useEffect(() => {
@@ -85,6 +88,30 @@ const ScanDashboard = () => {
       const d = await res.json();
       setTickers(d.tickers.join(', '));
     } catch (e) {}
+  };
+
+  const fetchSectorRanking = async () => {
+    setRankLoading(true);
+    const apiUrl = import.meta.env.VITE_API_URL || 'http://127.0.0.1:8000';
+    try {
+      const res = await fetch(`${apiUrl}/api/sectors/ranking`);
+      const d = await res.json();
+      setSectorRanking(d.rankings || []);
+    } catch (e) { setSectorRanking([]); }
+    setRankLoading(false);
+  };
+
+  const smartScan = async () => {
+    setSmartScanLoading(true);
+    const apiUrl = import.meta.env.VITE_API_URL || 'http://127.0.0.1:8000';
+    try {
+      const res = await fetch(`${apiUrl}/api/sectors/scan-universe?slots=30&top_sectors=4`);
+      const d = await res.json();
+      if (d.tickers && d.tickers.length > 0) {
+        setTickers(d.tickers.join(', '));
+      }
+    } catch (e) {}
+    setSmartScanLoading(false);
   };
 
   const loadWatchlist = async (name) => {
@@ -171,6 +198,66 @@ const ScanDashboard = () => {
               <span style={{ color:regimeColor(data.market_regime), fontSize:11, fontWeight:"bold" }}>{data.market_regime}</span>
               {data.vix_estimate > 0 && <span style={{ color:"#8899aa", fontSize:9, marginLeft:8 }}>VIX {data.vix_estimate}</span>}
             </div>
+          </div>
+        )}
+      </div>
+
+      {/* Smart Scan — Sector Momentum Universe */}
+      <div style={{ background:"#070d1a", border:"1px solid #1a3525", borderRadius:8, padding:"12px 14px", marginBottom:12 }}>
+        <div style={{ display:"flex", alignItems:"center", justifyContent:"space-between", marginBottom:8 }}>
+          <div style={{ display:"flex", alignItems:"center", gap:8 }}>
+            <TrendingUp size={13} color="#00ff88" />
+            <span style={{ color:"#00ff88", fontSize:10, fontWeight:"bold", fontFamily:"sans-serif", letterSpacing:1 }}>SECTOR MOMENTUM UNIVERSE</span>
+            <span style={{ color:"#8899aa", fontSize:9, fontFamily:"sans-serif" }}>ETF momentum vs SPY · top sectors · &gt;$10B stocks</span>
+          </div>
+          <div style={{ display:"flex", gap:6 }}>
+            <button onClick={fetchSectorRanking} disabled={rankLoading}
+              style={{ background:"#0d1a2a", border:"1px solid #1a3535", borderRadius:4, padding:"3px 10px",
+                color:"#00d4ff", fontSize:10, fontFamily:"sans-serif", cursor:"pointer", display:"flex", alignItems:"center", gap:4 }}>
+              {rankLoading ? <RefreshCw size={10} /> : <BarChart2 size={10} />}
+              {rankLoading ? 'Ranking...' : 'Rank Sectors'}
+            </button>
+            <button onClick={smartScan} disabled={smartScanLoading}
+              style={{ background:"linear-gradient(135deg,#00ff8822,#00bb6622)", border:"1px solid #00ff8844", borderRadius:4, padding:"3px 12px",
+                color:"#00ff88", fontSize:10, fontFamily:"sans-serif", cursor:"pointer", fontWeight:"bold", display:"flex", alignItems:"center", gap:5 }}>
+              {smartScanLoading ? <RefreshCw size={10} /> : <Zap size={10} />}
+              {smartScanLoading ? 'Loading...' : 'Smart Scan Universe'}
+            </button>
+          </div>
+        </div>
+
+        {sectorRanking && sectorRanking.length > 0 && (
+          <div style={{ display:"flex", gap:5, flexWrap:"wrap", marginTop:4 }}>
+            {sectorRanking.map((r) => {
+              const isLeading = r.score > 0;
+              const c = r.score > 1.0 ? "#00ff88" : r.score > -0.5 ? "#fbbf24" : "#ff4466";
+              return (
+                <div key={r.sector} onClick={() => loadSector(r.sector_key)}
+                  style={{ background:`${c}0e`, border:`1px solid ${c}33`, borderRadius:5, padding:"5px 10px",
+                    cursor:"pointer", display:"flex", alignItems:"center", gap:7, minWidth:130 }}>
+                  <span style={{ color:"#8899aa", fontSize:8, fontFamily:"monospace" }}>#{r.rank}</span>
+                  <div>
+                    <div style={{ color:"#e0e0e0", fontSize:9, fontFamily:"sans-serif", fontWeight:"bold", whiteSpace:"nowrap" }}>
+                      {r.sector}
+                    </div>
+                    <div style={{ display:"flex", gap:5, marginTop:2 }}>
+                      <span style={{ color:c, fontSize:8, fontFamily:"monospace", fontWeight:"bold" }}>
+                        {r.score > 0 ? "+" : ""}{r.score.toFixed(1)}
+                      </span>
+                      <span style={{ color:"#8899aa", fontSize:8, fontFamily:"monospace" }}>
+                        5d {r.vs_spy_5d > 0 ? "+" : ""}{r.vs_spy_5d}%
+                      </span>
+                    </div>
+                  </div>
+                  <span style={{ fontSize:8, color:"#8899aa", fontFamily:"monospace", marginLeft:"auto" }}>{r.etf}</span>
+                </div>
+              );
+            })}
+          </div>
+        )}
+        {!sectorRanking && (
+          <div style={{ color:"#2a4a5a", fontSize:10, fontFamily:"sans-serif" }}>
+            Click "Rank Sectors" to score sector momentum, then "Smart Scan Universe" to load top-sector stocks.
           </div>
         )}
       </div>

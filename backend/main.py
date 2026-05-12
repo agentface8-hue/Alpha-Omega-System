@@ -792,7 +792,42 @@ async def get_chart_data(symbol: str, interval: str = "1d", period: str = "6M"):
         traceback.print_exc(); raise HTTPException(status_code=500, detail=str(e))
 
 
-# ── Sector Heat ─────────────────────────────────────────────
+# ── Universe endpoint ────────────────────────────────────────
+@app.get("/api/universe")
+async def universe_endpoint(force: bool = False):
+    from core.universe_builder import build_universe
+    return build_universe(force=force)
+
+@app.get("/api/universe/sector/{sector_name}")
+async def universe_sector(sector_name: str):
+    from core.universe_builder import get_universe
+    uni = get_universe()
+    sector_map = {v.lower().replace(" ", "_"): v for v in uni["sectors"]}
+    sector = sector_map.get(sector_name.lower(), sector_name)
+    tickers = uni["sectors"].get(sector, [])
+    if not tickers:
+        raise HTTPException(status_code=404, detail=f"Sector '{sector_name}' not found")
+    return {"sector": sector, "tickers": tickers, "count": len(tickers)}
+
+@app.get("/api/sectors/ranking")
+async def sector_ranking(force: bool = False):
+    """Rank sectors by 5d+20d ETF momentum vs SPY. Cached 4h."""
+    from core.sector_ranker import rank_sectors
+    import asyncio
+    loop = asyncio.get_event_loop()
+    rankings = await loop.run_in_executor(None, lambda: rank_sectors(force=force))
+    return {"rankings": rankings, "count": len(rankings)}
+
+@app.get("/api/sectors/scan-universe")
+async def sectors_scan_universe(slots: int = 40, top_sectors: int = 4):
+    """Return scan-ready ticker list from top N leading sectors."""
+    from core.sector_ranker import get_scan_universe
+    import asyncio
+    loop = asyncio.get_event_loop()
+    tickers = await loop.run_in_executor(None, lambda: get_scan_universe(slots, top_sectors))
+    return {"tickers": tickers, "count": len(tickers)}
+
+# ── Sector Heat (legacy — now backed by momentum ranker) ─────
 @app.get("/api/sectors/heat")
 async def sector_heat():
     try:
@@ -817,11 +852,27 @@ async def sector_heat():
 
 @app.get("/api/sectors/watchlist/{sector_key}")
 async def sector_watchlist(sector_key: str):
+    from core.universe_builder import get_universe
+    from core.sector_ranker import SECTOR_KEY_MAP
     from core.watchlists import SECTOR_WATCHLISTS
-    if sector_key not in SECTOR_WATCHLISTS:
-        raise HTTPException(status_code=404, detail=f"Sector '{sector_key}' not found")
-    s = SECTOR_WATCHLISTS[sector_key]
-    return {"key":sector_key,"label":s["label"],"etf":s["etf"],"tickers":s["tickers"]}
+    uni = get_universe()
+    # Map sector_key → GICS name
+    reverse_map = {v: k for k, v in SECTOR_KEY_MAP.items()}
+    gics_name = reverse_map.get(sector_key)
+    if gics_name and gics_name in uni["sectors"]:
+        tickers = uni["sectors"][gics_name]
+        etf = next((v for k, v in SECTOR_KEY_MAP.items()
+                    if k == gics_name), "")
+        from core.sector_ranker import SECTOR_ETFS
+        etf = SECTOR_ETFS.get(gics_name, "")
+        return {"key": sector_key, "label": gics_name, "etf": etf,
+                "tickers": tickers, "count": len(tickers), "source": "universe_10b"}
+    # Fallback to legacy watchlist
+    if sector_key in SECTOR_WATCHLISTS:
+        s = SECTOR_WATCHLISTS[sector_key]
+        return {"key": sector_key, "label": s["label"], "etf": s["etf"],
+                "tickers": s["tickers"], "source": "legacy"}
+    raise HTTPException(status_code=404, detail=f"Sector '{sector_key}' not found")
 
 
 # ── Alpha-Mega Dashboard ─────────────────────────────────────

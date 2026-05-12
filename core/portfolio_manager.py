@@ -397,44 +397,118 @@ def get_portfolio() -> Dict:
 
 def autopilot_fill(watchlist_name: str = "full_scan", symbols_override: list = None) -> Dict:
     """
-    Fill open slots from scan results.
-    symbols_override: if provided (e.g. from Alpha-Mega rankings), use instead of watchlist.
+    Fill open slots using >$10B sector-ranked universe.
+    Priority: symbols_override → sector ranker → watchlist fallback.
+    Selection: top sectors by momentum, conviction >= 60%, sorted by conviction desc,
+               sector cap of 2 positions, min R:R 1.8.
     """
-    from core.watchlists import get_watchlist
     from core.conviction_engine import run_scan
+    from core.market_data import fetch_market_regime
     state    = store.load_state()
     open_pos = store.load_positions("open")
     slots    = MAX_POSITIONS - len(open_pos)
-    if slots == 0: return {"message":"Portfolio full","opened":[],"slots_used":0}
+    if slots == 0: return {"message": "Portfolio full", "opened": [], "slots_used": 0}
     existing_tickers = {p["ticker"] for p in open_pos}
 
+    # ── Build scan universe ───────────────────────────────────────────────────
     if symbols_override:
         all_syms = symbols_override
-        print(f"[AUTOPILOT-PORTFOLIO] Using Alpha-Mega ranked universe ({len(all_syms)} stocks)")
+        universe_source = f"alpha_mega ({len(all_syms)} stocks)"
     else:
-        wl_data  = get_watchlist(watchlist_name)
-        all_syms = wl_data.get("tickers",[]) if isinstance(wl_data,dict) else list(wl_data)
-        print(f"[AUTOPILOT-PORTFOLIO] Using {watchlist_name} watchlist ({len(all_syms)} stocks)")
+        try:
+            from core.sector_ranker import get_scan_universe, rank_sectors
+            rankings = rank_sectors()
+            all_syms = get_scan_universe(total_slots=40, top_sectors=4)
+            top3 = ", ".join(r["sector"] for r in rankings[:3])
+            universe_source = f"sector_ranked >$10B (top: {top3})"
+        except Exception as e:
+            print(f"[AUTOPILOT] Sector ranker failed ({e}), falling back to watchlist")
+            from core.watchlists import get_watchlist
+            wl_data  = get_watchlist(watchlist_name)
+            all_syms = wl_data.get("tickers", []) if isinstance(wl_data, dict) else list(wl_data)
+            universe_source = f"watchlist:{watchlist_name}"
 
     symbols = [s for s in all_syms if s not in existing_tickers]
-    if not symbols: return {"message":"No new symbols to scan","opened":[]}
+    if not symbols:
+        return {"message": "No new symbols to scan", "opened": [], "universe": universe_source}
 
-    scan_result = run_scan(symbols[:20])
-    candidates  = [r for r in scan_result.get("results",[])
-                   if not r.get("hard_fail") and r.get("conviction_pct",0)>=55
-                   and r["ticker"] not in existing_tickers][:slots]
+    print(f"[AUTOPILOT] Universe: {universe_source} → scanning {len(symbols)} tickers")
+
+    # ── Regime-based conviction threshold ────────────────────────────────────
+    try:
+        regime = fetch_market_regime().get("regime", "Trending Bull")
+    except Exception:
+        regime = "Trending Bull"
+    conv_threshold = 70 if regime in ("Choppy / Range", "Trending Bear", "High-Vol Event") else 60
+    print(f"[AUTOPILOT] Regime: {regime} → conviction threshold: {conv_threshold}%")
+
+    # ── Run conviction scan ───────────────────────────────────────────────────
+    scan_result = run_scan(symbols)
+    raw = scan_result.get("results", [])
+
+    # ── Filter + sort by conviction desc ─────────────────────────────────────
+    candidates = sorted(
+        [r for r in raw
+         if not r.get("hard_fail")
+         and r.get("conviction_pct", 0) >= conv_threshold
+         and r.get("rr", 0) >= 1.8
+         and r["ticker"] not in existing_tickers],
+        key=lambda x: x["conviction_pct"],
+        reverse=True
+    )
+
     if not candidates:
-        return {"message":"No qualifying signals (need conviction >= 55%)","opened":[],
-                "top_scores":[(r["ticker"],r.get("conviction_pct",0),r.get("hard_fail_reason","")[:40])
-                              for r in scan_result.get("results",[])[:8] if not r.get("hard_fail")]}
-    opened = []
+        top_scores = [(r["ticker"], r.get("conviction_pct", 0))
+                      for r in raw if not r.get("hard_fail")][:8]
+        return {
+            "message": f"No qualifying signals (need conviction >= {conv_threshold}%, R:R >= 1.8)",
+            "opened": [], "universe": universe_source,
+            "top_scores": top_scores, "regime": regime,
+        }
+
+    # ── Sector cap: max 2 per sector ─────────────────────────────────────────
+    try:
+        from core.universe_builder import get_ticker_sector
+    except Exception:
+        def get_ticker_sector(t): return "Other"
+
+    sector_counts: dict = {}
+    already_held_sectors = {}
+    for p in open_pos:
+        s = get_ticker_sector(p["ticker"])
+        already_held_sectors[s] = already_held_sectors.get(s, 0) + 1
+
+    final_candidates = []
     for c in candidates:
+        sector = get_ticker_sector(c["ticker"])
+        held   = already_held_sectors.get(sector, 0)
+        in_q   = sector_counts.get(sector, 0)
+        if held + in_q < 2:
+            sector_counts[sector] = in_q + 1
+            final_candidates.append(c)
+        if len(final_candidates) >= slots:
+            break
+
+    # ── Open positions ────────────────────────────────────────────────────────
+    opened = []
+    for c in final_candidates:
         result = open_position(
-            ticker=c["ticker"], entry_price=c.get("entry_high",c["last_close"]),
+            ticker=c["ticker"],
+            entry_price=c.get("entry_high", c["last_close"]),
             sl=c["sl"], tp1=c["tp1"], tp2=c["tp2"], tp3=c["tp3"],
             conviction=c["conviction_pct"], asset_type="stock",
         )
         if "error" not in result:
-            opened.append({"ticker":c["ticker"],"conviction":c["conviction_pct"],
-                           "entry":result["entry_price"],"shares":result["shares"]})
-    return {"opened":opened,"slots_used":len(opened)}
+            opened.append({
+                "ticker":     c["ticker"],
+                "conviction": c["conviction_pct"],
+                "sector":     get_ticker_sector(c["ticker"]),
+                "entry":      result["entry_price"],
+                "shares":     result["shares"],
+                "rr":         c.get("rr", 0),
+            })
+    return {
+        "opened": opened, "slots_used": len(opened),
+        "universe": universe_source, "regime": regime,
+        "conviction_threshold": conv_threshold,
+    }
