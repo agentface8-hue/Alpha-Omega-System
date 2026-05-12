@@ -102,38 +102,44 @@ const ScanDashboard = () => {
     const symbols = tickers.split(',').map(s => s.trim().toUpperCase()).filter(Boolean);
     const apiUrl = import.meta.env.VITE_API_URL || 'http://127.0.0.1:8000';
     try {
-      // Step 1 — start the job
-      const startRes = await fetch(`${apiUrl}/api/scan`, {
+      // SSE streaming — one open connection, no polling, no in-memory job store
+      const response = await fetch(`${apiUrl}/api/scan/stream`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ symbols })
       });
-      if (!startRes.ok) throw new Error(`API error ${startRes.status}`);
-      const { job_id } = await startRes.json();
-
-      // Step 2 — poll for completion every 2 seconds
-      await new Promise((resolve, reject) => {
-        const poll = async () => {
+      if (!response.ok) {
+        const err = await response.text();
+        throw new Error(`API error ${response.status}: ${err}`);
+      }
+      const reader = response.body.getReader();
+      const decoder = new TextDecoder();
+      let buffer = '';
+      while (true) {
+        const { done, value } = await reader.read();
+        if (done) break;
+        buffer += decoder.decode(value, { stream: true });
+        const lines = buffer.split('\n');
+        buffer = lines.pop(); // hold incomplete line for next chunk
+        for (const line of lines) {
+          if (!line.startsWith('data: ')) continue;
           try {
-            const statusRes = await fetch(`${apiUrl}/api/scan/status/${job_id}`);
-            if (!statusRes.ok) throw new Error(`Status error ${statusRes.status}`);
-            const job = await statusRes.json();
-            setProgress(job.progress || '');
-            if (job.status === 'complete') {
-              const json = job.results;
+            const event = JSON.parse(line.slice(6));
+            if (event.type === 'progress') {
+              setProgress(event.progress || '');
+            } else if (event.type === 'complete') {
+              const json = event.results;
               setData(json);
-              const top3 = (json.results || []).filter(r => !r.hard_fail).slice(0,3).map(r => r.ticker);
+              const top3 = (json.results || []).filter(r => !r.hard_fail).slice(0, 3).map(r => r.ticker);
               setExpanded(new Set(top3));
-              resolve();
-            } else if (job.status === 'error') {
-              reject(new Error(job.error || 'Scan failed'));
-            } else {
-              setTimeout(poll, 2000);
+            } else if (event.type === 'error') {
+              throw new Error(event.error || 'Scan failed');
             }
-          } catch (e) { reject(e); }
-        };
-        poll();
-      });
+          } catch (pe) {
+            if (pe.message && (pe.message.includes('API error') || pe.message.includes('Scan failed'))) throw pe;
+          }
+        }
+      }
     } catch (e) {
       setError(e.message);
     }

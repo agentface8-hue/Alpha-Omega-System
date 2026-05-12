@@ -238,6 +238,97 @@ async def scan_status(job_id: str):
     }
 
 
+@app.post("/api/scan/stream")
+async def scan_stocks_stream(request: ScanRequest):
+    """Stream scan results via SSE — one progress event per ticker, final complete event.
+    Avoids in-memory job store and polling; connection stays open for duration of scan."""
+    import json as _json
+    from fastapi.responses import StreamingResponse as _SR
+
+    symbols = [s.upper().strip() for s in request.symbols if s.strip()]
+    if not symbols:
+        raise HTTPException(status_code=400, detail="No symbols provided")
+    if len(symbols) > 30:
+        raise HTTPException(status_code=400, detail="Maximum 30 tickers per scan")
+
+    async def generate():
+        import asyncio
+        loop = asyncio.get_event_loop()
+        try:
+            n = len(symbols)
+            yield f"data: {_json.dumps({'type': 'progress', 'progress': 'Fetching market data...'})}\n\n"
+
+            def _regime():
+                from core.market_data import fetch_market_regime
+                return fetch_market_regime()
+
+            regime = await loop.run_in_executor(None, _regime)
+            results = []
+
+            for i, sym in enumerate(symbols):
+                yield f"data: {_json.dumps({'type': 'progress', 'progress': f'{i}/{n} stocks scanned', 'current': sym})}\n\n"
+
+                def _score(_sym=sym, _regime=regime):
+                    from core.market_data import fetch_ticker_data
+                    from core.conviction_engine import score_ticker
+                    return score_ticker(fetch_ticker_data(_sym), _regime)
+
+                try:
+                    raw = await loop.run_in_executor(None, _score)
+                except Exception as _e:
+                    raw = {"ticker": sym, "hard_fail": True, "error": str(_e)}
+
+                results.append(raw)
+                yield f"data: {_json.dumps({'type': 'progress', 'progress': f'{i+1}/{n} stocks scanned'})}\n\n"
+
+            # Sort: non-fails by conviction desc, then hard-fails
+            non_fails = sorted([r for r in results if not r.get("hard_fail")],
+                               key=lambda x: x.get("conviction_pct", 0), reverse=True)
+            fails = [r for r in results if r.get("hard_fail")]
+            sorted_results = non_fails + fails
+
+            # Trade plans for top 3
+            for r in sorted_results[:3]:
+                if not r.get("hard_fail"):
+                    r["plan"] = (
+                        f"Entry: decisive close ${r.get('entry_low', 0)}-${r.get('entry_high', 0)} in final 30min. "
+                        f"SL: ${r.get('sl', 0)} (ATR triple-guard). "
+                        f"TP1: ${r.get('tp1', 0)} (exit 40%, move SL to BE). "
+                        f"TP2: ${r.get('tp2', 0)} (exit 45%). R:R {r.get('rr', '?')}:1."
+                    )
+
+            spy_chg = regime.get("spy_change_pct", 0)
+            direction = "up" if spy_chg > 0 else "down"
+            header = (
+                f"SPY {direction} {abs(spy_chg)}% at ${regime.get('spy_close', 0)}. "
+                f"VIX at {regime['vix']} — {regime['regime']} regime. "
+                f"Min R:R requirement: {regime['min_rr']}:1."
+            )
+            final = {
+                "market_header": header,
+                "market_regime": regime["regime"],
+                "vix_estimate": regime["vix"],
+                "results": sorted_results,
+            }
+            try:
+                from core.trade_journal import log_scan
+                log_scan(final)
+            except Exception as je:
+                print(f"[JOURNAL] Log failed: {je}")
+
+            yield f"data: {_json.dumps({'type': 'complete', 'results': final})}\n\n"
+
+        except Exception as e:
+            traceback.print_exc()
+            yield f"data: {_json.dumps({'type': 'error', 'error': str(e)})}\n\n"
+
+    return _SR(
+        generate(),
+        media_type="text/event-stream",
+        headers={"Cache-Control": "no-cache", "X-Accel-Buffering": "no"},
+    )
+
+
 @app.post("/api/prices")
 async def get_prices(request: ScanRequest):
     try:
