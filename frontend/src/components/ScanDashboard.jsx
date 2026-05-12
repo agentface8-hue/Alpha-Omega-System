@@ -236,20 +236,31 @@ const ScanDashboard = () => {
                   style={{ background:`${c}0e`, border:`1px solid ${c}33`, borderRadius:5, padding:"5px 10px",
                     cursor:"pointer", display:"flex", alignItems:"center", gap:7, minWidth:130 }}>
                   <span style={{ color:"#8899aa", fontSize:8, fontFamily:"monospace" }}>#{r.rank}</span>
-                  <div>
+                  <div style={{ flex:1 }}>
                     <div style={{ color:"#e0e0e0", fontSize:9, fontFamily:"sans-serif", fontWeight:"bold", whiteSpace:"nowrap" }}>
                       {r.sector}
                     </div>
-                    <div style={{ display:"flex", gap:5, marginTop:2 }}>
+                    <div style={{ display:"flex", gap:5, marginTop:2, flexWrap:"wrap" }}>
                       <span style={{ color:c, fontSize:8, fontFamily:"monospace", fontWeight:"bold" }}>
                         {r.score > 0 ? "+" : ""}{r.score.toFixed(1)}
                       </span>
                       <span style={{ color:"#8899aa", fontSize:8, fontFamily:"monospace" }}>
                         5d {r.vs_spy_5d > 0 ? "+" : ""}{r.vs_spy_5d}%
                       </span>
+                      <span style={{ color:"#8899aa", fontSize:8, fontFamily:"monospace" }}>
+                        20d {r.vs_spy_20d > 0 ? "+" : ""}{r.vs_spy_20d}%
+                      </span>
                     </div>
+                    {r.etfs && (
+                      <div style={{ display:"flex", gap:3, marginTop:3 }}>
+                        {(r.etf_detail || r.etfs.map(e => ({etf:e}))).map(ed => (
+                          <span key={ed.etf} style={{ fontSize:7, color:"#4a6a8a", background:"#0d1a2a", borderRadius:2, padding:"1px 4px", fontFamily:"monospace" }}>
+                            {ed.etf}{ed['5d'] != null ? ` ${ed['5d'] > 0 ? '+' : ''}${ed['5d']}%` : ''}
+                          </span>
+                        ))}
+                      </div>
+                    )}
                   </div>
-                  <span style={{ fontSize:8, color:"#8899aa", fontFamily:"monospace", marginLeft:"auto" }}>{r.etf}</span>
                 </div>
               );
             })}
