@@ -144,6 +144,22 @@ def check_portfolio() -> Dict:
         tp1    = pos["tp1"];         tp2 = pos["tp2"]; tp3 = pos["tp3"]
         shares = pos["shares_remaining"]
 
+        # ── TP ordering guardrail — fix inversions from stale/dynamic TP data ─
+        _atr_g = pos.get("atr_at_entry", 0) or abs(tp1 - entry) or abs(entry - sl)
+        _fixed = False
+        if tp2 > 0 and tp1 > 0 and tp2 <= tp1:
+            pos["tp2"] = round(tp1 + _atr_g * 0.5, 4)
+            tp2 = pos["tp2"]; _fixed = True
+            print(f"  [TP-ORDER] {ticker}: TP2 corrected → ${tp2:.2f}")
+        if tp3 > 0 and tp3 <= tp2:
+            pos["tp3"] = round(tp2 + _atr_g * 0.5, 4)
+            tp3 = pos["tp3"]; _fixed = True
+            print(f"  [TP-ORDER] {ticker}: TP3 corrected → ${tp3:.2f}")
+        elif tp3 > 0 and tp3 <= tp1:
+            pos["tp3"] = round(tp1 + _atr_g * 1.0, 4)
+            tp3 = pos["tp3"]; _fixed = True
+            print(f"  [TP-ORDER] {ticker}: TP3 corrected → ${tp3:.2f}")
+
         pos["current_price"]      = price
         gain_from_entry           = price - entry
         pos["mae"]                = round(min(pos.get("mae",0), gain_from_entry), 4)

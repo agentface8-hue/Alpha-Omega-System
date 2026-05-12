@@ -726,9 +726,10 @@ def check_signals() -> Dict[str, Any]:
             _atr = s.get("atr_at_entry", 0)
             if _dtp_state and _atr > 0:
                 if _dtp_state == "RUNNING":
-                    # Push TPs forward — never backward
+                    # Push TPs forward — never backward; TP3 always > TP2 > TP1
                     _new_tp1 = round(price + _atr * 1.0, 4)
                     _new_tp2 = round(price + _atr * 2.0, 4)
+                    _new_tp3 = round(price + _atr * 3.0, 4)
                     _tp_pushed = False
                     if _new_tp1 > s.get("tp1", 0) and not s.get("tp1_hit"):
                         s["tp1"] = _new_tp1
@@ -738,9 +739,18 @@ def check_signals() -> Dict[str, Any]:
                         s["tp2"] = _new_tp2
                         s["dynamic_tp_active"] = True
                         _tp_pushed = True
+                    if _new_tp3 > s.get("tp3", 0) and not s.get("tp3_hit"):
+                        s["tp3"] = _new_tp3
+                        s["dynamic_tp_active"] = True
+                        _tp_pushed = True
+                    # Hard guardrail: enforce TP3 > TP2 > TP1
+                    if s["tp3"] <= s["tp2"]:
+                        s["tp3"] = round(s["tp2"] + _atr * 0.5, 4)
+                    if s["tp2"] <= s["tp1"]:
+                        s["tp2"] = round(s["tp1"] + _atr * 0.5, 4)
                     if _tp_pushed:
                         _append_action(s, "DYNAMIC TP PUSHED",
-                            f"TP1→${s['tp1']:.2f}  TP2→${s['tp2']:.2f}  (RUNNING·score {s.get('live_score',0):.0f}%)",
+                            f"TP1→${s['tp1']:.2f}  TP2→${s['tp2']:.2f}  TP3→${s['tp3']:.2f}  (RUNNING·score {s.get('live_score',0):.0f}%)",
                             "profit")
 
                 elif _dtp_state == "PROTECTING":
