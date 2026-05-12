@@ -86,7 +86,7 @@ const ScanDashboard = () => {
     try {
       const res = await fetch(`${apiUrl}/api/sectors/watchlist/${key}`);
       const d = await res.json();
-      setTickers(d.tickers.join(', '));
+      setTickers(d.tickers.slice(0, 30).join(', '));
     } catch (e) {}
   };
 
@@ -118,7 +118,7 @@ const ScanDashboard = () => {
     const apiUrl = import.meta.env.VITE_API_URL || 'http://127.0.0.1:8000';
     const res = await fetch(`${apiUrl}/api/watchlists/${name}`);
     const d = await res.json();
-    setTickers(d.tickers.join(', '));
+    setTickers(d.tickers.slice(0, 30).join(', '));
   };
 
   const runScan = async () => {
