@@ -905,27 +905,72 @@ async def sector_heat():
 
 @app.get("/api/sectors/watchlist/{sector_key}")
 async def sector_watchlist(sector_key: str):
-    from core.universe_builder import get_universe
-    from core.sector_ranker import SECTOR_KEY_MAP
+    """
+    Return top 30 tickers for a sector, ranked by momentum score.
+    Reads from momentum screener cache (2h TTL) — instant if warm,
+    ~15s batch download if cold. Falls back to static universe order.
+    """
+    import asyncio, json as _json, time as _time
+    from pathlib import Path as _Path
+    from core.sector_ranker import SECTOR_KEY_MAP, SECTOR_ETFS
     from core.watchlists import SECTOR_WATCHLISTS
-    uni = get_universe()
+
     # Map sector_key → GICS name
     reverse_map = {v: k for k, v in SECTOR_KEY_MAP.items()}
-    gics_name = reverse_map.get(sector_key)
-    if gics_name and gics_name in uni["sectors"]:
-        tickers = uni["sectors"][gics_name]
-        etf = next((v for k, v in SECTOR_KEY_MAP.items()
-                    if k == gics_name), "")
-        from core.sector_ranker import SECTOR_ETFS
-        etf = SECTOR_ETFS.get(gics_name, "")
-        return {"key": sector_key, "label": gics_name, "etf": etf,
-                "tickers": tickers, "count": len(tickers), "source": "universe_10b"}
-    # Fallback to legacy watchlist
-    if sector_key in SECTOR_WATCHLISTS:
-        s = SECTOR_WATCHLISTS[sector_key]
-        return {"key": sector_key, "label": s["label"], "etf": s["etf"],
-                "tickers": s["tickers"], "source": "legacy"}
-    raise HTTPException(status_code=404, detail=f"Sector '{sector_key}' not found")
+    gics_name   = reverse_map.get(sector_key)
+
+    if not gics_name:
+        # Fallback: legacy watchlist
+        if sector_key in SECTOR_WATCHLISTS:
+            s = SECTOR_WATCHLISTS[sector_key]
+            return {"key": sector_key, "label": s["label"], "etf": s["etf"],
+                    "tickers": s["tickers"][:30], "source": "legacy"}
+        raise HTTPException(status_code=404, detail=f"Sector '{sector_key}' not found")
+
+    # ── Try momentum screener cache first (fast path) ─────────────────────
+    SCREEN_CACHE = _Path("calibration/momentum_screen_cache.json")
+    CACHE_TTL    = 3600 * 2
+    tickers      = []
+    source       = "momentum_screen"
+
+    if SCREEN_CACHE.exists():
+        try:
+            cached = _json.loads(SCREEN_CACHE.read_text())
+            if _time.time() - cached.get("ts", 0) < CACHE_TTL:
+                # Filter to this sector, already sorted by adjusted_score desc
+                tickers = [
+                    r["ticker"] for r in cached.get("results", [])
+                    if r.get("sector") == gics_name
+                ][:30]
+        except Exception:
+            pass
+
+    # ── Cache miss → run screener for this sector ─────────────────────────
+    if not tickers:
+        try:
+            from core.momentum_screener import screen_universe
+            loop    = asyncio.get_event_loop()
+            all_res = await loop.run_in_executor(None, lambda: screen_universe(top_n=377))
+            tickers = [r["ticker"] for r in all_res if r.get("sector") == gics_name][:30]
+        except Exception:
+            source = "static_universe"
+
+    # ── Final fallback: static universe order ─────────────────────────────
+    if not tickers:
+        from core.universe_builder import get_universe
+        uni     = get_universe()
+        tickers = uni["sectors"].get(gics_name, [])[:30]
+        source  = "static_universe"
+
+    etf = SECTOR_ETFS.get(gics_name, ("",))[0]
+    return {
+        "key":    sector_key,
+        "label":  gics_name,
+        "etf":    etf,
+        "tickers": tickers,
+        "count":  len(tickers),
+        "source": source,
+    }
 
 
 # ── Alpha-Mega Dashboard ─────────────────────────────────────
