@@ -508,54 +508,89 @@ async def get_regime_performance():
 
 
 @app.get("/api/scan/candidates")
-async def scan_candidates(exclude: str = ""):
+async def scan_candidates(exclude: str = "", force: bool = False):
     """
-    Return top 10 scan candidates, excluding already-open tickers.
-    Used by the Portfolio BENCH row. Scans the full_scan watchlist.
+    Return top 10 bench candidates from the shared portfolio scan cache.
+    Cache is written by autopilot_fill(). If cache is stale/missing, runs a
+    fresh sector-ranked scan of top 30 stocks (same universe as autopilot).
     Query param: exclude=CRWD,NET,MRVL  (comma-separated, case-insensitive)
     """
+    import json as _json, time as _time
+    from pathlib import Path as _Path
     try:
-        from agents.swing_scanner import SwingScanner
-        from core.watchlists import get_watchlist
-
         excluded = {t.strip().upper() for t in exclude.split(",") if t.strip()} if exclude else set()
 
-        wl      = get_watchlist("full_scan")
-        symbols = [s for s in wl["tickers"] if s.upper() not in excluded]
+        SCAN_CACHE = _Path("calibration/last_portfolio_scan.json")
+        CACHE_TTL  = 3600 * 4  # 4 hours — same as sector ranker
 
-        scanner = SwingScanner()
-        result  = scanner.scan(symbols)
+        raw        = []
+        regime     = "Unknown"
+        source     = "cache"
 
-        raw = [
-            r for r in result.get("results", [])
-            if not r.get("hard_fail")
-            and r.get("conviction_pct", 0) > 0
-            and r.get("ticker", "").upper() not in excluded
-        ]
-        raw.sort(key=lambda x: x.get("conviction_pct", 0), reverse=True)
+        # ── Try shared cache first ────────────────────────────────────────────
+        if not force and SCAN_CACHE.exists():
+            try:
+                cached = _json.loads(SCAN_CACHE.read_text())
+                if _time.time() - cached.get("ts", 0) < CACHE_TTL:
+                    raw    = cached.get("results", [])
+                    regime = cached.get("regime", "Unknown")
+            except Exception:
+                pass
+
+        # ── Cache miss → fresh sector-ranked scan (top 30) ───────────────────
+        if not raw:
+            source = "fresh_scan"
+            from core.sector_ranker import get_scan_universe
+            from core.conviction_engine import run_scan
+            symbols = get_scan_universe(total_slots=30, top_sectors=4)
+            symbols = [s for s in symbols if s not in excluded]
+            result  = run_scan(symbols)
+            raw     = result.get("results", [])
+            regime  = result.get("market_regime", "Unknown")
+            # Save for next call
+            try:
+                SCAN_CACHE.parent.mkdir(parents=True, exist_ok=True)
+                SCAN_CACHE.write_text(_json.dumps({
+                    "ts": _time.time(), "built_at": __import__("datetime").datetime.utcnow().isoformat(),
+                    "universe": "sector_ranked_top30", "regime": regime, "results": raw,
+                }))
+            except Exception:
+                pass
+
+        # ── Filter, sort, shape ───────────────────────────────────────────────
+        filtered = sorted(
+            [r for r in raw
+             if not r.get("hard_fail")
+             and r.get("conviction_pct", 0) > 0
+             and r.get("ticker", "").upper() not in excluded],
+            key=lambda x: x.get("conviction_pct", 0),
+            reverse=True
+        )
 
         candidates = [
             {
-                "ticker":       r["ticker"],
+                "ticker":         r["ticker"],
                 "conviction_pct": r.get("conviction_pct", 0),
-                "heat":         r.get("heat", ""),
-                "trend":        r.get("trend", ""),
-                "regime":       result.get("market_regime", ""),
-                "sector":       r.get("sector", ""),
-                "sl":           r.get("sl", 0),
-                "tp1":          r.get("tp1", 0),
-                "tp2":          r.get("tp2", 0),
-                "tp3":          r.get("tp3", 0),
-                "entry_price":  r.get("last_close", 0),
+                "rr":             r.get("rr", 0),
+                "heat":           r.get("heat", ""),
+                "trend":          r.get("trend", ""),
+                "regime":         regime,
+                "sector":         r.get("sector", ""),
+                "sl":             r.get("sl", 0),
+                "tp1":            r.get("tp1", 0),
+                "tp2":            r.get("tp2", 0),
+                "tp3":            r.get("tp3", 0),
+                "entry_price":    r.get("entry_high", r.get("last_close", 0)),
             }
-            for r in raw[:10]
+            for r in filtered[:10]
         ]
 
         return {
             "candidates":    candidates,
-            "market_regime": result.get("market_regime", ""),
-            "scanned":       len(result.get("results", [])),
+            "market_regime": regime,
+            "scanned":       len(raw),
             "excluded":      list(excluded),
+            "source":        source,
         }
     except Exception as e:
         traceback.print_exc()

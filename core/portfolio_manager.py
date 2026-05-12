@@ -1,12 +1,17 @@
 """
-portfolio_manager.py — Paper trading portfolio engine v1.2
+portfolio_manager.py — Paper trading portfolio engine v1.3
+v1.3: Shared scan cache — autopilot saves all results; bench reads from same scan
 v1.2: Momentum fade → AUTO-CLOSE (5 checks/2%), Alpha-Mega symbols_override
 v1.1: ATR at entry, trailing TP3
 """
-import uuid, datetime, math
+import uuid, datetime, math, json, time
+from pathlib import Path
 from typing import Dict, Any, List, Optional
 import yfinance as yf
 from core import portfolio_store as store
+
+SCAN_CACHE_PATH = Path(__file__).parent.parent / "calibration" / "last_portfolio_scan.json"
+SCAN_CACHE_TTL  = 3600 * 4  # 4 hours
 
 MAX_POSITIONS   = 10
 STARTING_CASH   = 25_000.0
@@ -418,7 +423,7 @@ def autopilot_fill(watchlist_name: str = "full_scan", symbols_override: list = N
         try:
             from core.sector_ranker import get_scan_universe, rank_sectors
             rankings = rank_sectors()
-            all_syms = get_scan_universe(total_slots=40, top_sectors=4)
+            all_syms = get_scan_universe(total_slots=30, top_sectors=4)
             top3 = ", ".join(r["sector"] for r in rankings[:3])
             universe_source = f"sector_ranked >$10B (top: {top3})"
         except Exception as e:
@@ -445,6 +450,20 @@ def autopilot_fill(watchlist_name: str = "full_scan", symbols_override: list = N
     # ── Run conviction scan ───────────────────────────────────────────────────
     scan_result = run_scan(symbols)
     raw = scan_result.get("results", [])
+
+    # ── Save full scan results to shared cache (bench reads from here) ────────
+    try:
+        SCAN_CACHE_PATH.parent.mkdir(parents=True, exist_ok=True)
+        SCAN_CACHE_PATH.write_text(json.dumps({
+            "ts":            time.time(),
+            "built_at":      datetime.datetime.utcnow().isoformat(),
+            "universe":      universe_source,
+            "regime":        regime,
+            "conv_threshold": conv_threshold,
+            "results":       raw,
+        }))
+    except Exception as _ce:
+        print(f"[AUTOPILOT] Cache save failed: {_ce}")
 
     # ── Filter + sort by conviction desc ─────────────────────────────────────
     candidates = sorted(
@@ -507,8 +526,29 @@ def autopilot_fill(watchlist_name: str = "full_scan", symbols_override: list = N
                 "shares":     result["shares"],
                 "rr":         c.get("rr", 0),
             })
+    # ── Bench: qualifying candidates that weren't opened ─────────────────────
+    opened_tickers = {o["ticker"] for o in opened}
+    all_open_tickers = existing_tickers | opened_tickers
+    bench = sorted(
+        [r for r in raw
+         if not r.get("hard_fail")
+         and r.get("conviction_pct", 0) >= conv_threshold
+         and r.get("rr", 0) >= 1.8
+         and r["ticker"] not in all_open_tickers],
+        key=lambda x: x["conviction_pct"],
+        reverse=True
+    )[:10]
+
     return {
         "opened": opened, "slots_used": len(opened),
         "universe": universe_source, "regime": regime,
         "conviction_threshold": conv_threshold,
+        "bench_candidates": [
+            {"ticker": b["ticker"], "conviction_pct": b.get("conviction_pct", 0),
+             "rr": b.get("rr", 0), "sector": get_ticker_sector(b["ticker"]),
+             "entry_price": b.get("entry_high", b.get("last_close", 0)),
+             "sl": b.get("sl", 0), "tp1": b.get("tp1", 0),
+             "tp2": b.get("tp2", 0), "tp3": b.get("tp3", 0)}
+            for b in bench
+        ],
     }
