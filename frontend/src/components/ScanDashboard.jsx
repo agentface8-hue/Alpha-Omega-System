@@ -105,12 +105,21 @@ const ScanDashboard = () => {
     setSmartScanLoading(true);
     const apiUrl = import.meta.env.VITE_API_URL || 'http://127.0.0.1:8000';
     try {
-      const res = await fetch(`${apiUrl}/api/sectors/scan-universe?slots=30&top_sectors=4`);
+      // Momentum screener — ranks all >$10B stocks by price momentum score
+      const res = await fetch(`${apiUrl}/api/sectors/momentum-screen?top_n=30`);
       const d = await res.json();
-      if (d.tickers && d.tickers.length > 0) {
-        setTickers(d.tickers.join(', '));
+      if (d.results && d.results.length > 0) {
+        const tks = d.results.map(r => r.ticker).slice(0, 30);
+        setTickers(tks.join(', '));
       }
-    } catch (e) {}
+    } catch (e) {
+      // Fallback to legacy sector scan
+      try {
+        const res2 = await fetch(`${apiUrl}/api/sectors/scan-universe?slots=30&top_sectors=4`);
+        const d2 = await res2.json();
+        if (d2.tickers && d2.tickers.length > 0) setTickers(d2.tickers.join(', '));
+      } catch (e2) {}
+    }
     setSmartScanLoading(false);
   };
 
