@@ -251,12 +251,25 @@ async def scan_stocks_stream(request: ScanRequest):
     if len(symbols) > 30:
         raise HTTPException(status_code=400, detail="Maximum 30 tickers per scan")
 
+    # Custom encoder to handle numpy scalars from conviction engine
+    class _NpEncoder(_json.JSONEncoder):
+        def default(self, obj):
+            import numpy as _np
+            if isinstance(obj, _np.integer): return int(obj)
+            if isinstance(obj, _np.floating): return float(obj)
+            if isinstance(obj, (_np.bool_,)): return bool(obj)
+            if isinstance(obj, _np.ndarray): return obj.tolist()
+            return super().default(obj)
+
+    def _dumps(payload):
+        return _json.dumps(payload, cls=_NpEncoder)
+
     async def generate():
         import asyncio
         loop = asyncio.get_event_loop()
         try:
             n = len(symbols)
-            yield f"data: {_json.dumps({'type': 'progress', 'progress': 'Fetching market data...'})}\n\n"
+            yield f"data: {_dumps({'type': 'progress', 'progress': 'Fetching market data...'})}\n\n"
 
             def _regime():
                 from core.market_data import fetch_market_regime
@@ -266,7 +279,7 @@ async def scan_stocks_stream(request: ScanRequest):
             results = []
 
             for i, sym in enumerate(symbols):
-                yield f"data: {_json.dumps({'type': 'progress', 'progress': f'{i}/{n} stocks scanned', 'current': sym})}\n\n"
+                yield f"data: {_dumps({'type': 'progress', 'progress': f'{i}/{n} stocks scanned', 'current': sym})}\n\n"
 
                 def _score(_sym=sym, _regime=regime):
                     from core.market_data import fetch_ticker_data
@@ -279,7 +292,7 @@ async def scan_stocks_stream(request: ScanRequest):
                     raw = {"ticker": sym, "hard_fail": True, "error": str(_e)}
 
                 results.append(raw)
-                yield f"data: {_json.dumps({'type': 'progress', 'progress': f'{i+1}/{n} stocks scanned'})}\n\n"
+                yield f"data: {_dumps({'type': 'progress', 'progress': f'{i+1}/{n} stocks scanned'})}\n\n"
 
             # Sort: non-fails by conviction desc, then hard-fails
             non_fails = sorted([r for r in results if not r.get("hard_fail")],
@@ -316,11 +329,11 @@ async def scan_stocks_stream(request: ScanRequest):
             except Exception as je:
                 print(f"[JOURNAL] Log failed: {je}")
 
-            yield f"data: {_json.dumps({'type': 'complete', 'results': final})}\n\n"
+            yield f"data: {_dumps({'type': 'complete', 'results': final})}\n\n"
 
         except Exception as e:
             traceback.print_exc()
-            yield f"data: {_json.dumps({'type': 'error', 'error': str(e)})}\n\n"
+            yield f"data: {_dumps({'type': 'error', 'error': str(e)})}\n\n"
 
     return _SR(
         generate(),
