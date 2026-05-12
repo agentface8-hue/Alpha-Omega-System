@@ -152,6 +152,47 @@ def check_portfolio() -> Dict:
         pos["unrealized_pnl_pct"] = round((price - entry) / entry * 100, 2)
         now = datetime.datetime.utcnow().isoformat(); action = None
 
+        # ── ATR auto-refresh (once per position, replaces formula estimate) ───
+        if not pos.get("atr_refreshed"):
+            try:
+                import pandas as pd
+                _hist = yf.Ticker(ticker).history(period="30d", interval="1d")
+                if not _hist.empty and len(_hist) >= 14:
+                    _h, _l, _cp = _hist["High"], _hist["Low"], _hist["Close"].shift(1)
+                    _tr = pd.concat([_h - _l, (_h - _cp).abs(), (_l - _cp).abs()], axis=1).max(axis=1)
+                    _real_atr = round(float(_tr.rolling(14).mean().iloc[-1]), 4)
+                    if _real_atr > 0:
+                        old_atr = pos.get("atr_at_entry", 0)
+                        pos["atr_at_entry"]  = _real_atr
+                        pos["atr_refreshed"] = True
+                        print(f"  [ATR-REFRESH] {ticker}: ${old_atr:.2f} → ${_real_atr:.2f}")
+            except Exception as _ae:
+                print(f"  [ATR-REFRESH] {ticker} failed: {_ae}")
+
+        # ── Trailing Stop-Loss (TSL) — ratchet SL up as price rises ───────────
+        # Runs on every check. SL only moves UP, never down.
+        _atr = pos.get("atr_at_entry", 0)
+        if _atr > 0 and price > entry and shares > 0:
+            _multiple = (price - entry) / _atr
+            _new_sl   = None
+            _sl_note  = ""
+            if _multiple >= 2.0:
+                _cand = round(entry + _atr * 1.0, 4)
+                if _cand > pos["sl"]: _new_sl = _cand; _sl_note = "TSL 2×ATR → entry+1×ATR"
+            elif _multiple >= 1.5:
+                _cand = round(entry + _atr * 0.5, 4)
+                if _cand > pos["sl"]: _new_sl = _cand; _sl_note = "TSL 1.5×ATR → entry+0.5×ATR"
+            elif _multiple >= 1.0:
+                _cand = round(entry, 4)
+                if _cand > pos["sl"]: _new_sl = _cand; _sl_note = "TSL 1×ATR → break-even"
+            if _new_sl:
+                _old_sl = pos["sl"]
+                pos["sl"] = _new_sl
+                if "sl_history" not in pos: pos["sl_history"] = []
+                pos["sl_history"].append({"sl": _new_sl, "note": _sl_note, "ts": now, "label": "TSL"})
+                action = f"TSL: SL raised ${_old_sl:.2f} → ${_new_sl:.2f} ({_sl_note})"
+                print(f"  [TSL] {ticker}: ${_old_sl:.2f} → ${_new_sl:.2f}")
+
         # ── Momentum fade → AUTO-CLOSE ──────────────────────────────────────
         # After TP1 hit and in profit: if price declines FADE_CHECKS_NEEDED
         # consecutive times AND gives back FADE_GIVEBACK_PCT% from peak,
