@@ -421,17 +421,27 @@ def autopilot_fill(watchlist_name: str = "full_scan", symbols_override: list = N
         universe_source = f"alpha_mega ({len(all_syms)} stocks)"
     else:
         try:
-            from core.sector_ranker import get_scan_universe, rank_sectors
-            rankings = rank_sectors()
-            all_syms = get_scan_universe(total_slots=30, top_sectors=4)
-            top3 = ", ".join(r["sector"] for r in rankings[:3])
-            universe_source = f"sector_ranked >$10B (top: {top3})"
+            from core.momentum_screener import screen_universe, get_momentum_scan_universe
+            screened = screen_universe(top_n=30)
+            all_syms = [r["ticker"] for r in screened]
+            top3 = ", ".join(
+                f"{r['ticker']}({r['sector'][:5]})" for r in screened[:3]
+            )
+            universe_source = f"momentum_screen >$10B — top3: {top3}"
         except Exception as e:
-            print(f"[AUTOPILOT] Sector ranker failed ({e}), falling back to watchlist")
-            from core.watchlists import get_watchlist
-            wl_data  = get_watchlist(watchlist_name)
-            all_syms = wl_data.get("tickers", []) if isinstance(wl_data, dict) else list(wl_data)
-            universe_source = f"watchlist:{watchlist_name}"
+            print(f"[AUTOPILOT] Momentum screener failed ({e}), falling back to sector ranker")
+            try:
+                from core.sector_ranker import get_scan_universe, rank_sectors
+                rankings = rank_sectors()
+                all_syms = get_scan_universe(total_slots=30, top_sectors=4)
+                top3 = ", ".join(r["sector"] for r in rankings[:3])
+                universe_source = f"sector_ranked >$10B (top: {top3})"
+            except Exception as e2:
+                print(f"[AUTOPILOT] Sector ranker also failed ({e2}), using watchlist")
+                from core.watchlists import get_watchlist
+                wl_data  = get_watchlist(watchlist_name)
+                all_syms = wl_data.get("tickers", []) if isinstance(wl_data, dict) else list(wl_data)
+                universe_source = f"watchlist:{watchlist_name}"
 
     symbols = [s for s in all_syms if s not in existing_tickers]
     if not symbols:

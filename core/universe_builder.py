@@ -21,12 +21,12 @@ UNIVERSE_BY_SECTOR: Dict[str, List[str]] = {
         "ON","MPWR","TER","SWKS","MCHP","TSM","MRVL","SMCI","STX","WDC",
         # High-growth >$10B not in S&P500
         "CRWD","PANW","NET","ZS","DDOG","SNOW","PLTR","GTLB","OKTA","HUBS",
-        "WDAY","VEEV","MNDY","BILL","DOCU","SAMSF",
+        "WDAY","VEEV","MNDY","BILL","DOCU","APP","TTD","HOOD",
     ],
     "Financials": [
         "JPM","BAC","WFC","GS","MS","BLK","C","SCHW","AXP","COF",
         "USB","PNC","TFC","ICE","CME","SPGI","MCO","AON","MMC","AJG",
-        "BK","STT","DFS","SYF","AIG","MET","PRU","AFL","ALL","PGR",
+        "BK","STT","SYF","AIG","MET","PRU","AFL","ALL","PGR","COF",
         "TRV","CB","HIG","FITB","RF","KEY","HBAN","MTB","CFG","NTRS",
         # Fintech >$10B
         "COIN","SQ","PYPL","V","MA",
@@ -56,18 +56,18 @@ UNIVERSE_BY_SECTOR: Dict[str, List[str]] = {
     ],
     "Consumer Staples": [
         "PG","KO","PEP","COST","WMT","PM","MO","MDLZ","CL","GIS",
-        "KHC","SYY","ADM","TSN","HRL","K","CPB","CAG","SJM","MKC",
-        "CHD","CLX","EL","KR","SFM","GO","BJ","WBA","CVS",
+        "KHC","SYY","ADM","TSN","HRL","CPB","CAG","SJM","MKC",
+        "CHD","CLX","EL","KR","SFM","GO","BJ","CVS","CELH",
     ],
     "Energy": [
         "XOM","CVX","COP","EOG","SLB","MPC","PSX","VLO","OXY","HES",
-        "HAL","DVN","FANG","BKR","APA","MRO","EQT","RRC","AR","CNX",
+        "HAL","DVN","FANG","BKR","APA","EQT","RRC","AR","CNX","OKE",
         # Power/Clean energy >$10B
         "VST","CEG","FSLR","NEE","AES","D",
     ],
     "Communication Services": [
         "META","GOOGL","GOOG","NFLX","DIS","TMUS","VZ","T","CHTR","EA",
-        "WBD","OMC","IPG","FOXA","FOX","LYV","TTWO","ZM","TDOC","RBLX",
+        "WBD","OMC","FOXA","FOX","LYV","TTWO","ZM","TDOC","RBLX","SPOT",
         "SNAP","PINS","MTCH",
     ],
     "Utilities": [
@@ -76,7 +76,7 @@ UNIVERSE_BY_SECTOR: Dict[str, List[str]] = {
     ],
     "Materials": [
         "LIN","APD","SHW","ECL","FCX","NEM","NUE","VMC","MLM","ALB",
-        "MOS","CF","IFF","PPG","FMC","RPM","PKG","IP","WRK","AVY",
+        "MOS","CF","IFF","PPG","FMC","RPM","PKG","IP","AVY","BALL",
         "ATI","RS","CMC","SEE","SON",
     ],
     "Real Estate": [

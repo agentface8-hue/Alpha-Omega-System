@@ -537,12 +537,12 @@ async def scan_candidates(exclude: str = "", force: bool = False):
             except Exception:
                 pass
 
-        # ── Cache miss → fresh sector-ranked scan (top 30) ───────────────────
+        # ── Cache miss → fresh momentum-screened scan (top 30, all sectors) ───
         if not raw:
             source = "fresh_scan"
-            from core.sector_ranker import get_scan_universe
+            from core.momentum_screener import get_momentum_scan_universe
             from core.conviction_engine import run_scan
-            symbols = get_scan_universe(total_slots=30, top_sectors=4)
+            symbols = get_momentum_scan_universe(top_n=30)
             symbols = [s for s in symbols if s not in excluded]
             result  = run_scan(symbols)
             raw     = result.get("results", [])
@@ -861,6 +861,24 @@ async def sectors_scan_universe(slots: int = 40, top_sectors: int = 4):
     loop = asyncio.get_event_loop()
     tickers = await loop.run_in_executor(None, lambda: get_scan_universe(slots, top_sectors))
     return {"tickers": tickers, "count": len(tickers)}
+
+@app.get("/api/sectors/momentum-screen")
+async def momentum_screen(top_n: int = 30, force: bool = False):
+    """
+    Fast price-momentum pre-screen across all 377 >$10B stocks.
+    Returns top_n ranked by: 5d return (50%) + 20d return (30%) + vol surge (20%)
+    with sector bias applied. Cached 2h.
+    """
+    import asyncio
+    from core.momentum_screener import screen_universe
+    loop = asyncio.get_event_loop()
+    results = await loop.run_in_executor(None, lambda: screen_universe(top_n=top_n, force=force))
+    return {
+        "tickers": [r["ticker"] for r in results],
+        "results": results,
+        "count":   len(results),
+        "top_n":   top_n,
+    }
 
 # ── Sector Heat (legacy — now backed by momentum ranker) ─────
 @app.get("/api/sectors/heat")
