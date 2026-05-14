@@ -1,13 +1,49 @@
 import React, { useState } from 'react';
 import { Activity, Lock, User, Eye, EyeOff } from 'lucide-react';
 
-// SHA-256 of the password — plaintext never stored in code
 const VALID_USER = 'aviandjhon';
 const VALID_HASH = '3b233de2d3124fbd02ba28cf35824c76725c020258fb347f5a20f9f077ace9db';
+const API = import.meta.env.VITE_API_URL || 'http://127.0.0.1:8000';
 
 async function sha256(str) {
   const buf = await crypto.subtle.digest('SHA-256', new TextEncoder().encode(str));
   return Array.from(new Uint8Array(buf)).map(b => b.toString(16).padStart(2,'0')).join('');
+}
+
+// Get or create a persistent visitor ID
+function getVisitorId() {
+  let id = localStorage.getItem('ao_visitor_id');
+  if (!id) {
+    id = 'v_' + Date.now().toString(36) + Math.random().toString(36).slice(2, 8);
+    localStorage.setItem('ao_visitor_id', id);
+  }
+  return id;
+}
+
+// Increment visit counter
+function getVisitCount() {
+  const count = parseInt(localStorage.getItem('ao_visit_count') || '0') + 1;
+  localStorage.setItem('ao_visit_count', String(count));
+  return count;
+}
+
+// Fire-and-forget login event to backend
+async function reportLogin(username) {
+  try {
+    await fetch(`${API}/api/login-event`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        username,
+        user_agent:  navigator.userAgent,
+        screen:      `${screen.width}×${screen.height}`,
+        timezone:    Intl.DateTimeFormat().resolvedOptions().timeZone,
+        language:    navigator.language,
+        visitor_id:  getVisitorId(),
+        visit_count: getVisitCount(),
+      }),
+    });
+  } catch { /* silent — never block login */ }
 }
 
 const LoginScreen = ({ onLogin }) => {
@@ -23,6 +59,7 @@ const LoginScreen = ({ onLogin }) => {
     const hash = await sha256(pass);
     if (user === VALID_USER && hash === VALID_HASH) {
       localStorage.setItem('ao_auth', '1');
+      reportLogin(user); // fire-and-forget — never blocks login
       onLogin();
     } else {
       setError('Invalid username or password.');

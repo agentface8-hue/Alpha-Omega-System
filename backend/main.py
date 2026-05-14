@@ -1830,3 +1830,40 @@ async def quick_health():
     results = [check_supabase(), check_portfolio_state()]
     reds = [r for r in results if r["status"] == "RED"]
     return {"overall": "RED" if reds else "GREEN", "checks": results}
+
+
+# ── Login tracking ────────────────────────────────────────────────────────────
+
+class LoginEventRequest(BaseModel):
+    username:    str
+    user_agent:  str = ""
+    screen:      str = ""
+    timezone:    str = ""
+    language:    str = ""
+    visitor_id:  str = ""
+    visit_count: int = 1
+
+@app.post("/api/login-event")
+async def login_event(payload: LoginEventRequest, request: Request):
+    """
+    Called by frontend after successful login.
+    Collects browser fingerprint + IP geolocation → Telegram alert.
+    """
+    # Extract real IP (Render sits behind a proxy)
+    real_ip = (
+        request.headers.get("X-Forwarded-For", "").split(",")[0].strip()
+        or request.headers.get("X-Real-IP", "")
+        or request.client.host
+    )
+    from core.login_tracker import track_login
+    result = track_login(
+        username=payload.username,
+        real_ip=real_ip,
+        user_agent=payload.user_agent or request.headers.get("user-agent", ""),
+        screen=payload.screen,
+        timezone=payload.timezone,
+        language=payload.language,
+        visitor_id=payload.visitor_id,
+        visit_count=payload.visit_count,
+    )
+    return result
