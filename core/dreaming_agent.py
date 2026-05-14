@@ -124,10 +124,13 @@ def _call_gemini(prompt: str) -> Dict[str, Any]:
 def _save_dream(dream: Dict) -> bool:
     """Persist dream to Supabase dream_log table. Falls back to local JSON."""
     try:
-        from core import signal_store as store
-        # Try Supabase
-        if store._sb():
-            store._sb().table("dream_log").insert(dream).execute()
+        import os
+        from supabase import create_client
+        url = os.environ.get("SUPABASE_URL", "")
+        key = os.environ.get("SUPABASE_ANON_KEY", "")
+        if url and key:
+            sb = create_client(url, key)
+            sb.table("dream_log").insert(dream).execute()
             return True
     except Exception as e:
         logger.debug(f"[DREAM] Supabase save failed: {e}")
@@ -154,9 +157,13 @@ def _save_dream(dream: Dict) -> bool:
 def load_dream_log(limit: int = 10) -> List[Dict]:
     """Load recent dream log entries (Supabase first, JSON fallback)."""
     try:
-        from core import signal_store as store
-        if store._sb():
-            result = (store._sb().table("dream_log")
+        import os
+        from supabase import create_client
+        url = os.environ.get("SUPABASE_URL", "")
+        key = os.environ.get("SUPABASE_ANON_KEY", "")
+        if url and key:
+            sb = create_client(url, key)
+            result = (sb.table("dream_log")
                       .select("*")
                       .order("ts", desc=True)
                       .limit(limit)
