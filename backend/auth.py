@@ -1,19 +1,19 @@
 """
 auth.py — User authentication and role management for Alpha-Omega.
 
-Users stored in Supabase 'users' table.
-Roles: 'owner' | 'visitor'
-Owner usernames are hardcoded — only Avi can be owner.
-Visitors self-register and get read-only access.
+Uses direct HTTP calls to Supabase REST API (not supabase-py client)
+to avoid supabase-py v2 WebSocket initialization hanging on Render.
 """
 import os
 import hashlib
 import datetime
+import json
+import urllib.request
+import urllib.error
 import logging
 
 logger = logging.getLogger(__name__)
 
-# These usernames are always owners regardless of DB
 OWNER_USERNAMES = {"avi", "aviandjhon"}
 
 
@@ -21,53 +21,66 @@ def _hash(password: str) -> str:
     return hashlib.sha256(password.encode()).hexdigest()
 
 
-def _get_sb():
-    url = os.environ.get("SUPABASE_URL", "")
-    key = os.environ.get("SUPABASE_ANON_KEY", "")
-    if not url or not key:
+def _sb(endpoint: str, method: str = "GET", data: dict = None,
+        params: str = "", prefer: str = "") -> list | dict | None:
+    """Direct REST call to Supabase PostgREST. No supabase-py client."""
+    url_base = os.environ.get("SUPABASE_URL", "").rstrip("/")
+    key      = os.environ.get("SUPABASE_ANON_KEY", "")
+    if not url_base or not key:
         raise RuntimeError("Supabase not configured")
-    from supabase import create_client
-    return create_client(url, key)
+
+    url = f"{url_base}/rest/v1/{endpoint}"
+    if params:
+        url += f"?{params}"
+
+    headers = {
+        "apikey":        key,
+        "Authorization": f"Bearer {key}",
+        "Content-Type":  "application/json",
+    }
+    if prefer:
+        headers["Prefer"] = prefer
+
+    body = json.dumps(data).encode() if data else None
+    req  = urllib.request.Request(url, data=body, headers=headers, method=method)
+
+    try:
+        with urllib.request.urlopen(req, timeout=10) as r:
+            raw = r.read()
+            return json.loads(raw) if raw else None
+    except urllib.error.HTTPError as e:
+        err_body = e.read().decode()
+        raise RuntimeError(f"Supabase {e.code}: {err_body[:120]}")
 
 
 # ── Login ─────────────────────────────────────────────────────────────────────
 
 def login(username: str, password: str) -> dict:
-    """
-    Validate credentials. Returns user dict with role, or raises ValueError.
-    """
     username = username.strip().lower()
     if not username or not password:
         raise ValueError("Username and password required")
 
-    pw_hash = _hash(password)
-
     try:
-        sb = _get_sb()
-        res = sb.table("ao_users") \
-                .select("*") \
-                .eq("username", username) \
-                .single() \
-                .execute()
-        user = res.data
-    except Exception as e:
+        rows = _sb("ao_users", params=f"username=eq.{username}&select=*")
+    except RuntimeError as e:
+        raise ValueError(f"Auth error: {e}")
+
+    if not rows:
         raise ValueError("Invalid username or password")
 
-    if not user:
+    user = rows[0]
+    if user.get("password_hash") != _hash(password):
         raise ValueError("Invalid username or password")
 
-    if user.get("password_hash") != pw_hash:
-        raise ValueError("Invalid username or password")
-
-    # Determine role — owner usernames always get owner role
     role = "owner" if username in OWNER_USERNAMES else user.get("role", "visitor")
 
-    # Update last login + count
+    # Update last login
     try:
-        sb.table("ao_users").update({
-            "last_login":  datetime.datetime.utcnow().isoformat(),
-            "login_count": (user.get("login_count") or 0) + 1,
-        }).eq("username", username).execute()
+        _sb("ao_users", method="PATCH",
+            data={"last_login": datetime.datetime.utcnow().isoformat(),
+                  "login_count": (user.get("login_count") or 0) + 1},
+            params=f"username=eq.{username}",
+            prefer="return=minimal")
     except Exception:
         pass
 
@@ -79,12 +92,7 @@ def login(username: str, password: str) -> dict:
     }
 
 
-# ── Register ──────────────────────────────────────────────────────────────────
-
 def register(username: str, password: str, display_name: str = "") -> dict:
-    """
-    Create a new visitor account. Returns user dict or raises ValueError.
-    """
     username = username.strip().lower()
     if not username or not password:
         raise ValueError("Username and password required")
@@ -95,21 +103,15 @@ def register(username: str, password: str, display_name: str = "") -> dict:
     if username in OWNER_USERNAMES:
         raise ValueError("Username not available")
 
-    # Check username taken
     try:
-        sb = _get_sb()
-        existing = sb.table("ao_users") \
-                     .select("username") \
-                     .eq("username", username) \
-                     .execute()
-        if existing.data:
+        existing = _sb("ao_users", params=f"username=eq.{username}&select=username")
+        if existing:
             raise ValueError("Username already taken")
     except ValueError:
         raise
-    except Exception as e:
-        raise ValueError(f"Registration failed: {str(e)[:60]}")
+    except RuntimeError as e:
+        raise ValueError(f"Registration failed: {e}")
 
-    # Create user
     new_user = {
         "username":      username,
         "display_name":  display_name or username.capitalize(),
@@ -118,55 +120,39 @@ def register(username: str, password: str, display_name: str = "") -> dict:
         "login_count":   0,
         "created_at":    datetime.datetime.utcnow().isoformat(),
     }
-
     try:
-        sb.table("ao_users").insert(new_user).execute()
-    except Exception as e:
-        raise ValueError(f"Registration failed: {str(e)[:60]}")
+        _sb("ao_users", method="POST", data=new_user, prefer="return=minimal")
+    except RuntimeError as e:
+        raise ValueError(f"Registration failed: {e}")
 
-    return {
-        "username":     username,
-        "display_name": new_user["display_name"],
-        "role":         "visitor",
-    }
+    return {"username": username, "display_name": new_user["display_name"], "role": "visitor"}
 
-
-# ── Seed owner ────────────────────────────────────────────────────────────────
 
 def ensure_owner_exists(username: str, password: str):
-    """
-    Called on backend startup — creates owner account if not exists.
-    """
     username = username.lower()
     try:
-        sb = _get_sb()
-        existing = sb.table("ao_users") \
-                     .select("username") \
-                     .eq("username", username) \
-                     .execute()
-        if not existing.data:
-            sb.table("ao_users").insert({
+        existing = _sb("ao_users", params=f"username=eq.{username}&select=username")
+        if not existing:
+            _sb("ao_users", method="POST", prefer="return=minimal", data={
                 "username":      username,
                 "display_name":  "Avi",
                 "password_hash": _hash(password),
                 "role":          "owner",
                 "login_count":   0,
                 "created_at":    datetime.datetime.utcnow().isoformat(),
-            }).execute()
-            logger.info(f"[AUTH] Owner account '{username}' created")
+            })
+            logger.info(f"[AUTH] Owner '{username}' created")
+        else:
+            logger.info(f"[AUTH] Owner '{username}' already exists")
     except Exception as e:
-        logger.warning(f"[AUTH] Could not ensure owner exists: {e}")
+        logger.warning(f"[AUTH] Could not ensure owner: {e}")
 
-
-# ── List users (owner only) ────────────────────────────────────────────────────
 
 def list_users() -> list:
     try:
-        sb = _get_sb()
-        res = sb.table("ao_users") \
-                .select("username, display_name, role, login_count, last_login, created_at") \
-                .order("created_at") \
-                .execute()
-        return res.data or []
+        rows = _sb("ao_users",
+                   params="select=username,display_name,role,login_count,last_login,created_at&order=created_at")
+        return rows or []
     except Exception as e:
+        logger.warning(f"[AUTH] list_users error: {e}")
         return []
