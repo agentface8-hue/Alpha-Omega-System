@@ -1,10 +1,13 @@
 # ALPHA-OMEGA SYSTEM — MASTER KNOWLEDGE BASE
-# Last Updated: 2026-05-09
+# Last Updated: 2026-05-14
 # Location: C:\Users\asus\Alpha-Omega-System\MASTER-KNOWLEDGE.md
 
-## WHAT IS THIS FILE?
-This is the complete system bible. Read this first in any new session.
-It contains architecture, file locations, deployment info, and current state.
+## ⚠️ INSTRUCTIONS FOR CLAUDE — READ THIS FIRST EVERY SESSION
+
+1. Read this entire file before doing anything
+2. Search chat history for the most recent session to get fully up to date
+3. Never assume the system state — verify against history
+4. The chat history search is the strongest mechanism for continuity across sessions
 
 ---
 
@@ -332,7 +335,57 @@ GITHUB_TOKEN=...
 ```
 All keys must be set in Render dashboard — the .env file is NOT read in production.
 
-## 10. EVOLUTION HISTORY
+## 10. CURRENT SYSTEM STATE — Last updated 2026-05-14
+
+### All features built and live:
+| Feature | Status | Notes |
+|---------|--------|-------|
+| Council of Experts (10 agents) | ✅ Live | Opus 4.7 |
+| Swing Scanner v4.4 + Momentum Pre-Screener | ✅ Live | 377 stocks → top 30 |
+| Signal Tracker v2.0 | ✅ Live | 79-point audit trail |
+| Active Portfolio Tab | ✅ Live | $25K paper, 10 slots, Dynamic TP |
+| Dynamic TP Phase 2 | ✅ Live | Scales TP by conviction at entry (commit 9d08371) |
+| Dreaming Agent | ✅ Live | Claude Sonnet (NOT Gemini — 429 fixed) |
+| Dream Log tab | ✅ Live | Supabase storage |
+| Telegram bot | ✅ Live | @AlphaOmegaCEO_bot |
+| Google Sheets trade log | ✅ Live | SHEETS_TOKEN_JSON in Render env vars |
+| Daily 5PM summary | ✅ Live | Gmail + Telegram |
+| Learning Loop v2.0 | ✅ Live | 5-dimension analysis |
+| System Health Monitor | ✅ Built | 9 checks, /api/health/full, Telegram alerts |
+| UIKit design system | ✅ Live | All tabs redesigned (commit f6e0caa) |
+| 3-ETF Sector Ranker | ✅ Live | SPDR + iShares + Vanguard |
+| Order Executor | ✅ Built | paper/IBKR modes, waiting for IBKR approval |
+
+### Models in use:
+| Component | Model |
+|-----------|-------|
+| Advisor screen | claude-sonnet-4-6 |
+| Oracle / Council / Grader | claude-opus-4-7 |
+| Dream Log | claude-sonnet-4-6 |
+| Agents (Gemini) | gemini-2.0-flash (morning briefing scan only) |
+
+### Scheduled tasks (5 active):
+| Task | Schedule | Status |
+|------|----------|--------|
+| alpha-omega-morning-briefing | 9 AM ET weekdays | ✅ Running |
+| alpha-omega-market-check | Every 30min, 3-10 PM UTC weekdays | ✅ Running |
+| alpha-omega-weekly-calibration | Sundays 6 PM UTC | ✅ Running |
+| alpha-omega-daily-summary | 5 PM Cyprus weekdays | ✅ Running |
+| alpha-omega-health-check | 7 AM Cyprus weekdays | ⏳ Pending restart |
+
+### Pending from 2026-05-14 session:
+- [ ] Run `_inject_health_task.py` after Claude Desktop restart (script is ready at project root)
+- [ ] IBKR account approval — then set EXECUTOR_MODE=ibkr + IBKR_HOST + IBKR_PORT in Render
+- [ ] Delete Downloads ZIP copies (Alpha-Omega-main, Alpha-Omega-System-main) — dead weight
+- [ ] Delete client_secret JSON sitting loose in Downloads folder
+
+### Latest commits:
+- `c43a213` docs: Section 13 critical rules in MASTER-KNOWLEDGE
+- `56c2f0e` feat: System Health Monitor - 9 checks
+- `92f42ac` fix: Google Sheets SHEETS_TOKEN_JSON env var
+- `8b9cce8` fix: Dream agent → Claude Sonnet (429 fixed)
+- `f6e0caa` feat: UIKit design system, clean stats all tabs
+- `9d08371` feat: Dynamic TP Phase 2
 
 ### v1.0 — Initial Build (Feb 2026)
 - Council of Experts with 10 agents
