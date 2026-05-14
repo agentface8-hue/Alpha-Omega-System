@@ -69,7 +69,7 @@ const App = () => {
   const [focusedPanel,  setFocusedPanel]  = useState(null);
   const [activeTab,     setActiveTab]     = useState('analyze');
   const [mountedPanels, setMountedPanels] = useState([]);
-  const [backendStatus, setBackendStatus] = useState('waking');
+  const [backendStatus, setBackendStatus] = useState('ready');
   const [mobilePanel,   setMobilePanel]   = useState('portfolio'); // active panel on mobile
 
   const isOwner = userRole === 'owner';
@@ -80,38 +80,13 @@ const App = () => {
     setAuthed(true);
   };
 
-  // ── Step 1: Wake backend, then stagger panels ──────────────────────────────
+  // ── Mount panels immediately (Starter plan = no cold start) ──────────────
   React.useEffect(() => {
     if (!authed) return;
-    const API = import.meta.env.VITE_API_URL || 'http://127.0.0.1:8000';
-    let cancelled = false;
-
-    const wake = async () => {
-      setBackendStatus('waking');
-      setMountedPanels([]);
-      // Show "slow" warning after 8s
-      const slowTimer = setTimeout(() => { if (!cancelled) setBackendStatus('slow'); }, 8000);
-      try {
-        await fetch(`${API}/`);
-        if (cancelled) return;
-        clearTimeout(slowTimer);
-        setBackendStatus('ready');
-        // Now stagger panels one by one
-        setMountedPanels(['portfolio']);
-        setTimeout(() => { if (!cancelled) setMountedPanels(p => [...p, 'tracker']); }, 900);
-        setTimeout(() => { if (!cancelled) setMountedPanels(p => [...p, 'scan']);    }, 1800);
-        setTimeout(() => { if (!cancelled) setMountedPanels(p => [...p, 'dreams']); }, 2700);
-      } catch {
-        if (!cancelled) {
-          clearTimeout(slowTimer);
-          setBackendStatus('slow');
-          setTimeout(wake, 10000); // retry in 10s
-        }
-      }
-    };
-
-    wake();
-    return () => { cancelled = true; };
+    setMountedPanels(['portfolio']);
+    setTimeout(() => setMountedPanels(p => [...p, 'tracker']), 300);
+    setTimeout(() => setMountedPanels(p => [...p, 'scan']),    600);
+    setTimeout(() => setMountedPanels(p => [...p, 'dreams']),  900);
   }, [authed]);
 
   // Council Analyze state

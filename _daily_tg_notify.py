@@ -1,16 +1,16 @@
 import urllib.request, urllib.parse
 
-token = "8691159247:AAEfGEBQgXBqXvA9RCO67cFCwwtDaFrNRH4"
+token = "8246500243:AAFXsq94Fia3RimL4_Q-AM6sdDJpZNoxTYM"
 chat_id = "5812682751"
 
-date = "2026-05-08"
-trades = 1
-pnl = -335.16
+date = "2026-05-14"
+trades = 0
+pnl = 0.0
 wr = 0.0
 all_time_wr = 0.0
 all_time_trades = 1
-best = "NET (-6.84% via SL)"
-worst = "NET (-6.84% via SL)"
+best = ""
+worst = ""
 
 sign = "+" if pnl >= 0 else ""
 emoji = "🟢" if pnl >= 0 else "🔴"
