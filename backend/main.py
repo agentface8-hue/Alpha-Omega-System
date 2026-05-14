@@ -1813,3 +1813,20 @@ async def run_deep_learning():
     """Trigger a full deep learning cycle (all 5 dimensions)."""
     from core.learning_loop import run_deep
     return run_deep()
+
+
+# ── System Health endpoints ──────────────────────────────────────────────────
+
+@app.get("/api/health/full")
+async def full_health_check(telegram: bool = False):
+    """Run all 9 health checks. Set ?telegram=true to also fire Telegram alert."""
+    from core.system_health import run_full_check
+    return run_full_check(send_telegram=telegram)
+
+@app.get("/api/health/quick")
+async def quick_health():
+    """Fast status check — Supabase + portfolio state only."""
+    from core.system_health import check_supabase, check_portfolio_state
+    results = [check_supabase(), check_portfolio_state()]
+    reds = [r for r in results if r["status"] == "RED"]
+    return {"overall": "RED" if reds else "GREEN", "checks": results}
