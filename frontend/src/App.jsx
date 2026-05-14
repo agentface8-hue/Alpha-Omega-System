@@ -35,10 +35,11 @@ const PanelContent = ({ id, autoRun, compact = false }) => {
 };
 
 const App = () => {
-  const [authed,       setAuthed]       = useState(() => localStorage.getItem('ao_auth') === '1');
-  const [viewMode,     setViewMode]     = useState('dashboard'); // 'dashboard' | 'tab'
-  const [focusedPanel, setFocusedPanel] = useState(null);        // null | panel id
-  const [activeTab,    setActiveTab]    = useState('analyze');
+  const [authed,        setAuthed]        = useState(() => localStorage.getItem('ao_auth') === '1');
+  const [viewMode,      setViewMode]      = useState('dashboard');
+  const [focusedPanel,  setFocusedPanel]  = useState(null);
+  const [activeTab,     setActiveTab]     = useState('analyze');
+  const [mountedPanels, setMountedPanels] = useState(['portfolio']); // staggered mount
 
   // Council Analyze state
   const [symbol,    setSymbol]    = useState('');
@@ -49,6 +50,16 @@ const App = () => {
 
   const getTimestamp = () => new Date().toLocaleTimeString('en-US',
     { hour:'2-digit', minute:'2-digit', second:'2-digit', hour12:true });
+
+  // Stagger panel mounts on dashboard load — one API at a time
+  React.useEffect(() => {
+    if (viewMode !== 'dashboard') return;
+    setMountedPanels(['portfolio']); // reset on every dashboard open
+    const t1 = setTimeout(() => setMountedPanels(p => [...p, 'tracker']), 900);
+    const t2 = setTimeout(() => setMountedPanels(p => [...p, 'scan']),    1800);
+    const t3 = setTimeout(() => setMountedPanels(p => [...p, 'dreams']),  2700);
+    return () => [t1, t2, t3].forEach(clearTimeout);
+  }, [viewMode]);
 
   const handleAnalyze = async (e) => {
     e.preventDefault();
@@ -157,9 +168,16 @@ const App = () => {
               <Maximize2 size={11}/> FOCUS
             </button>
           </div>
-          {/* Scrollable content */}
+          {/* Scrollable content — only mount when it's this panel's turn */}
           <div style={{ flex:1, overflow:'auto', minHeight:0 }}>
-            <PanelContent id={panel.id} autoRun={true} compact={true} />
+            {mountedPanels.includes(panel.id)
+              ? <PanelContent id={panel.id} autoRun={true} compact={true} />
+              : <div style={{ display:'flex', alignItems:'center', justifyContent:'center',
+                  height:'100%', color:'#2a4a5a', fontSize:11, fontFamily:'monospace',
+                  letterSpacing:1 }}>
+                  ⧗ QUEUED...
+                </div>
+            }
           </div>
         </div>
       ))}
