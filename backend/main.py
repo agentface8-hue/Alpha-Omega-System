@@ -1723,3 +1723,25 @@ async def replay_signal(signal_id: str):
     except Exception as e:
         traceback.print_exc()
         raise HTTPException(status_code=500, detail=str(e))
+
+
+# ── Dream Log endpoints ──────────────────────────────────────────────────────
+
+@app.post("/api/dreams/run")
+async def run_dream_now(request: Request):
+    """Trigger a dream cycle immediately (force=True bypasses schedule check)."""
+    try:
+        body = await request.json()
+    except Exception:
+        body = {}
+    force = body.get("force", True)
+    from core.dreaming_agent import run_dream_cycle
+    result = run_dream_cycle(force=force)
+    return result
+
+@app.get("/api/dreams/latest")
+async def get_dream_log(limit: int = 10):
+    """Return the most recent dream log entries."""
+    from core.dreaming_agent import load_dream_log
+    dreams = load_dream_log(limit=limit)
+    return {"dreams": dreams, "count": len(dreams)}
