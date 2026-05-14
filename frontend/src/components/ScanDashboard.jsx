@@ -48,7 +48,7 @@ const PillarBar = ({ scores }) => {
   );
 };
 
-const ScanDashboard = () => {
+const ScanDashboard = ({ autoScan = false }) => {
   const [tickers, setTickers] = useState('AAPL, NVDA, TSLA, AMD, MSFT');
   const [loading, setLoading] = useState(false);
   const [progress, setProgress] = useState('');
@@ -68,6 +68,14 @@ const ScanDashboard = () => {
     const apiUrl = import.meta.env.VITE_API_URL || 'http://127.0.0.1:8000';
     fetch(`${apiUrl}/api/watchlists`).then(r => r.json()).then(d => setWatchlists(d.watchlists)).catch(() => {});
   }, []);
+
+  // Auto-run scan on mount when in dashboard grid
+  React.useEffect(() => {
+    if (autoScan) {
+      const timer = setTimeout(() => runScan(), 1200);
+      return () => clearTimeout(timer);
+    }
+  }, [autoScan]);
 
   const fetchSectorHeat = async () => {
     setHeatLoading(true);
