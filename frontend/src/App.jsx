@@ -1,5 +1,5 @@
 import React, { useState } from 'react';
-import { Search, Activity, BarChart3, Brain, Briefcase, DollarSign } from 'lucide-react';
+import { Search, Activity, BarChart3, Brain, Briefcase, DollarSign, Moon } from 'lucide-react';
 import Terminal from './components/Terminal';
 import ResultCard from './components/ResultCard';
 import LiveTicker from './components/LiveTicker';
@@ -12,6 +12,7 @@ import AlphaMegaDashboard from './components/AlphaMegaDashboard';
 import Analytics from './components/Analytics';
 import PortfolioTab from './components/PortfolioTab';
 import PrintingProfits from './components/PrintingProfits';
+import DreamLog from './components/DreamLog';
 import LoginScreen from './components/LoginScreen';
 import { playThinkingSound, playSuccessSound, playErrorSound } from './utils/sounds';
 
@@ -136,50 +137,36 @@ const App = () => {
         </div>
       </header>
 
-      {/* Tab Bar */}
-      <div style={{ display:"flex", gap:0, padding:"0 20px", background:"#080b0f", borderBottom:"1px solid #1a2535" }}>
-        <button onClick={() => setActiveTab('analyze')} style={{ background:activeTab==='analyze'?"#0d1a2a":"transparent", color:activeTab==='analyze'?"#00d4ff":"#8899aa", border:"none", borderBottom:activeTab==='analyze'?"2px solid #00d4ff":"2px solid transparent", padding:"10px 20px", fontSize:12, fontWeight:"bold", fontFamily:"sans-serif", cursor:"pointer", display:"flex", alignItems:"center", gap:6, letterSpacing:1 }}>
-          <Activity size={14} /> COUNCIL ANALYZE
-        </button>
-        <button onClick={() => setActiveTab('scan')} style={{ background:activeTab==='scan'?"#0d1a2a":"transparent", color:activeTab==='scan'?"#00d4ff":"#8899aa", border:"none", borderBottom:activeTab==='scan'?"2px solid #00d4ff":"2px solid transparent", padding:"10px 20px", fontSize:12, fontWeight:"bold", fontFamily:"sans-serif", cursor:"pointer", display:"flex", alignItems:"center", gap:6, letterSpacing:1 }}>
-          <BarChart3 size={14} /> SWING SCAN v4.4
-        </button>
-        <button onClick={() => setActiveTab('backtest')} style={{ background:activeTab==='backtest'?"#0d1a2a":"transparent", color:activeTab==='backtest'?"#a855f7":"#8899aa", border:"none", borderBottom:activeTab==='backtest'?"2px solid #a855f7":"2px solid transparent", padding:"10px 20px", fontSize:12, fontWeight:"bold", fontFamily:"sans-serif", cursor:"pointer", display:"flex", alignItems:"center", gap:6, letterSpacing:1 }}>
-          <BarChart3 size={14} /> BACKTESTER
-        </button>
-        <button onClick={() => setActiveTab('tracker')} style={{ background:activeTab==='tracker'?"#0d1a2a":"transparent", color:activeTab==='tracker'?"#c084fc":"#8899aa", border:"none", borderBottom:activeTab==='tracker'?"2px solid #c084fc":"2px solid transparent", padding:"10px 20px", fontSize:12, fontWeight:"bold", fontFamily:"sans-serif", cursor:"pointer", display:"flex", alignItems:"center", gap:6, letterSpacing:1 }}>
-          <Activity size={14} /> SIGNAL TRACKER
-        </button>
-        <button onClick={() => setActiveTab('alphamega')} style={{ background:activeTab==='alphamega'?"#0d1a2a":"transparent", color:activeTab==='alphamega'?"#c084fc":"#8899aa", border:"none", borderBottom:activeTab==='alphamega'?"2px solid #c084fc":"2px solid transparent", padding:"10px 20px", fontSize:12, fontWeight:"bold", fontFamily:"sans-serif", cursor:"pointer", display:"flex", alignItems:"center", gap:6, letterSpacing:1 }}>
-          <BarChart3 size={14} /> ALPHA-MEGA
-        </button>
-        <button onClick={() => setActiveTab('analytics')} style={{ background:activeTab==='analytics'?"#0d1a2a":"transparent", color:activeTab==='analytics'?"#00d4ff":"#8899aa", border:"none", borderBottom:activeTab==='analytics'?"2px solid #00d4ff":"2px solid transparent", padding:"10px 20px", fontSize:12, fontWeight:"bold", fontFamily:"sans-serif", cursor:"pointer", display:"flex", alignItems:"center", gap:6, letterSpacing:1 }}>
-          <Brain size={14} /> ANALYTICS
-        </button>
-        <button onClick={() => setActiveTab('portfolio')} style={{ background:activeTab==='portfolio'?"#0d1a2a":"transparent", color:activeTab==='portfolio'?"#00ff88":"#8899aa", border:"none", borderBottom:activeTab==='portfolio'?"2px solid #00ff88":"2px solid transparent", padding:"10px 20px", fontSize:12, fontWeight:"bold", fontFamily:"sans-serif", cursor:"pointer", display:"flex", alignItems:"center", gap:6, letterSpacing:1 }}>
-          <Briefcase size={14} /> PORTFOLIO
-        </button>
-        <button onClick={() => setActiveTab('printing')} style={{ background:activeTab==='printing'?"#0d1a2a":"transparent", color:activeTab==='printing'?"#fbbf24":"#8899aa", border:"none", borderBottom:activeTab==='printing'?"2px solid #fbbf24":"2px solid transparent", padding:"10px 20px", fontSize:12, fontWeight:"bold", fontFamily:"sans-serif", cursor:"pointer", display:"flex", alignItems:"center", gap:6, letterSpacing:1 }}>
-          <DollarSign size={14} /> PRINTING PROFITS
-        </button>
+      {/* Tab Bar — ordered by usage frequency */}
+      <div style={{ display:"flex", gap:0, padding:"0 20px", background:"#080b0f", borderBottom:"1px solid #1a2535", overflowX:"auto" }}>
+        {[
+          { id:'portfolio',  label:'PORTFOLIO',        icon:<Briefcase size={14}/>, color:'#00ff88' },
+          { id:'tracker',    label:'SIGNAL TRACKER',   icon:<Activity   size={14}/>, color:'#c084fc' },
+          { id:'scan',       label:'SWING SCAN v4.4',  icon:<BarChart3  size={14}/>, color:'#00d4ff' },
+          { id:'alphamega',  label:'ALPHA-MEGA',        icon:<BarChart3  size={14}/>, color:'#c084fc' },
+          { id:'analytics',  label:'ANALYTICS',         icon:<Brain      size={14}/>, color:'#00d4ff' },
+          { id:'dreams',     label:'DREAM LOG',         icon:<Moon       size={14}/>, color:'#c084fc' },
+          { id:'analyze',    label:'COUNCIL ANALYZE',  icon:<Activity   size={14}/>, color:'#00d4ff' },
+          { id:'printing',   label:'PRINTING PROFITS', icon:<DollarSign size={14}/>, color:'#fbbf24' },
+          { id:'backtest',   label:'BACKTESTER',        icon:<BarChart3  size={14}/>, color:'#a855f7' },
+        ].map(({ id, label, icon, color }) => (
+          <button key={id} onClick={() => setActiveTab(id)}
+            style={{ background: activeTab===id ? '#0d1a2a' : 'transparent', color: activeTab===id ? color : '#8899aa', border:'none', borderBottom: activeTab===id ? `2px solid ${color}` : '2px solid transparent', padding:'10px 20px', fontSize:12, fontWeight:'bold', fontFamily:'sans-serif', cursor:'pointer', display:'flex', alignItems:'center', gap:6, letterSpacing:1, whiteSpace:'nowrap' }}>
+            {icon} {label}
+          </button>
+        ))}
       </div>
 
       {/* Content */}
-      {activeTab === 'scan' ? (
-        <ScanDashboard />
-      ) : activeTab === 'backtest' ? (
-        <BacktestDashboard />
-      ) : activeTab === 'tracker' ? (
-        <SignalTracker />
-      ) : activeTab === 'alphamega' ? (
-        <AlphaMegaDashboard />
-      ) : activeTab === 'analytics' ? (
-        <Analytics />
-      ) : activeTab === 'portfolio' ? (
-        <PortfolioTab />
-      ) : activeTab === 'printing' ? (
-        <PrintingProfits />
-      ) : (
+      {activeTab === 'portfolio'  ? <PortfolioTab />
+      : activeTab === 'tracker'   ? <SignalTracker />
+      : activeTab === 'scan'      ? <ScanDashboard />
+      : activeTab === 'alphamega' ? <AlphaMegaDashboard />
+      : activeTab === 'analytics' ? <Analytics />
+      : activeTab === 'dreams'    ? <DreamLog />
+      : activeTab === 'printing'  ? <PrintingProfits />
+      : activeTab === 'backtest'  ? <BacktestDashboard />
+      : (
       <main className="main-container">
         {/* Search */}
         <form className="search-form" onSubmit={handleAnalyze}>

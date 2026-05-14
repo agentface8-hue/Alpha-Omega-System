@@ -1261,48 +1261,6 @@ const SignalTracker = () => {
 
 
 
-      {/* DREAM LOG */}
-      <div style={{ marginTop:24, background:"#0a0f18", border:"1px solid #1a2535", borderRadius:12, overflow:"hidden" }}>
-        <div
-          onClick={() => { setDreamOpen(o=>!o); if(!dreamOpen) fetchDreamLog(); }}
-          style={{ padding:"12px 16px", cursor:"pointer", display:"flex", justifyContent:"space-between", alignItems:"center", userSelect:"none" }}>
-          <div style={{ display:"flex", alignItems:"center", gap:8 }}>
-            <span style={{ fontSize:16 }}>&#128173;</span>
-            <span style={{ fontSize:10, fontWeight:"bold", color:"#c084fc", fontFamily:"sans-serif", letterSpacing:1 }}>DREAM LOG</span>
-            <span style={{ fontSize:8, color:"#4a6a8a", fontFamily:"sans-serif" }}>background market analysis</span>
-          </div>
-          <div style={{ display:"flex", alignItems:"center", gap:8 }}>
-            <button onClick={e => { e.stopPropagation(); runDreamCycle(); }}
-              style={{ fontSize:8, background:"rgba(192,132,252,0.1)", border:"1px solid #c084fc33", color:"#c084fc", borderRadius:3, padding:"2px 7px", cursor:"pointer", fontFamily:"sans-serif" }}>
-              Run Now
-            </button>
-            <span style={{ fontSize:10, color:"#2a4a5a" }}>{dreamOpen ? "▲" : "▼"}</span>
-          </div>
-        </div>
-        {dreamOpen && (
-          <div style={{ borderTop:"1px solid #1a2535", padding:"12px 16px" }}>
-            {dreamLog.length === 0
-              ? <div style={{ fontSize:10, color:"#4a6a8a", fontFamily:"sans-serif" }}>No dreams yet. Click Run Now to trigger a cycle.</div>
-              : dreamLog.map((d, i) => {
-                const edgeColor = d.edge_level==='HIGH'?'#ff4466':d.edge_level==='MEDIUM'?'#fbbf24':'#4a6a8a';
-                return (
-                  <div key={i} style={{ marginBottom:12, paddingBottom:12, borderBottom: i<dreamLog.length-1?'1px solid #1a2535':'none' }}>
-                    <div style={{ display:'flex', alignItems:'center', gap:8, marginBottom:4 }}>
-                      <span style={{ fontSize:9, fontWeight:'bold', color:edgeColor, background:edgeColor+'18', padding:'1px 6px', borderRadius:3, fontFamily:'sans-serif' }}>{d.edge_level}</span>
-                      {d.top_ticker && <span style={{ fontSize:10, fontWeight:'bold', color:'#00d4ff' }}>{d.top_ticker}</span>}
-                      <span style={{ fontSize:8, color:'#4a6a8a', fontFamily:'sans-serif' }}>{d.action}</span>
-                      <span style={{ fontSize:8, color:'#2a4a5a', fontFamily:'sans-serif', marginLeft:'auto' }}>{d.ts ? d.ts.slice(0,16).replace('T',' ')+' UTC' : ''}</span>
-                    </div>
-                    {d.key_risk && <div style={{ fontSize:9, color:'#fbbf24', fontFamily:'sans-serif' }}>&#9888;&#65039; {d.key_risk}</div>}
-                  </div>
-                );
-              })
-            }
-          </div>
-        )}
-      </div>
-
-
       {/* GLOBAL ACTION LOG */}
       <div style={{ marginTop:24, background:"#0a0f18", border:"1px solid #1a2535", borderRadius:12, padding:"14px 16px" }}>
         <div style={{ fontSize:9, fontWeight:"bold", color:"#c084fc", fontFamily:"sans-serif", marginBottom:10, letterSpacing:1, display:"flex", alignItems:"center", gap:6 }}>
