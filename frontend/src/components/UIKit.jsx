@@ -31,7 +31,7 @@ export const StatCard = ({ label, value, sub, color, accent, minWidth = 130, com
     borderRadius: compact ? 6 : 10,
     padding: compact ? '7px 10px' : '16px 18px',
     flex: 1,
-    minWidth: compact ? 72 : minWidth,
+    minWidth: compact ? 72 : Math.min(minWidth, 110),
   }}>
     <div style={{ color: C.textFaint, fontSize: compact ? 7 : 9, letterSpacing: compact ? 1 : 2,
       fontFamily: 'sans-serif', textTransform: 'uppercase', marginBottom: compact ? 3 : 8 }}>

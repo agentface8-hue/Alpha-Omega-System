@@ -1,6 +1,6 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { Search, Activity, BarChart3, Brain, Briefcase, DollarSign, Moon,
-         Maximize2, Minimize2, LayoutGrid, ChevronLeft } from 'lucide-react';
+         Maximize2, LayoutGrid, ChevronLeft } from 'lucide-react';
 import Terminal           from './components/Terminal';
 import ResultCard         from './components/ResultCard';
 import LiveTicker         from './components/LiveTicker';
@@ -17,25 +17,38 @@ import DreamLog           from './components/DreamLog';
 import LoginScreen        from './components/LoginScreen';
 import { playThinkingSound, playSuccessSound, playErrorSound } from './utils/sounds';
 
-// ── Dashboard grid panels ─────────────────────────────────────────────────────
+// ── Mobile detection ──────────────────────────────────────────────────────────
+const useMobile = () => {
+  const [m, setM] = useState(() => window.innerWidth < 768);
+  useEffect(() => {
+    const fn = () => setM(window.innerWidth < 768);
+    window.addEventListener('resize', fn);
+    return () => window.removeEventListener('resize', fn);
+  }, []);
+  return m;
+};
+
+// ── Dashboard panels ──────────────────────────────────────────────────────────
 const PANELS = [
-  { id:'portfolio', label:'PORTFOLIO',     icon:'📊', color:'#00ff88' },
-  { id:'tracker',   label:'SIGNAL TRACKER',icon:'📈', color:'#c084fc' },
-  { id:'scan',      label:'SWING SCAN v4.4',icon:'🔍', color:'#00d4ff' },
-  { id:'dreams',    label:'DREAM LOG',     icon:'🌙', color:'#a78bfa' },
+  { id:'portfolio', label:'PORTFOLIO',      icon:'📊', short:'PORT',    color:'#00ff88' },
+  { id:'tracker',   label:'SIGNAL TRACKER', icon:'📈', short:'SIGNALS', color:'#c084fc' },
+  { id:'scan',      label:'SWING SCAN',     icon:'🔍', short:'SCAN',    color:'#00d4ff' },
+  { id:'dreams',    label:'DREAM LOG',      icon:'🌙', short:'DREAM',   color:'#a78bfa' },
 ];
 
 // ── Panel renderer ────────────────────────────────────────────────────────────
 const PanelContent = ({ id, autoRun, compact = false, isOwner = false }) => {
-  if (id === 'portfolio')  return <PortfolioTab compact={compact} isOwner={isOwner} />;
-  if (id === 'tracker')    return <SignalTracker compact={compact} isOwner={isOwner} />;
-  if (id === 'scan')       return <ScanDashboard autoScan={autoRun} compact={compact} isOwner={isOwner} />;
-  if (id === 'dreams')     return <DreamLog />;
+  if (id === 'portfolio') return <PortfolioTab compact={compact} isOwner={isOwner} />;
+  if (id === 'tracker')   return <SignalTracker compact={compact} isOwner={isOwner} />;
+  if (id === 'scan')      return <ScanDashboard autoScan={autoRun} compact={compact} isOwner={isOwner} />;
+  if (id === 'dreams')    return <DreamLog />;
   return null;
 };
 
 const App = () => {
-  // Force re-login if old session has no role (pre-auth-system sessions)
+  const isMobile = useMobile();
+
+  // Force re-login if old session has no role
   const hasValidSession = () => {
     const auth = localStorage.getItem('ao_auth') === '1';
     const role = localStorage.getItem('ao_role');
@@ -57,6 +70,7 @@ const App = () => {
   const [activeTab,     setActiveTab]     = useState('analyze');
   const [mountedPanels, setMountedPanels] = useState([]);
   const [backendStatus, setBackendStatus] = useState('waking');
+  const [mobilePanel,   setMobilePanel]   = useState('portfolio'); // active panel on mobile
 
   const isOwner = userRole === 'owner';
 
@@ -193,44 +207,68 @@ const App = () => {
     );
   };
 
-  // ── Dashboard grid ──────────────────────────────────────────────────────────
+  // ── Dashboard (desktop 2x2 / mobile single panel) ───────────────────────────
   const renderDashboard = () => {
-    // Backend still waking up — show single status screen
+    // Backend waking screen
     if (backendStatus !== 'ready' && mountedPanels.length === 0) {
       return (
-        <div style={{ height:'calc(100vh - 152px)', display:'flex', alignItems:'center',
-          justifyContent:'center', flexDirection:'column', gap:16, background:'#050810' }}>
+        <div style={{ height: isMobile ? 'calc(100vh - 110px)' : 'calc(100vh - 152px)',
+          display:'flex', alignItems:'center', justifyContent:'center',
+          flexDirection:'column', gap:16, background:'#050810' }}>
           <div style={{ fontSize:28 }}>⧗</div>
           <div style={{ color:'#00d4ff', fontFamily:'monospace', fontSize:13, letterSpacing:3 }}>
             {backendStatus === 'slow' ? 'BACKEND WAKING UP...' : 'CONNECTING...'}
           </div>
-          <div style={{ color:'#4a6a8a', fontSize:10, fontFamily:'sans-serif' }}>
-            {backendStatus === 'slow'
-              ? 'Render free tier is cold-starting — usually takes 30-60s'
-              : 'Checking backend status...'}
+          <div style={{ color:'#4a6a8a', fontSize:10, fontFamily:'sans-serif', textAlign:'center', padding:'0 20px' }}>
+            {backendStatus === 'slow' ? 'Render free tier cold-starting — usually 30-60s' : 'Checking backend...'}
           </div>
-          {backendStatus === 'slow' && (
-            <div style={{ marginTop:8, display:'flex', gap:6 }}>
-              {['Portfolio','Signal Tracker','Swing Scan','Dream Log'].map((p, i) => (
-                <div key={p} style={{ background:'#080c14', border:'1px solid #1a2535',
-                  borderRadius:6, padding:'4px 12px', color:'#2a4a5a',
-                  fontSize:9, fontFamily:'monospace', letterSpacing:1 }}>
-                  {p}
-                </div>
-              ))}
-            </div>
-          )}
         </div>
       );
     }
 
+    // ── MOBILE: one panel at a time + bottom nav ──
+    if (isMobile) {
+      const panel = PANELS.find(p => p.id === mobilePanel) || PANELS[0];
+      return (
+        <div style={{ display:'flex', flexDirection:'column', height:'calc(100vh - 110px)' }}>
+          {/* Panel content */}
+          <div style={{ flex:1, overflow:'auto', background:'#050810' }}>
+            {mountedPanels.includes(panel.id)
+              ? <PanelContent id={panel.id} autoRun={true} compact={false} isOwner={isOwner} />
+              : <div style={{ display:'flex', alignItems:'center', justifyContent:'center',
+                  height:'200px', color:'#2a4a5a', fontSize:11, fontFamily:'monospace' }}>
+                  ⧗ LOADING...
+                </div>
+            }
+          </div>
+          {/* Bottom nav bar */}
+          <div style={{ display:'flex', background:'#080c14',
+            borderTop:'1px solid #1a2535', flexShrink:0 }}>
+            {PANELS.map(p => (
+              <button key={p.id} onClick={() => { setMobilePanel(p.id); }}
+                style={{ flex:1, background:'transparent', border:'none',
+                  borderTop: mobilePanel===p.id ? `2px solid ${p.color}` : '2px solid transparent',
+                  padding:'10px 4px 8px',
+                  color: mobilePanel===p.id ? p.color : '#4a6a8a',
+                  cursor:'pointer', display:'flex', flexDirection:'column',
+                  alignItems:'center', gap:3 }}>
+                <span style={{ fontSize:16 }}>{p.icon}</span>
+                <span style={{ fontSize:8, fontFamily:'sans-serif', fontWeight:'bold',
+                  letterSpacing:0.5 }}>{p.short}</span>
+              </button>
+            ))}
+          </div>
+        </div>
+      );
+    }
+
+    // ── DESKTOP: 2×2 grid ──
     return (
       <div style={{ display:'grid', gridTemplateColumns:'1fr 1fr', gridTemplateRows:'1fr 1fr',
         height:'calc(100vh - 152px)', gap:2, background:'#0a0f18' }}>
         {PANELS.map(panel => (
           <div key={panel.id} style={{ display:'flex', flexDirection:'column',
             background:'#050810', overflow:'hidden', minHeight:0 }}>
-            {/* Panel header */}
             <div style={{ display:'flex', alignItems:'center', justifyContent:'space-between',
               padding:'6px 14px', background:'#080c14',
               borderBottom:`1px solid ${panel.color}33`, flexShrink:0 }}>
@@ -239,7 +277,6 @@ const App = () => {
                 {panel.icon} {panel.label}
               </span>
               <button onClick={() => setFocusedPanel(panel.id)}
-                title="Expand to full screen"
                 style={{ background:'transparent', border:`1px solid #1a2535`,
                   borderRadius:4, padding:'3px 8px', color:'#4a6a8a',
                   cursor:'pointer', display:'flex', alignItems:'center', gap:4,
@@ -247,15 +284,13 @@ const App = () => {
                 <Maximize2 size={11}/> FOCUS
               </button>
             </div>
-            {/* Content — mount only when backend is ready and it's this panel's turn */}
             <div style={{ flex:1, overflow:'auto', minHeight:0 }}>
               {mountedPanels.includes(panel.id)
                 ? <PanelContent id={panel.id} autoRun={true} compact={true} isOwner={isOwner} />
                 : <div style={{ display:'flex', alignItems:'center', justifyContent:'center',
                     height:'100%', color:'#2a4a5a', fontSize:10, fontFamily:'monospace',
                     letterSpacing:2, flexDirection:'column', gap:8 }}>
-                    <span>⧗</span>
-                    <span>LOADING...</span>
+                    <span>⧗</span><span>LOADING...</span>
                   </div>
               }
             </div>
@@ -305,49 +340,58 @@ const App = () => {
         <LiveTicker />
 
         {/* Header */}
-        <header className="header">
+        <header className="header" style={{ padding: isMobile ? '10px 14px' : undefined }}>
           <div className="header-left">
-            <div className="header-icon"><Activity size={26} /></div>
+            <div className="header-icon" style={{ display: isMobile ? 'none' : undefined }}>
+              <Activity size={26} />
+            </div>
             <div>
-              <div className="header-title">ALPHA - OMEGA</div>
-              <div className="header-subtitle">Council of Experts Trading System</div>
+              <div className="header-title" style={{ fontSize: isMobile ? 16 : undefined }}>
+                ALPHA - OMEGA
+              </div>
+              {!isMobile && <div className="header-subtitle">Council of Experts Trading System</div>}
             </div>
           </div>
-          <div className="system-status">
+          <div className="system-status" style={{ fontSize: isMobile ? 9 : undefined }}>
             {displayName && (
-              <span style={{ fontSize:10, color: isOwner ? '#00ff88' : '#c084fc',
-                fontFamily:'monospace', marginRight:12, letterSpacing:1 }}>
+              <span style={{ fontSize: isMobile ? 9 : 10,
+                color: isOwner ? '#00ff88' : '#c084fc',
+                fontFamily:'monospace', marginRight: isMobile ? 6 : 12, letterSpacing:1 }}>
                 {isOwner ? '👑' : '👤'} {displayName}
-                {!isOwner && <span style={{ color:'#4a6a8a', fontSize:9 }}> · VIEWER</span>}
+                {!isOwner && !isMobile && <span style={{ color:'#4a6a8a', fontSize:9 }}> · VIEWER</span>}
               </span>
             )}
-            <span className="status-dot"></span>SYSTEM ONLINE
+            <span className="status-dot"></span>
+            {!isMobile && 'SYSTEM ONLINE'}
           </div>
         </header>
 
         {/* Tab bar */}
-        <div style={{ display:'flex', gap:0, padding:'0 16px', background:'#080b0f',
-          borderBottom:'1px solid #1a2535', overflowX:'auto' }}>
-          {/* Dashboard toggle */}
+        <div style={{ display:'flex', gap:0,
+          padding: isMobile ? '0 8px' : '0 16px',
+          background:'#080b0f', borderBottom:'1px solid #1a2535',
+          overflowX:'auto', WebkitOverflowScrolling:'touch',
+          scrollbarWidth:'none' }}>
           <button onClick={() => setViewMode('dashboard')}
             style={{ background: viewMode==='dashboard' ? '#0d1a2a' : 'transparent',
               color: viewMode==='dashboard' ? '#00ff88' : '#8899aa', border:'none',
               borderBottom: viewMode==='dashboard' ? '2px solid #00ff88' : '2px solid transparent',
-              padding:'10px 18px', fontSize:11, fontWeight:'bold', fontFamily:'sans-serif',
-              cursor:'pointer', display:'flex', alignItems:'center', gap:6,
-              letterSpacing:1, whiteSpace:'nowrap' }}>
-            <LayoutGrid size={14}/> DASHBOARD
+              padding: isMobile ? '8px 10px' : '10px 18px',
+              fontSize: isMobile ? 9 : 11, fontWeight:'bold', fontFamily:'sans-serif',
+              cursor:'pointer', display:'flex', alignItems:'center', gap: isMobile ? 4 : 6,
+              letterSpacing:1, whiteSpace:'nowrap', flexShrink:0 }}>
+            <LayoutGrid size={isMobile ? 11 : 14}/> {isMobile ? 'HOME' : 'DASHBOARD'}
           </button>
-          {/* Other tabs */}
           {TAB_ITEMS.map(({ id, label, color }) => (
             <button key={id}
               onClick={() => { setViewMode('tab'); setActiveTab(id); }}
               style={{ background: viewMode==='tab' && activeTab===id ? '#0d1a2a' : 'transparent',
                 color: viewMode==='tab' && activeTab===id ? color : '#8899aa', border:'none',
                 borderBottom: viewMode==='tab' && activeTab===id ? `2px solid ${color}` : '2px solid transparent',
-                padding:'10px 18px', fontSize:11, fontWeight:'bold', fontFamily:'sans-serif',
-                cursor:'pointer', letterSpacing:1, whiteSpace:'nowrap' }}>
-              {label}
+                padding: isMobile ? '8px 10px' : '10px 18px',
+                fontSize: isMobile ? 9 : 11, fontWeight:'bold', fontFamily:'sans-serif',
+                cursor:'pointer', letterSpacing:1, whiteSpace:'nowrap', flexShrink:0 }}>
+              {isMobile ? label.split(' ')[0] : label}
             </button>
           ))}
         </div>
