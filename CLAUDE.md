@@ -1,283 +1,357 @@
 # CLAUDE.md — Alpha-Omega System
-# Read this before doing ANYTHING in this repo.
+# ⚠️ READ THIS FIRST — BEFORE TOUCHING ANYTHING ⚠️
+# Last updated: 2026-05-14
 
 ---
 
-## YOU HAVE SUPERPOWERS
+## 🔴 CRITICAL: ALWAYS READ THIS ENTIRE FILE BEFORE STARTING ANY TASK
 
-This project has Superpowers skills installed in `.claude/skills/`. **You must use them.**
-
-Before writing any code, before making any plan, before touching any file:
-1. Check which skill applies
-2. Invoke it via the Skill tool
-3. Follow it — it is mandatory, not optional
-
-**Skill → Task mapping (non-exhaustive):**
-
-| What you're about to do | Skill to invoke FIRST |
-|---|---|
-| Build a new feature or component | `brainstorming` |
-| Start implementing after design approved | `writing-plans` |
-| Execute a written plan | `subagent-driven-development` or `executing-plans` |
-| Write any feature or bugfix code | `test-driven-development` |
-| Hit a bug or test failure | `systematic-debugging` |
-| Claim something is done/fixed | `verification-before-completion` |
-| Finish a feature branch | `finishing-a-development-branch` |
-| Multiple independent failures to fix | `dispatching-parallel-agents` |
-| Receive code review | `receiving-code-review` |
-| Doing a code review | `requesting-code-review` |
-| Starting a new feature branch | `using-git-worktrees` |
-
-**If there's even a 1% chance a skill applies — use it. This is not negotiable.**
+This is the single source of truth. Everything here is current as of 2026-05-14.
+Do NOT assume anything from your training data — use this file.
 
 ---
 
-## PROJECT OVERVIEW
+## 1. WHAT THIS SYSTEM IS
 
-Alpha-Omega is an AI-powered stock/crypto trading analysis system:
-- **Council of Experts**: 10 AI agents analyze any ticker from different angles
-- **Swing Scanner v4.4**: Scans 30+ stocks, ranks by conviction (5-pillar system)
-- **Signal Tracker v2.0**: Paper-trades signals with full audit trail
-- **Backtester**: Tests the conviction engine against historical data
-- **Auto-Pilot**: One button → scan universe → rank → launch ATR-based turbo signals
+Alpha-Omega is a fully autonomous AI-powered stock/crypto swing trading system.
+
+**Live at:** https://alpha-omega-ngfw.vercel.app
+**Backend API:** https://alpha-omega-system.onrender.com
+**Owner:** Avi | Windows 11 (ASUS laptop) | Cyprus
+
+### Core capabilities (all live):
+- Council of Experts: 10 AI agents analyze any ticker
+- Swing Scanner v4.4: Momentum pre-screener → 5-pillar conviction scan
+- Signal Tracker v2.1: Paper-trades signals, full audit trail, advisor veto
+- Portfolio Manager v1.4: 10-slot $25K paper portfolio, DTP, TSL, momentum fade
+- Backtester: Walk-forward historical validation
+- Auto-Pilot: One button → screen 377 stocks → scan top 30 → open positions
+- Dreaming Agent: Gemini background market analysis every 4h
+- Learning Loop v2.0: Self-improving 5-dimension calibration after every 5 closes
+- Outcomes Grader: Opus grades every closed trade A-F
+- Order Executor v1.0: IBKR live/paper execution layer (paper mode default)
 
 ---
 
-## DEPLOYMENT
+## 2. DEPLOYMENT
 
-| Component | Platform | URL |
-|---|---|---|
-| Frontend | Vercel | https://alpha-omega-ngfw.vercel.app |
-| Backend | Render | https://alpha-omega-system.onrender.com |
-| Local dev | localhost | http://127.0.0.1:8000 (backend), :5173 (frontend) |
+| Component | Platform | URL | Remote |
+|---|---|---|---|
+| Frontend | Vercel | https://alpha-omega-ngfw.vercel.app | origin → github.com/agentface8-hue/Alpha-Omega-System |
+| Backend | Render | https://alpha-omega-system.onrender.com | origin → github.com/agentface8-hue/Alpha-Omega-System |
 
-### Git remotes:
-- `origin` → github.com/agentface8-hue/Alpha-Omega-System (triggers Render)
-- `vercel` → triggers Vercel frontend deploy
-
-### Deploy workflow:
-```bash
+### Single remote — ONE push deploys BOTH:
+```cmd
 cd C:\Users\asus\Alpha-Omega-System
-
-# If JSX/CSS changed, build frontend first:
-cd frontend && npx vite build && cd ..
-
-# Commit and push to BOTH remotes:
 git add -A
-git commit -m "descriptive message"
-git push origin main   # Render backend
-git push vercel main   # Vercel frontend
+git commit -m "description"
+git push origin main
 ```
 
-### Render free tier notes:
-- Spins down after 15 min inactivity → first request takes 30-60s
-- **Ephemeral filesystem** — signals/ files deleted on every deploy
-- Supabase migration is the #1 infrastructure priority (see PRD.md)
+### Frontend build (only when JSX/CSS changed):
+```cmd
+cd C:\Users\asus\Alpha-Omega-System\frontend
+npx vite build
+cd ..
+git add frontend/src frontend/dist
+```
+
+### Render notes:
+- Free tier: spins down after 15 min → cold start 30-60s
+- 512MB RAM limit — all downloads must be chunked
+- Ephemeral filesystem — signals/ backed by Supabase
 
 ---
 
-## ARCHITECTURE & FILE MAP
+## 3. INSTALLED COWORK PLUGINS
+
+| Plugin | ID | Status | Skills |
+|---|---|---|---|
+| **Data** | `data@knowledge-work-plugins` | ✅ Active | SQL, dashboards, viz, statistical-analysis |
+| **Daloopa** | `daloopa@knowledge-work-plugins` | ⚠️ MCP not authenticated | earnings, DCF, comps, tearsheet (needs paid Daloopa account) |
+
+---
+
+## 4. CONNECTED MCP SERVERS (14 total)
+
+| Connector | URL | Purpose |
+|---|---|---|
+| Gmail | gmailmcp.googleapis.com | Daily summary email, alerts |
+| Google Drive | drivemcp.googleapis.com | Trade log sheet hosting |
+| Google Calendar | calendarmcp.googleapis.com | Earnings dates, trade reviews |
+| Notion | mcp.notion.com | Trade theses, playbooks |
+| Slack | mcp.slack.com | Team alerts |
+| GitHub | (claude_desktop_config) | Direct git push without terminal |
+| Cloudflare | bindings.mcp.cloudflare.com | Workers/KV/D1 edge deployment |
+| Asana | mcp.asana.com | Task management |
+| Canva | mcp.canva.com | Design assets |
+| Invideo | mcp.invideo.io | Video generation |
+| Zapier | mcp.zapier.com | Workflow automation |
+| n8n | ipurches.app.n8n.cloud | Custom automation workflows |
+| Desktop Commander | (local MCP) | Run Python/git on Windows machine |
+| Computer Use / Chrome | (local MCP) | Browser automation |
+
+---
+
+## 5. API KEYS (.env + Render environment)
+
+| Key | Status | Used For |
+|---|---|---|
+| `ANTHROPIC_API_KEY` | ✅ Set | Advisor (Sonnet), Opus oracle, Outcomes Grader, Agent Council |
+| `SUPABASE_URL` | ✅ Set | Active project: nchkslvakbcykpiizotn.supabase.co |
+| `SUPABASE_ANON_KEY` | ✅ Set | Signal/portfolio persistence |
+| `TELEGRAM_TOKEN` | ✅ Set | Bot alerts |
+| `TELEGRAM_PERSONAL_CHAT_ID` | ✅ Set | Personal alerts to Avi |
+| `TELEGRAM_GROUP_CHAT_ID` | ✅ Set | Group channel |
+| `GITHUB_TOKEN` | ✅ Set | GitHub MCP direct push |
+| `GOOGLE_API_KEY` | ✅ Set on Render | Gemini for agents + dreaming agent |
+| `ALPHA_VANTAGE_API_KEY` | ✅ Set | Primary real-time price source |
+| `EXECUTOR_MODE` | paper (default) | Set to `ibkr` when IBKR ready |
+| `IBKR_HOST` | not set | Set when IB Gateway is running |
+| `IBKR_PORT` | 7497 (default) | 7497=paper, 7496=live |
+
+---
+
+## 6. COMPLETE FILE MAP (current)
 
 ```
 C:\Users\asus\Alpha-Omega-System\
-├── CLAUDE.md                    # THIS FILE — read first
-├── MASTER-KNOWLEDGE.md          # Extended system bible
-├── COWORK-SKILLS.md             # Step-by-step ops guide
-├── SIGNAL-TRACKER-V2.md         # Signal tracker deep dive
-├── PRD.md                       # Product requirements
-├── .env                         # API keys (gitignored)
-├── requirements.txt             # Python deps
-├── render.yaml                  # Render deploy config
-│
-├── .claude/
-│   └── skills/                  # Superpowers skills (14 skills)
+├── CLAUDE.md                    ← THIS FILE (always keep updated)
+├── MASTER-KNOWLEDGE.md          ← Extended system bible
+├── SYSTEM-AUDIT.md              ← Full component audit
+├── SYSTEM-BUILD-RECORD.md       ← Every commit and feature
+├── CHANGES-LOG.md               ← Latest session changes
+├── COWORK-SKILLS.md             ← Step-by-step ops guide
+├── PRD.md                       ← Product requirements
+├── .env                         ← API keys (gitignored)
+├── requirements.txt             ← Python deps
+├── render.yaml                  ← Render deploy config
 │
 ├── backend/
-│   ├── main.py                  # FastAPI app — ALL endpoints
-│   └── schemas.py               # Pydantic models
+│   ├── main.py                  ← FastAPI app (1787 lines) — ALL endpoints
+│   ├── portfolio_routes.py      ← Portfolio-specific routes
+│   ├── printing_routes.py       ← Printing profits routes
+│   └── schemas.py               ← Pydantic models
 │
-├── core/                        # Business logic
-│   ├── signal_tracker.py        # ⭐ Signal Tracker v2.0
-│   ├── orchestrator.py          # Agent orchestrator
-│   ├── smart_analyze.py         # Smart analysis fallback chain
-│   ├── conviction_engine.py     # 5-pillar conviction scoring
-│   ├── backtester.py            # Historical backtesting
-│   ├── calibrator.py            # Auto-calibrate thresholds
-│   ├── market_data.py           # yfinance data fetching
-│   ├── watchlists.py            # Stock universes
-│   ├── decision_matrix.py       # Decision framework
-│   ├── decision_ledger.py       # Trade decision logging
-│   ├── trade_journal.py         # Trade journal
-│   └── attribution.py          # Performance attribution
+├── core/                        ← Business logic
+│   ├── signal_tracker.py        ⭐ Signal Tracker v2.1 (1175 lines)
+│   ├── signal_store.py          ← Supabase + JSON signal persistence
+│   ├── portfolio_manager.py     ⭐ Portfolio engine v1.4 (DTP Phase 2)
+│   ├── portfolio_store.py       ← Supabase + JSON portfolio persistence
+│   ├── printing_portfolio.py    ← Printing Profits engine
+│   ├── printing_scanner.py      ← Scanner for short-duration trades
+│   ├── printing_store.py        ← Printing persistence
+│   ├── order_executor.py        ⭐ NEW: IBKR/paper execution v1.0
+│   ├── orchestrator.py          ← Agent orchestrator
+│   ├── smart_analyze.py         ← Single-ticker deep analysis
+│   ├── conviction_engine.py     ← 5-pillar scoring engine v4.4
+│   ├── market_data.py           ← Data fetcher (Alpha Vantage primary, yfinance fallback)
+│   ├── momentum_screener.py     ⭐ NEW: 377-stock momentum pre-screener (chunked)
+│   ├── sector_ranker.py         ⭐ NEW: 3-ETF sector ranking (SPDR+iShares+Vanguard)
+│   ├── universe_builder.py      ← >$10B ticker universe (377 stocks, 11 sectors)
+│   ├── backtester.py            ← Walk-forward backtesting
+│   ├── calibrator.py            ← Auto-calibrate conviction thresholds
+│   ├── learning_loop.py         ⭐ NEW: Self-improvement v2.0 (5-dimension analysis)
+│   ├── outcomes_grader.py       ⭐ Opus grades every closed trade A-F
+│   ├── dreaming_agent.py        ⭐ Gemini background market analysis (every 4h)
+│   ├── advisor.py               ← Two-layer AI advisor (Sonnet screen + Opus oracle)
+│   ├── agent_council.py         ← Bull/Bear debate + Opus Moderator
+│   ├── regime_engine.py         ← Market regime detection
+│   ├── futures_data.py          ← Pre-market futures data
+│   ├── kelly_sizer.py           ← Kelly Criterion position sizing
+│   ├── chart_generator.py       ← matplotlib charts for case reports
+│   ├── trade_log.py             ← CSV + Google Sheet logging on every close
+│   ├── telegram_alerts.py       ← All Telegram alert formatting + sending
+│   ├── telegram_agent.py        ← Telegram bot command listener
+│   ├── keepalive.py             ← Prevents timeout during long scans
+│   ├── decision_matrix.py       ← Final go/no-go gate
+│   ├── decision_ledger.py       ← Decision logging
+│   ├── attribution.py           ← P&L attribution
+│   └── watchlists.py            ← Static watchlists
 │
-├── agents/                      # AI Expert Council
-│   ├── swing_scanner.py         # ⭐ Swing Scanner v4.4
-│   ├── base_agent.py            # Base agent class
-│   ├── historian.py             # Technical analysis
-│   ├── newsroom.py              # Sentiment analysis
-│   ├── macro_strategist.py      # Macro/rates/VIX
-│   ├── risk_officer.py          # Risk assessment
-│   ├── contrarian.py            # Devil's advocate
-│   ├── executioner.py           # Buy/sell decision
-│   ├── portfolio_architect.py   # Position sizing
-│   ├── bear_case_advocate.py    # Bear case
-│   └── regime_detector.py      # Market regime
+├── agents/                      ← AI Expert Council (10 agents)
+│   ├── base_agent.py            ← Base class (Gemini primary, Claude fallback)
+│   ├── swing_scanner.py         ← Swing Scanner v4.4
+│   ├── historian.py             ← Technical/historical analysis
+│   ├── newsroom.py              ← Sentiment/news analysis
+│   ├── macro_strategist.py      ← Macro/rates/VIX
+│   ├── risk_officer.py          ← Risk assessment
+│   ├── contrarian.py            ← Devil's advocate
+│   ├── executioner.py           ← Final buy/sell decision
+│   ├── portfolio_architect.py   ← Position sizing
+│   ├── bear_case_advocate.py    ← Bear case
+│   └── regime_detector.py      ← Market regime agent
 │
-├── frontend/
-│   └── src/
-│       ├── App.jsx              # Main app + tabs
-│       └── components/
-│           ├── SignalTracker.jsx # Signal Tracker UI
-│           ├── ScanDashboard.jsx # Swing Scanner UI
-│           ├── BacktestDashboard.jsx
-│           ├── Terminal.jsx     # Council Analyze terminal
-│           ├── ResultCard.jsx   # Analysis results
-│           ├── LiveTicker.jsx   # Top ticker bar
-│           └── TopStocks.jsx   # Top movers widget
+├── frontend/src/
+│   ├── App.jsx                  ← Main app + tabs (REORDERED by priority)
+│   └── components/
+│       ├── PortfolioTab.jsx     ← Tab 1: Portfolio (most used)
+│       ├── SignalTracker.jsx    ← Tab 2: Signal Tracker
+│       ├── ScanDashboard.jsx   ← Tab 3: Swing Scan v4.4
+│       ├── AlphaMegaDashboard.jsx ← Tab 4: Alpha-Mega combined view
+│       ├── Analytics.jsx       ← Tab 5: Performance analytics
+│       ├── DreamLog.jsx        ⭐ Tab 6: NEW Gemini dream log (own tab)
+│       ├── Terminal.jsx        ← Tab 7: Council Analyze
+│       ├── PrintingProfits.jsx ← Tab 8: Printing Profits
+│       ├── BacktestDashboard.jsx ← Tab 9: Backtester
+│       ├── ResultCard.jsx      ← Analysis result display
+│       ├── LiveTicker.jsx      ← Top price ticker bar
+│       ├── ChartPanel.jsx      ← Chart display panel
+│       └── TopStocks.jsx       ← Top movers widget
 │
-├── signals/
-│   ├── active_signals.json      # Currently tracking
-│   ├── closed_signals.json      # Completed trades
-│   └── reports/*.json           # Case reports
+├── calibration/
+│   ├── calibration_params.json     ← Auto-tuned thresholds (updated by learning loop)
+│   ├── momentum_screen_cache.json  ← 2h cache of momentum screener results
+│   ├── sector_rank_cache.json      ← 2h cache of sector rankings
+│   └── universe_cache.json         ← Universe builder cache
 │
-├── tests/
-│   ├── test_app_integration.py
-│   └── test_flow.py
+├── signals/                     ← Runtime data (backed by Supabase)
+│   ├── active_signals.json
+│   ├── closed_signals.json
+│   ├── portfolio_positions.json
+│   ├── portfolio_state.json
+│   ├── printing_positions.json
+│   ├── printing_state.json
+│   ├── dream_log.json           ← Dream cycle log (JSON fallback)
+│   ├── outcomes_log.json        ← Trade grades log (JSON fallback)
+│   └── reports/*.json           ← Per-signal case reports
+│
+├── data/
+│   ├── trade_log.csv            ← All closed trades (local backup)
+│   └── sheets_token.json        ← Google OAuth token (gitignored)
 │
 └── docs/
     ├── DEPLOY.md
     ├── ATTRIBUTION_OPS.md
-    └── superpowers/
-        └── plans/               # Implementation plans go here
+    └── superpowers/plans/       ← Implementation plans
 ```
 
 ---
 
-## TECH STACK
+## 7. AI MODELS IN USE
 
-- **Backend**: Python, FastAPI, Uvicorn
-- **Frontend**: React (Vite), Tailwind basics, lucide-react icons
-- **AI**: Google Gemini (primary), Claude (Anthropic), OpenAI — via env keys
-- **Data**: yfinance, Polygon.io (optional)
-- **Storage**: JSON files (ephemeral on Render) → Supabase (planned)
-- **LangChain**: langchain-google-genai, langchain-anthropic, langchain-openai
-
-### Frontend style guide:
-- Dark theme: bg `#050810`, cards `#0a0f18`, borders `#1a2535`
-- Green (profit): `#00ff88` | Red (loss): `#ff4466`
-- Purple (accent): `#c084fc` | Blue (info): `#00d4ff`
-- Yellow (warning): `#fbbf24` | Orange (crypto): `#f7931a`
-- Font: monospace for data, sans-serif for labels
-- All inline styles (no external CSS classes beyond Tailwind basics)
+| Component | Model | Purpose |
+|---|---|---|
+| Advisor pre-screen | `claude-sonnet-4-6` | Auto APPROVE/FLAG/VETO every signal |
+| Advisor oracle | `claude-opus-4-7` | On-demand deep signal analysis |
+| Agent Council moderator | `claude-opus-4-7` | Bull/Bear debate moderator |
+| Outcomes Grader | `claude-opus-4-7` | Post-trade A-F grade + lesson |
+| Dreaming Agent | `gemini-2.0-flash` | Background market analysis |
+| All other agents | Gemini (primary) / Claude (fallback) | Council of Experts |
 
 ---
 
-## DEVELOPMENT PRINCIPLES (from superpowers)
+## 8. KEY API ENDPOINTS (backend/main.py)
 
-### TDD is mandatory
-Write the failing test first. Watch it fail. Then write code. If you didn't watch it fail, you don't know if it tests the right thing. The test files live in `tests/`.
+### Signals
+- `GET /api/signals` — all signals
+- `POST /api/signals/check` — refresh prices
+- `POST /api/signals/turbo/{symbol}` — launch signal
+- `POST /api/signals/close/{id}` — close signal
+- `POST /api/autopilot` — full stock autopilot
+- `POST /api/autopilot/crypto` — crypto autopilot
 
-```bash
-# Run tests
-python tests/test_app_integration.py
-python tests/test_flow.py
-python test_tracker_v2.py
+### Portfolio
+- `GET /api/portfolio` — full portfolio state
+- `POST /api/portfolio/check` — refresh prices
+- `POST /api/portfolio/autopilot` — fill slots
+
+### Scanning
+- `POST /api/scan` — run conviction scan
+- `GET /api/sectors/momentum-screen` — momentum pre-screen
+- `GET /api/sectors/watchlist/{sector}` — sector stocks by momentum
+- `GET /api/scan/candidates` — bench candidates from last scan
+
+### Dream Log
+- `POST /api/dreams/run` — trigger dream cycle
+- `GET /api/dreams/latest` — get recent dreams
+
+### Learning
+- `GET /api/learning/summary` — calibration + outcomes summary
+- `POST /api/learning/run-fast` — trigger fast 5D analysis
+- `POST /api/learning/run-deep` — trigger full weekly analysis
+
+### Order Executor
+- `GET /api/executor/status` — broker connection status
+- `POST /api/executor/execute/{signal_id}` — execute signal
+- `POST /api/executor/test` — test with custom payload
+
+---
+
+## 9. FRONTEND STYLE GUIDE
+
+```
+Dark theme: bg #050810 | cards #0a0f18 | borders #1a2535
+Green (profit): #00ff88  | Red (loss): #ff4466
+Purple (accent): #c084fc | Blue (info): #00d4ff
+Yellow (warning): #fbbf24 | Orange (crypto): #f7931a
+Font: monospace for data, sans-serif for labels
+All inline styles — no external CSS files
 ```
 
-### No fixes without root cause
-Use `systematic-debugging` before proposing any fix. Symptom patches are failure.
+---
 
-### No completion claims without evidence
-Run the verification commands. Check output. Then and only then say it's done.
+## 10. SCHEDULED TASKS (Cowork Desktop)
 
-### Plans go in docs/superpowers/plans/
-Format: `docs/superpowers/plans/YYYY-MM-DD-<feature-name>.md`
+| Task | Schedule | What It Does |
+|---|---|---|
+| `alpha-omega-morning-briefing` | Weekdays 3 PM UTC (9 AM ET) | Regime → scan → autopilot → 4 Telegram messages |
+| `alpha-omega-market-check` | Weekdays every 30 min 3-10 PM UTC | Price refresh, TP/SL alerts |
+| `alpha-omega-weekly-calibration` | Sundays 6 PM UTC | Retune conviction thresholds |
+| `alpha-omega-daily-summary` | Weekdays 5 PM Cyprus | P&L summary → Gmail draft + Telegram |
 
 ---
 
-## QUICK SMOKE TESTS
+## 11. SUPABASE TABLES (active project: nchkslvakbcykpiizotn)
 
-```bash
-cd C:\Users\asus\Alpha-Omega-System
+| Table | Contents |
+|---|---|
+| `signals` | All active + closed signals |
+| `signal_reports` | Per-signal case reports |
+| `portfolio_positions` | Open paper positions |
+| `portfolio_state` | Portfolio-level state |
+| `printing_positions` | Printing profits positions |
+| `printing_state` | Printing portfolio state |
+| `outcomes` | Trade grades from Outcomes Grader |
+| `dream_log` | Dream cycle analysis entries |
 
-# Backend loads?
-python -c "from backend.main import app; print('FastAPI OK')"
+---
 
-# Signal tracker works?
-python -c "from core.signal_tracker import SignalTracker; print('Signal Tracker OK')"
+## 12. WHAT'S NOT YET DONE (open roadmap)
 
-# Scanner works?
-python -c "from agents.swing_scanner import SwingScanner; print('Scanner OK')"
+| Item | Priority | Notes |
+|---|---|---|
+| IBKR live execution | 🔴 High | Waiting for IBKR account approval (address doc being processed) |
+| Claude Finance plugins | 🟡 Medium | Free on GitHub (anthropics/financial-services-plugins) |
+| Claude Routines | 🟡 Medium | Upgrade scheduled tasks to cloud (laptop-independent) |
+| Claude Design UI upgrade | 🟡 Medium | Use claude.ai/design to redesign Portfolio + Signal Tracker |
+| Daloopa MCP auth | 🟢 Low | Needs paid Daloopa account |
+| FactSet MCP | 🟢 Low | Alpha Vantage already covers it |
+| GitHub token rotation | 🟢 Low | Token briefly exposed in commit (since reset) |
 
-# Conviction engine works?
-python -c "from core.conviction_engine import ConvictionEngine; print('Conviction OK')"
+---
+
+## 13. DEPLOY CHECKLIST (run after every session)
+
+```
+1. git add -A
+2. git commit -m "descriptive message"
+3. git push origin main
+4. UPDATE THIS FILE (CLAUDE.md) with anything new that was built
+5. Update SYSTEM-AUDIT.md if new modules/connectors added
 ```
 
+**⚠️ RULE: After every session that adds features, update CLAUDE.md sections 3, 4, 6, 7, 8, 12 as needed.**
+
 ---
 
-## COMMON ERRORS
+## 14. COMMON ERRORS
 
 | Error | Cause | Fix |
 |---|---|---|
-| ModuleNotFoundError | Missing pip package | `pip install <package>` |
-| yfinance rate limit | Too many requests | Add `time.sleep(1)` between calls |
-| CORS error in browser | Backend not running | Check Render status |
-| Signals disappear | Render redeployed (ephemeral) | Re-run autopilot |
-| 502/timeout on Render | Cold start (free tier sleeping) | Wait 30-60s, retry |
-
----
-
-## KEY PRIORITIES (from PRD)
-
-1. **Supabase migration** — persistent signals storage (highest infra priority)
-2. **Sharpe Ratio > 2.5** — core KPI
-3. **Max drawdown < 15%** — hard limit
-4. **Circuit breakers** — auto-shutdown on drawdown breach
-5. **XAI thesis** — every signal must have human-readable explanation
-6. **Paper trading first** — 6 months minimum before live capital
-
----
-
-## SIGNAL TRACKER KEY FUNCTIONS
-
-```python
-# core/signal_tracker.py
-create_turbo_signal(symbol, asset_type, scan_data)  # Create signal
-check_signals()                                      # Price refresh (every 30s)
-close_signal(signal_id, reason)                     # Manual close
-record_signal(scan_result, asset_type)              # Auto-record from scanner
-get_all_signals()                                   # All active + closed + stats
-get_signal_report(id)                               # Case report
-_fetch_live_price(symbol, asset_type)               # Price with validation
-_detect_gap_fill(signal, price, prev_close)         # Gap detection
-```
-
----
-
-## ADDING A NEW API ENDPOINT
-
-```python
-# 1. Add logic to core/*.py
-# 2. Add endpoint to backend/main.py:
-@app.get("/api/my-endpoint")
-async def my_endpoint():
-    from core.my_module import my_function
-    return my_function()
-# 3. Test: python -c "from backend.main import app; print('OK')"
-# 4. Deploy
-```
-
----
-
-## ADDING A NEW AGENT
-
-1. Create `agents/my_agent.py` extending `base_agent.py`
-2. Add to chain in `core/orchestrator.py`
-3. Add result section in `frontend/src/components/ResultCard.jsx`
-4. Test: `python -c "from agents.my_agent import MyAgent; print('OK')"`
-5. Deploy
-
----
-
-*For extended docs see MASTER-KNOWLEDGE.md, COWORK-SKILLS.md, SIGNAL-TRACKER-V2.md, PRD.md*
-*Superpowers skills: `.claude/skills/` — invoke via Skill tool before any task*
+| OOM crash on Render | Downloading too much data at once | Use chunked downloads (50 tickers max), gc.collect() after each |
+| Gemini 429 | Rate limit hit | 15s retry + 10min cooldown between dream cycles |
+| Signals disappear after deploy | Render ephemeral filesystem | Data is in Supabase, will reload |
+| Cold start 502 | Render free tier sleeping | Wait 30-60s, retry |
+| `_sb()` called as function | Wrong Supabase pattern | Use direct `create_client()` not `store._sb()` |
+| DTP guardrail fires | TP ordering inversion after scaling | Already handled in portfolio_manager.py |

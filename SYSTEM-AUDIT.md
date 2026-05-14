@@ -1,6 +1,6 @@
 # Alpha-Omega System Audit
-**Last updated:** 2026-04-30
-**Capital:** $25,000 paper | **Max positions:** 5 | **Risk/trade:** $500
+**Last updated:** 2026-05-14
+**Capital:** $25,000 paper | **Max positions:** 10 | **Risk/trade:** $500
 
 ---
 
