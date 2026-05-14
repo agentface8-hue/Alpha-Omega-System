@@ -1,5 +1,6 @@
 """
-portfolio_manager.py — Paper trading portfolio engine v1.3
+portfolio_manager.py — Paper trading portfolio engine v1.4
+v1.4: Dynamic TP Phase 2 — conviction score scales TP distances at entry
 v1.3: Shared scan cache — autopilot saves all results; bench reads from same scan
 v1.2: Momentum fade → AUTO-CLOSE (5 checks/2%), Alpha-Mega symbols_override
 v1.1: ATR at entry, trailing TP3
@@ -25,6 +26,22 @@ MAX_TP3_EXTENSIONS = 3
 
 FADE_CHECKS_NEEDED = 5    # consecutive lower price checks before auto-close
 FADE_GIVEBACK_PCT  = 2.0  # % given back from MFE peak before auto-close
+
+
+# ── Dynamic TP Phase 2 — scale TP distances by conviction ──────────────────
+def _dtp_scale(conviction: int) -> tuple:
+    """
+    Returns (scale_factor, label).
+    SL is NEVER touched. Only TP distances from entry are scaled.
+    Higher conviction = wider TPs (let winners run).
+    Lower conviction = tighter TPs (lock in gains faster).
+    """
+    if   conviction >= 85: return 1.50, f"DTP +50% (conviction {conviction}%)"
+    elif conviction >= 80: return 1.35, f"DTP +35% (conviction {conviction}%)"
+    elif conviction >= 75: return 1.20, f"DTP +20% (conviction {conviction}%)"
+    elif conviction >= 70: return 1.10, f"DTP +10% (conviction {conviction}%)"
+    elif conviction >= 65: return 1.00, f"DTP baseline (conviction {conviction}%)"
+    else:                  return 0.85, f"DTP -15% (conviction {conviction}%)"
 
 
 def _live_price(ticker: str, asset_type: str = "stock") -> Optional[float]:
@@ -83,6 +100,18 @@ def open_position(ticker: str, entry_price: float, sl: float,
         else:
             return {"error": f"Insufficient cash (need ${min_size:.2f}, have ${state['cash']:.0f})"}
 
+    # ── Dynamic TP Phase 2 — scale TP distances by conviction ─────────────────
+    dtp_scale_val, dtp_note = _dtp_scale(conviction)
+    if dtp_scale_val != 1.0:
+        _sl_dist = max(entry_price - sl, 0.01)
+        tp1 = round(entry_price + (tp1 - entry_price) * dtp_scale_val, 4)
+        tp2 = round(entry_price + (tp2 - entry_price) * dtp_scale_val, 4)
+        tp3 = round(entry_price + (tp3 - entry_price) * dtp_scale_val, 4)
+        # Guardrail: ensure strict TP ordering after scaling
+        if tp2 <= tp1: tp2 = round(tp1 + _sl_dist * 0.5, 4)
+        if tp3 <= tp2: tp3 = round(tp2 + _sl_dist * 0.5, 4)
+        print(f"  [DTP] {ticker}: scale={dtp_scale_val}× → TP1=${tp1:.2f} TP2=${tp2:.2f} TP3=${tp3:.2f} ({dtp_note})")
+
     now          = datetime.datetime.utcnow().isoformat()
     # Real 14-day ATR via yfinance
     atr_at_entry = 0.0
@@ -118,6 +147,7 @@ def open_position(ticker: str, entry_price: float, sl: float,
         "momentum_down_count": 0, "fade_alert_sent": False,
         "momentum_fade_close": False,
         "conviction": conviction, "signal_id": signal_id, "close_reason": None,
+        "dtp_scale": dtp_scale_val, "dtp_note": dtp_note,
         "pillar_scores": pillar_scores or {},
         "tas": tas or "",
         "entry_market_context": entry_market_context or {},
