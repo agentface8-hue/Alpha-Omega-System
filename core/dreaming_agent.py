@@ -12,9 +12,13 @@ import os
 import json
 import logging
 import datetime
+import time
 from typing import Dict, Any, List
 
 logger = logging.getLogger(__name__)
+
+_last_run_ts: float = 0.0   # epoch seconds of last completed dream cycle
+DREAM_COOLDOWN = 600        # 10 minutes between runs
 
 # Tickers to scan during dream cycle (top conviction candidates)
 DREAM_WATCHLIST = [
@@ -97,7 +101,9 @@ def _build_dream_prompt(market_ctx: Dict, scan_results: List[Dict]) -> str:
 
 
 def _call_gemini(prompt: str) -> Dict[str, Any]:
-    """Call Gemini Flash for the dream analysis."""
+    """Call Gemini Flash for the dream analysis. Retries once on 429."""
+    import time
+    import urllib.error as _ue
     api_key = os.environ.get("GOOGLE_API_KEY", "").strip()
     if not api_key:
         raise RuntimeError("GOOGLE_API_KEY not set")
@@ -111,14 +117,24 @@ def _call_gemini(prompt: str) -> Dict[str, Any]:
         "generationConfig": {"maxOutputTokens": 250},
     }).encode()
     req = _ur.Request(url, data=body, headers={"Content-Type": "application/json"})
-    with _ur.urlopen(req, timeout=15) as r:
-        resp = json.loads(r.read().decode())
-    raw = resp["candidates"][0]["content"]["parts"][0]["text"].strip()
-    if raw.startswith("```"):
-        raw = raw.split("```")[1]
-        if raw.startswith("json"):
-            raw = raw[4:]
-    return json.loads(raw.strip())
+
+    for attempt in range(2):  # try twice
+        try:
+            with _ur.urlopen(req, timeout=20) as r:
+                resp = json.loads(r.read().decode())
+            raw = resp["candidates"][0]["content"]["parts"][0]["text"].strip()
+            if raw.startswith("```"):
+                raw = raw.split("```")[1]
+                if raw.startswith("json"):
+                    raw = raw[4:]
+            return json.loads(raw.strip())
+        except _ue.HTTPError as e:
+            if e.code == 429 and attempt == 0:
+                logger.warning("[DREAM] Gemini 429 rate limit — waiting 15s then retrying...")
+                time.sleep(15)
+                continue
+            raise
+    raise RuntimeError("Gemini call failed after retry")
 
 
 def _save_dream(dream: Dict) -> bool:
@@ -208,15 +224,21 @@ def _send_dream_alert(dream: Dict):
 def run_dream_cycle(force: bool = False) -> Dict[str, Any]:
     """
     Run one dream cycle. Call from scheduler or /api/dreams/run endpoint.
-
     Args:
         force: If True, skips the market-day/hour check (for testing).
-
     Returns:
         dict with dream result + metadata.
     """
+    global _last_run_ts
+
     if not force and not _is_market_day_and_hour():
         return {"status": "skipped", "reason": "outside dream schedule"}
+
+    # Cooldown: don't run more than once per 10 minutes
+    secs_since = time.time() - _last_run_ts
+    if secs_since < DREAM_COOLDOWN:
+        wait = int(DREAM_COOLDOWN - secs_since)
+        return {"status": "skipped", "reason": f"cooldown — try again in {wait}s"}
 
     logger.info("[DREAM] Starting dream cycle...")
 
@@ -256,6 +278,7 @@ def run_dream_cycle(force: bool = False) -> Dict[str, Any]:
     }
 
     _save_dream(dream)
+    _last_run_ts = time.time()   # update cooldown timestamp
 
     if dream["edge_level"] == "HIGH":
         _send_dream_alert(dream)
