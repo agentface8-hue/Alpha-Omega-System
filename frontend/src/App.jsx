@@ -39,7 +39,42 @@ const App = () => {
   const [viewMode,      setViewMode]      = useState('dashboard');
   const [focusedPanel,  setFocusedPanel]  = useState(null);
   const [activeTab,     setActiveTab]     = useState('analyze');
-  const [mountedPanels, setMountedPanels] = useState(['portfolio']); // staggered mount
+  const [mountedPanels, setMountedPanels] = useState([]);
+  const [backendStatus, setBackendStatus] = useState('waking'); // 'waking' | 'slow' | 'ready'
+
+  // ── Step 1: Wake backend, then stagger panels ──────────────────────────────
+  React.useEffect(() => {
+    if (!authed) return;
+    const API = import.meta.env.VITE_API_URL || 'http://127.0.0.1:8000';
+    let cancelled = false;
+
+    const wake = async () => {
+      setBackendStatus('waking');
+      setMountedPanels([]);
+      // Show "slow" warning after 8s
+      const slowTimer = setTimeout(() => { if (!cancelled) setBackendStatus('slow'); }, 8000);
+      try {
+        await fetch(`${API}/`);
+        if (cancelled) return;
+        clearTimeout(slowTimer);
+        setBackendStatus('ready');
+        // Now stagger panels one by one
+        setMountedPanels(['portfolio']);
+        setTimeout(() => { if (!cancelled) setMountedPanels(p => [...p, 'tracker']); }, 900);
+        setTimeout(() => { if (!cancelled) setMountedPanels(p => [...p, 'scan']);    }, 1800);
+        setTimeout(() => { if (!cancelled) setMountedPanels(p => [...p, 'dreams']); }, 2700);
+      } catch {
+        if (!cancelled) {
+          clearTimeout(slowTimer);
+          setBackendStatus('slow');
+          setTimeout(wake, 10000); // retry in 10s
+        }
+      }
+    };
+
+    wake();
+    return () => { cancelled = true; };
+  }, [authed]);
 
   // Council Analyze state
   const [symbol,    setSymbol]    = useState('');
@@ -50,16 +85,6 @@ const App = () => {
 
   const getTimestamp = () => new Date().toLocaleTimeString('en-US',
     { hour:'2-digit', minute:'2-digit', second:'2-digit', hour12:true });
-
-  // Stagger panel mounts on dashboard load — one API at a time
-  React.useEffect(() => {
-    if (viewMode !== 'dashboard') return;
-    setMountedPanels(['portfolio']); // reset on every dashboard open
-    const t1 = setTimeout(() => setMountedPanels(p => [...p, 'tracker']), 900);
-    const t2 = setTimeout(() => setMountedPanels(p => [...p, 'scan']),    1800);
-    const t3 = setTimeout(() => setMountedPanels(p => [...p, 'dreams']),  2700);
-    return () => [t1, t2, t3].forEach(clearTimeout);
-  }, [viewMode]);
 
   const handleAnalyze = async (e) => {
     e.preventDefault();
@@ -144,45 +169,77 @@ const App = () => {
     );
   };
 
-  // ── Dashboard grid: 2×2 panels ──────────────────────────────────────────────
-  const renderDashboard = () => (
-    <div style={{ display:'grid', gridTemplateColumns:'1fr 1fr', gridTemplateRows:'1fr 1fr',
-      height:'calc(100vh - 152px)', gap:2, background:'#0a0f18' }}>
-      {PANELS.map(panel => (
-        <div key={panel.id} style={{ display:'flex', flexDirection:'column',
-          background:'#050810', overflow:'hidden', minHeight:0 }}>
-          {/* Panel header */}
-          <div style={{ display:'flex', alignItems:'center', justifyContent:'space-between',
-            padding:'6px 14px', background:'#080c14',
-            borderBottom:`1px solid ${panel.color}33`, flexShrink:0 }}>
-            <span style={{ color:panel.color, fontSize:10, fontWeight:'bold',
-              fontFamily:'monospace', letterSpacing:2 }}>
-              {panel.icon} {panel.label}
-            </span>
-            <button onClick={() => setFocusedPanel(panel.id)}
-              title="Expand to full screen"
-              style={{ background:'transparent', border:`1px solid #1a2535`,
-                borderRadius:4, padding:'3px 8px', color:'#4a6a8a',
-                cursor:'pointer', display:'flex', alignItems:'center', gap:4,
-                fontSize:9, fontFamily:'monospace', letterSpacing:1 }}>
-              <Maximize2 size={11}/> FOCUS
-            </button>
+  // ── Dashboard grid ──────────────────────────────────────────────────────────
+  const renderDashboard = () => {
+    // Backend still waking up — show single status screen
+    if (backendStatus !== 'ready' && mountedPanels.length === 0) {
+      return (
+        <div style={{ height:'calc(100vh - 152px)', display:'flex', alignItems:'center',
+          justifyContent:'center', flexDirection:'column', gap:16, background:'#050810' }}>
+          <div style={{ fontSize:28 }}>⧗</div>
+          <div style={{ color:'#00d4ff', fontFamily:'monospace', fontSize:13, letterSpacing:3 }}>
+            {backendStatus === 'slow' ? 'BACKEND WAKING UP...' : 'CONNECTING...'}
           </div>
-          {/* Scrollable content — only mount when it's this panel's turn */}
-          <div style={{ flex:1, overflow:'auto', minHeight:0 }}>
-            {mountedPanels.includes(panel.id)
-              ? <PanelContent id={panel.id} autoRun={true} compact={true} />
-              : <div style={{ display:'flex', alignItems:'center', justifyContent:'center',
-                  height:'100%', color:'#2a4a5a', fontSize:11, fontFamily:'monospace',
-                  letterSpacing:1 }}>
-                  ⧗ QUEUED...
+          <div style={{ color:'#4a6a8a', fontSize:10, fontFamily:'sans-serif' }}>
+            {backendStatus === 'slow'
+              ? 'Render free tier is cold-starting — usually takes 30-60s'
+              : 'Checking backend status...'}
+          </div>
+          {backendStatus === 'slow' && (
+            <div style={{ marginTop:8, display:'flex', gap:6 }}>
+              {['Portfolio','Signal Tracker','Swing Scan','Dream Log'].map((p, i) => (
+                <div key={p} style={{ background:'#080c14', border:'1px solid #1a2535',
+                  borderRadius:6, padding:'4px 12px', color:'#2a4a5a',
+                  fontSize:9, fontFamily:'monospace', letterSpacing:1 }}>
+                  {p}
                 </div>
-            }
-          </div>
+              ))}
+            </div>
+          )}
         </div>
-      ))}
-    </div>
-  );
+      );
+    }
+
+    return (
+      <div style={{ display:'grid', gridTemplateColumns:'1fr 1fr', gridTemplateRows:'1fr 1fr',
+        height:'calc(100vh - 152px)', gap:2, background:'#0a0f18' }}>
+        {PANELS.map(panel => (
+          <div key={panel.id} style={{ display:'flex', flexDirection:'column',
+            background:'#050810', overflow:'hidden', minHeight:0 }}>
+            {/* Panel header */}
+            <div style={{ display:'flex', alignItems:'center', justifyContent:'space-between',
+              padding:'6px 14px', background:'#080c14',
+              borderBottom:`1px solid ${panel.color}33`, flexShrink:0 }}>
+              <span style={{ color:panel.color, fontSize:10, fontWeight:'bold',
+                fontFamily:'monospace', letterSpacing:2 }}>
+                {panel.icon} {panel.label}
+              </span>
+              <button onClick={() => setFocusedPanel(panel.id)}
+                title="Expand to full screen"
+                style={{ background:'transparent', border:`1px solid #1a2535`,
+                  borderRadius:4, padding:'3px 8px', color:'#4a6a8a',
+                  cursor:'pointer', display:'flex', alignItems:'center', gap:4,
+                  fontSize:9, fontFamily:'monospace', letterSpacing:1 }}>
+                <Maximize2 size={11}/> FOCUS
+              </button>
+            </div>
+            {/* Content — mount only when backend is ready and it's this panel's turn */}
+            <div style={{ flex:1, overflow:'auto', minHeight:0 }}>
+              {mountedPanels.includes(panel.id)
+                ? <PanelContent id={panel.id} autoRun={true} compact={true} />
+                : <div style={{ display:'flex', alignItems:'center', justifyContent:'center',
+                    height:'100%', color:'#2a4a5a', fontSize:10, fontFamily:'monospace',
+                    letterSpacing:2, flexDirection:'column', gap:8 }}>
+                    <span>⧗</span>
+                    <span>LOADING...</span>
+                  </div>
+              }
+            </div>
+          </div>
+        ))}
+      </div>
+    );
+  };
 
   // ── Tab content ─────────────────────────────────────────────────────────────
   const renderTabContent = () => {
