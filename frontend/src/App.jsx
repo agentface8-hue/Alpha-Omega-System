@@ -35,7 +35,21 @@ const PanelContent = ({ id, autoRun, compact = false, isOwner = false }) => {
 };
 
 const App = () => {
-  const [authed,        setAuthed]        = useState(() => localStorage.getItem('ao_auth') === '1');
+  // Force re-login if old session has no role (pre-auth-system sessions)
+  const hasValidSession = () => {
+    const auth = localStorage.getItem('ao_auth') === '1';
+    const role = localStorage.getItem('ao_role');
+    if (auth && !role) {
+      // Old session — clear it
+      localStorage.removeItem('ao_auth');
+      localStorage.removeItem('ao_username');
+      localStorage.removeItem('ao_display_name');
+      return false;
+    }
+    return auth;
+  };
+
+  const [authed,        setAuthed]        = useState(() => hasValidSession());
   const [userRole,      setUserRole]      = useState(() => localStorage.getItem('ao_role') || 'visitor');
   const [displayName,   setDisplayName]   = useState(() => localStorage.getItem('ao_display_name') || '');
   const [viewMode,      setViewMode]      = useState('dashboard');
