@@ -54,7 +54,7 @@ def _append_csv(row: dict):
 def _get_sheet():
     """
     Return the gspread worksheet, or None if not set up.
-    Requires setup_sheets_auth.py to have been run once.
+    Reads token from SHEETS_TOKEN_JSON env var (Render) or local file (dev).
     """
     try:
         import gspread
@@ -62,10 +62,15 @@ def _get_sheet():
         from google.auth.transport.requests import Request
         import json
 
-        if not TOKEN_FILE.exists():
-            return None
+        # Try env var first (Render), fall back to local file (dev)
+        token_json = os.environ.get("SHEETS_TOKEN_JSON", "")
+        if token_json:
+            creds_data = json.loads(token_json)
+        elif TOKEN_FILE.exists():
+            creds_data = json.loads(TOKEN_FILE.read_text())
+        else:
+            return None  # Not configured
 
-        creds_data = json.loads(TOKEN_FILE.read_text())
         creds = Credentials(
             token=creds_data.get("token"),
             refresh_token=creds_data.get("refresh_token"),
@@ -78,22 +83,24 @@ def _get_sheet():
         # Auto-refresh if expired
         if creds.expired and creds.refresh_token:
             creds.refresh(Request())
-            # Save refreshed token
-            updated = {
-                "token": creds.token,
-                "refresh_token": creds.refresh_token,
-                "token_uri": creds.token_uri,
-                "client_id": creds.client_id,
-                "client_secret": creds.client_secret,
-                "scopes": list(creds.scopes) if creds.scopes else [],
-            }
-            TOKEN_FILE.write_text(json.dumps(updated, indent=2))
+            # Save refreshed token back to file if possible (dev only)
+            if TOKEN_FILE.exists():
+                updated = {
+                    "token": creds.token,
+                    "refresh_token": creds.refresh_token,
+                    "token_uri": creds.token_uri,
+                    "client_id": creds.client_id,
+                    "client_secret": creds.client_secret,
+                    "scopes": list(creds.scopes) if creds.scopes else [],
+                }
+                TOKEN_FILE.write_text(json.dumps(updated, indent=2))
 
         gc = gspread.authorize(creds)
         sh = gc.open_by_key(SHEET_ID)
         return sh.sheet1
 
-    except Exception:
+    except Exception as e:
+        print(f"  [TradeLog] Sheet connection failed: {e}")
         return None
 
 
