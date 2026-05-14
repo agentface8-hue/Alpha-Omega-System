@@ -16,7 +16,7 @@ from typing import Dict, Any, Optional
 
 logger = logging.getLogger(__name__)
 
-OPUS_MODEL = "claude-opus-4-6"
+OPUS_MODEL = "claude-opus-4-7"   # upgraded from 4.6
 
 _GRADE_SYSTEM = """You are the Alpha-Omega Outcomes Grader. Your job is to grade completed trades.
 You receive a closed signal with full entry/exit context and conviction data.

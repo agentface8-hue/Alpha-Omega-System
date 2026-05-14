@@ -1151,3 +1151,17 @@ def _calc_stats(closed: List[Dict]) -> Dict[str, Any]:
         "avg_tp3_extensions":round(ext_total/len(closed),2) if closed else 0,
         "momentum_fade_closes":len(fade_closes),
     }
+
+
+def get_signal_by_id(signal_id: str):
+    """Return a single signal (active or closed) by ID. Used by order_executor."""
+    from core import signal_store as store
+    active = store.load_active()
+    for s in active:
+        if s.get("id") == signal_id:
+            return s
+    closed = store.load_closed()
+    for s in closed:
+        if s.get("id") == signal_id:
+            return s
+    return None

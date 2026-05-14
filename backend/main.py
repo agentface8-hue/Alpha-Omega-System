@@ -1745,3 +1745,42 @@ async def get_dream_log(limit: int = 10):
     from core.dreaming_agent import load_dream_log
     dreams = load_dream_log(limit=limit)
     return {"dreams": dreams, "count": len(dreams)}
+
+
+# ── Order Executor endpoints ─────────────────────────────────────────────────
+
+@app.get("/api/executor/status")
+async def executor_status():
+    """Check broker connection and current execution mode."""
+    from core.order_executor import check_connection, EXECUTOR_MODE, IBKR_HOST, IBKR_PORT
+    conn = check_connection()
+    conn["executor_mode"] = EXECUTOR_MODE
+    conn["ibkr_host"]     = IBKR_HOST
+    conn["ibkr_port"]     = IBKR_PORT
+    conn["env"]           = "PAPER" if IBKR_PORT == 7497 else "LIVE"
+    return conn
+
+@app.post("/api/executor/execute/{signal_id}")
+async def execute_live_signal(signal_id: str):
+    """
+    Execute a specific signal as a live/paper broker order.
+    Reads the signal from store, routes to order_executor.
+    """
+    from core.signal_tracker import get_signal_by_id
+    from core.order_executor import execute_signal
+    signal = get_signal_by_id(signal_id)
+    if not signal:
+        raise HTTPException(status_code=404, detail=f"Signal {signal_id} not found")
+    result = execute_signal(signal)
+    return result
+
+@app.post("/api/executor/test")
+async def executor_test(request: Request):
+    """
+    Test execution with a custom payload — no real order placed in paper mode.
+    Body: { ticker, entry_price, sl, tp1, tp2, tp3, shares }
+    """
+    from core.order_executor import execute_signal
+    body = await request.json()
+    result = execute_signal(body)
+    return result

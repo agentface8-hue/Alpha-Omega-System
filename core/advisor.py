@@ -16,7 +16,7 @@ from typing import Dict, Any, List, Optional
 logger = logging.getLogger(__name__)
 
 SONNET_MODEL = "claude-sonnet-4-6"
-OPUS_MODEL   = "claude-opus-4-6"
+OPUS_MODEL   = "claude-opus-4-7"   # upgraded from 4.6 — 13% better reasoning, stronger finance
 
 _SCREEN_SYSTEM = """You are a trading signal screener for the Alpha-Omega AI system.
 Review the conviction data and return ONLY a valid JSON object — no markdown, no explanation.

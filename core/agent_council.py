@@ -20,7 +20,7 @@ from typing import Dict, Any, Optional
 logger = logging.getLogger(__name__)
 
 SONNET_MODEL = "claude-sonnet-4-6"
-OPUS_MODEL   = "claude-opus-4-6"
+OPUS_MODEL   = "claude-opus-4-7"   # upgraded from 4.6
 
 # ── System Prompts ────────────────────────────────────────────────────────────
 
