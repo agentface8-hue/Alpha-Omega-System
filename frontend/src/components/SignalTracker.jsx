@@ -485,7 +485,7 @@ const SLHistoryPanel = ({ signal, entryTime, onClose }) => {
 };
 
 // ================================================
-const SignalTracker = () => {
+const SignalTracker = ({ compact = false }) => {
   const [data,             setData]             = useState(null);
   const [loading,          setLoading]          = useState(false);
   const [refreshing,       setRefreshing]       = useState(false);
@@ -781,23 +781,23 @@ const SignalTracker = () => {
       </div>
 
       {/* Stats */}
-      <div style={{ display:"flex", gap:10, marginBottom:12, flexWrap:"wrap" }}>
-        <KSC label="ACTIVE"        val={active.length}                   color={KC.blue}   minWidth={110} value={active.length} />
-        <KSC label="WIN RATE"      value={`${stats.win_rate||0}%`}       color={(stats.win_rate||0)>=50?KC.green:KC.red} minWidth={110} />
-        <KSC label="AVG P&L"       value={`${stats.avg_pnl||0}%`}        color={pnlColor(stats.avg_pnl||0)} minWidth={110} />
-        <KSC label="PROFIT FACTOR" value={stats.profit_factor||0}         color={(stats.profit_factor||0)>=1.5?KC.green:(stats.profit_factor||0)>=1?KC.yellow:KC.red} sub="> 1.5 = strong" minWidth={130} />
-        <KSC label="WINS"          value={stats.wins||0}                  color={KC.green}  minWidth={90} />
-        <KSC label="LOSSES"        value={stats.losses||0}                color={KC.red}    minWidth={90} />
-        <KSC label="TP1 HIT%"      value={`${stats.tp1_hit_rate||0}%`}   color={KC.yellow} minWidth={100} />
-        <KSC label="AVG MAE"       value={`${stats.avg_mae||0}%`}         color={KC.red}    sub="max drawdown" minWidth={110} />
-        <KSC label="AVG MFE"       value={`${stats.avg_mfe||0}%`}         color={KC.green}  sub="max runup"   minWidth={110} />
-        <KSC label="GAP TRADES"    value={stats.gap_affected_trades||0}   color={KC.orange} sub={`slip ${stats.total_gap_slippage||0}%`} minWidth={110} />
+      <div style={{ display:"flex", gap: compact ? 6 : 10, marginBottom: compact ? 8 : 12, flexWrap:"wrap" }}>
+        <KSC label="ACTIVE"        value={active.length}                   color={KC.blue}   compact={compact} />
+        <KSC label="WIN RATE"      value={`${stats.win_rate||0}%`}         color={(stats.win_rate||0)>=50?KC.green:KC.red} compact={compact} />
+        <KSC label="AVG P&L"       value={`${stats.avg_pnl||0}%`}          color={pnlColor(stats.avg_pnl||0)} compact={compact} />
+        <KSC label="PROFIT FACTOR" value={stats.profit_factor||0}           color={(stats.profit_factor||0)>=1.5?KC.green:(stats.profit_factor||0)>=1?KC.yellow:KC.red} sub="> 1.5 = strong" compact={compact} />
+        <KSC label="WINS"          value={stats.wins||0}                    color={KC.green}  compact={compact} />
+        <KSC label="LOSSES"        value={stats.losses||0}                  color={KC.red}    compact={compact} />
+        <KSC label="TP1 HIT%"      value={`${stats.tp1_hit_rate||0}%`}     color={KC.yellow} compact={compact} />
+        <KSC label="AVG MAE"       value={`${stats.avg_mae||0}%`}           color={KC.red}    sub="max drawdown" compact={compact} />
+        <KSC label="AVG MFE"       value={`${stats.avg_mfe||0}%`}           color={KC.green}  sub="max runup"   compact={compact} />
+        <KSC label="GAP TRADES"    value={stats.gap_affected_trades||0}     color={KC.orange} sub={`slip ${stats.total_gap_slippage||0}%`} compact={compact} />
       </div>
 
       {(stats.avg_conviction_winners>0||stats.avg_conviction_losers>0) && (
-        <div style={{ display:"flex", gap:10, marginBottom:16 }}>
-          <KSC label="AVG CONVICTION (WINNERS)" value={`${stats.avg_conviction_winners||0}%`} color={KC.green} accent={KC.green} />
-          <KSC label="AVG CONVICTION (LOSERS)"  value={`${stats.avg_conviction_losers||0}%`}  color={KC.red}   accent={KC.red}   />
+        <div style={{ display:"flex", gap: compact ? 6 : 10, marginBottom: compact ? 8 : 16 }}>
+          <KSC label="AVG CONVICTION (WINNERS)" value={`${stats.avg_conviction_winners||0}%`} color={KC.green} accent={KC.green} compact={compact} />
+          <KSC label="AVG CONVICTION (LOSERS)"  value={`${stats.avg_conviction_losers||0}%`}  color={KC.red}   accent={KC.red}   compact={compact} />
         </div>
       )}
 

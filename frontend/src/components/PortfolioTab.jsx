@@ -627,7 +627,7 @@ const ClosedRow = ({ pos }) => {
   );
 };
 
-export default function PortfolioTab() {
+export default function PortfolioTab({ compact = false }) {
   const [data, setData]             = useState(null);
   const [loading, setLoading]       = useState(false);
   const [checking, setChecking]     = useState(false);
@@ -789,10 +789,11 @@ export default function PortfolioTab() {
   const totalPnl = s.total_pnl || 0;
 
   return (
-    <div style={{ padding: '28px 24px', fontFamily:"'Inter',sans-serif", color:'#e0e0e0', maxWidth:1200, margin:'0 auto' }}>
+    <div style={{ padding: compact ? '10px 12px' : '28px 24px', fontFamily:"'Inter',sans-serif", color:'#e0e0e0', maxWidth:1200, margin:'0 auto' }}>
       <style>{`@keyframes p-pulse { 0%,100%{opacity:1} 50%{opacity:0.45} }`}</style>
 
-      {/* ── Header ── */}
+      {/* ── Header — hidden in compact/grid mode ── */}
+      {!compact && (
       <div style={{ display:'flex', alignItems:'center', justifyContent:'space-between', marginBottom:24 }}>
         <div style={{ display:'flex', alignItems:'center', gap:12 }}>
           <div style={{ background:'linear-gradient(135deg,#00d4ff22,#0088cc22)', border:'1px solid #00d4ff33', borderRadius:10, padding:10, display:'flex' }}>
@@ -819,6 +820,7 @@ export default function PortfolioTab() {
           </button>
         </div>
       </div>
+      )} {/* end !compact header */}
 
       {error && (
         <div style={{ background:'rgba(255,68,102,0.08)', border:'1px solid #ff446633', borderRadius:8, padding:'10px 16px', marginBottom:16, color:'#ff8899', fontSize:12, display:'flex', justifyContent:'space-between', alignItems:'center' }}>
@@ -827,14 +829,14 @@ export default function PortfolioTab() {
       )}
 
       {/* ── Stats row ── */}
-      <div style={{ display:'flex', gap:10, marginBottom:24, flexWrap:'wrap' }}>
-        <KStatCard label='TOTAL VALUE'   value={usd(s.total_value)}  color='#00d4ff' accent='#00d4ff' />
-        <KStatCard label='CASH'          value={usd(s.cash)}          color='#7ee8ff' sub={`${slots} slot${slots!==1?'s':''} open`} />
-        <KStatCard label='TOTAL P&L'     value={`${totalPnl>=0?'+':''}${fmt(totalPnl,0)}`} color={clr(totalPnl)} sub={pct(s.total_pnl_pct||0)} accent={clr(totalPnl)} />
-        <KStatCard label='UNREALIZED'    value={`${(s.total_unrealized_pnl||0)>=0?'+':''}${fmt(s.total_unrealized_pnl||0,0)}`} color={clr(s.total_unrealized_pnl||0)} />
-        <KStatCard label='REALIZED'      value={`${(s.total_realized_pnl||0)>=0?'+':''}${fmt(s.total_realized_pnl||0,0)}`} color={clr(s.total_realized_pnl||0)} />
-        <KStatCard label='OPEN'          value={s.open_count||0}      sub='positions' color='#fbbf24' />
-        <KStatCard label='WIN RATE'      value={`${s.win_rate||0}%`}  sub={`${s.total_closed||0} closed`} color={s.win_rate>=60?KC.green:s.win_rate>=40?KC.yellow:KC.red} />
+      <div style={{ display:'flex', gap: compact ? 6 : 10, marginBottom: compact ? 10 : 24, flexWrap:'wrap' }}>
+        <KStatCard label='TOTAL VALUE'   value={usd(s.total_value)}  color='#00d4ff' accent='#00d4ff' compact={compact} />
+        <KStatCard label='CASH'          value={usd(s.cash)}          color='#7ee8ff' sub={`${slots} slot${slots!==1?'s':''} open`} compact={compact} />
+        <KStatCard label='TOTAL P&L'     value={`${totalPnl>=0?'+':''}${fmt(totalPnl,0)}`} color={clr(totalPnl)} sub={pct(s.total_pnl_pct||0)} accent={clr(totalPnl)} compact={compact} />
+        <KStatCard label='UNREALIZED'    value={`${(s.total_unrealized_pnl||0)>=0?'+':''}${fmt(s.total_unrealized_pnl||0,0)}`} color={clr(s.total_unrealized_pnl||0)} compact={compact} />
+        <KStatCard label='REALIZED'      value={`${(s.total_realized_pnl||0)>=0?'+':''}${fmt(s.total_realized_pnl||0,0)}`} color={clr(s.total_realized_pnl||0)} compact={compact} />
+        <KStatCard label='OPEN'          value={s.open_count||0}      sub='positions' color='#fbbf24' compact={compact} />
+        <KStatCard label='WIN RATE'      value={`${s.win_rate||0}%`}  sub={`${s.total_closed||0} closed`} color={s.win_rate>=60?KC.green:s.win_rate>=40?KC.yellow:KC.red} compact={compact} />
       </div>
       <div style={{ background:'#0a1018', border:'1px solid #1a2535', borderRadius:10, padding:16, marginBottom:20 }}>
         <div style={{ display:'flex', justifyContent:'space-between', alignItems:'center', marginBottom:8 }}>

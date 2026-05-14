@@ -26,10 +26,10 @@ const PANELS = [
 ];
 
 // ── Panel renderer ────────────────────────────────────────────────────────────
-const PanelContent = ({ id, autoRun }) => {
-  if (id === 'portfolio')  return <PortfolioTab />;
-  if (id === 'tracker')    return <SignalTracker />;
-  if (id === 'scan')       return <ScanDashboard autoScan={autoRun} />;
+const PanelContent = ({ id, autoRun, compact = false }) => {
+  if (id === 'portfolio')  return <PortfolioTab compact={compact} />;
+  if (id === 'tracker')    return <SignalTracker compact={compact} />;
+  if (id === 'scan')       return <ScanDashboard autoScan={autoRun} compact={compact} />;
   if (id === 'dreams')     return <DreamLog />;
   return null;
 };
@@ -159,7 +159,7 @@ const App = () => {
           </div>
           {/* Scrollable content */}
           <div style={{ flex:1, overflow:'auto', minHeight:0 }}>
-            <PanelContent id={panel.id} autoRun={true} />
+            <PanelContent id={panel.id} autoRun={true} compact={true} />
           </div>
         </div>
       ))}

@@ -23,23 +23,25 @@ export const C = {
 };
 
 // ── StatCard ──────────────────────────────────────────────────────────────────
-export const StatCard = ({ label, value, sub, color, accent, minWidth = 130 }) => (
+export const StatCard = ({ label, value, sub, color, accent, minWidth = 130, compact = false }) => (
   <div style={{
     background: C.card,
     border: `1px solid ${accent ? accent + '30' : C.border}`,
     borderTop: accent ? `2px solid ${accent}` : `1px solid ${C.border}`,
-    borderRadius: 10,
-    padding: '16px 18px',
+    borderRadius: compact ? 6 : 10,
+    padding: compact ? '7px 10px' : '16px 18px',
     flex: 1,
-    minWidth,
+    minWidth: compact ? 72 : minWidth,
   }}>
-    <div style={{ color: C.textFaint, fontSize: 9, letterSpacing: 2, fontFamily: 'sans-serif', textTransform: 'uppercase', marginBottom: 8 }}>
+    <div style={{ color: C.textFaint, fontSize: compact ? 7 : 9, letterSpacing: compact ? 1 : 2,
+      fontFamily: 'sans-serif', textTransform: 'uppercase', marginBottom: compact ? 3 : 8 }}>
       {label}
     </div>
-    <div style={{ color: color || C.text, fontSize: 24, fontWeight: 'bold', fontFamily: 'monospace', lineHeight: 1.1 }}>
+    <div style={{ color: color || C.text, fontSize: compact ? 15 : 24,
+      fontWeight: 'bold', fontFamily: 'monospace', lineHeight: 1.1 }}>
       {value}
     </div>
-    {sub && (
+    {sub && !compact && (
       <div style={{ color: C.textFaint, fontSize: 9, fontFamily: 'sans-serif', marginTop: 5 }}>{sub}</div>
     )}
   </div>
