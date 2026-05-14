@@ -1,5 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { Activity, RefreshCw, X, TrendingUp, TrendingDown, Target, AlertTriangle, Clock, BarChart3, Shield, Zap } from 'lucide-react';
+import { C as KC, StatCard as KSC } from './UIKit';
 
 const pnlColor   = v => v > 0 ? "#00ff88" : v < 0 ? "#ff4466" : "#94a3b8";
 const statusColor = s => {
@@ -780,46 +781,23 @@ const SignalTracker = () => {
       </div>
 
       {/* Stats */}
-      <div style={{ display:"grid", gridTemplateColumns:"repeat(4,1fr)", gap:8, marginBottom:12 }}>
-        {[
-          { label:"ACTIVE",        val:active.length,            color:"#00d4ff" },
-          { label:"WIN RATE",      val:`${stats.win_rate||0}%`,  color:(stats.win_rate||0)>=50?"#00ff88":"#ff4466" },
-          { label:"AVG P&L",       val:`${stats.avg_pnl||0}%`,   color:pnlColor(stats.avg_pnl||0) },
-          { label:"PROFIT FACTOR", val:stats.profit_factor||0,   color:(stats.profit_factor||0)>=1.5?"#00ff88":(stats.profit_factor||0)>=1?"#fbbf24":"#ff4466" },
-        ].map(c => (
-          <div key={c.label} style={{ background:"#0a0f18", border:"1px solid #1a2535", borderRadius:8, padding:10, textAlign:"center" }}>
-            <div style={{ fontSize:8, color:"#2a4a5a", letterSpacing:1.5, fontFamily:"sans-serif", marginBottom:4 }}>{c.label}</div>
-            <div style={{ fontSize:18, fontWeight:"bold", color:c.color }}>{c.val}</div>
-          </div>
-        ))}
-      </div>
-      <div style={{ display:"grid", gridTemplateColumns:"repeat(6,1fr)", gap:8, marginBottom:20 }}>
-        {[
-          { label:"WINS",       val:stats.wins||0,                   color:"#00ff88" },
-          { label:"LOSSES",     val:stats.losses||0,                 color:"#ff4466" },
-          { label:"TP1 HIT%",   val:`${stats.tp1_hit_rate||0}%`,     color:"#fbbf24" },
-          { label:"AVG MAE",    val:`${stats.avg_mae||0}%`,          color:"#ff4466", sub:"max drawdown" },
-          { label:"AVG MFE",    val:`${stats.avg_mfe||0}%`,          color:"#00ff88", sub:"max runup" },
-          { label:"GAP TRADES", val:stats.gap_affected_trades||0,    color:"#f97316", sub:`slip: ${stats.total_gap_slippage||0}%` },
-        ].map(c => (
-          <div key={c.label} style={{ background:"#0a0f18", border:"1px solid #1a2535", borderRadius:8, padding:10, textAlign:"center" }}>
-            <div style={{ fontSize:8, color:"#2a4a5a", letterSpacing:1.5, fontFamily:"sans-serif", marginBottom:4 }}>{c.label}</div>
-            <div style={{ fontSize:16, fontWeight:"bold", color:c.color }}>{c.val}</div>
-            {c.sub && <div style={{ fontSize:8, color:"#2a4a5a", fontFamily:"sans-serif", marginTop:2 }}>{c.sub}</div>}
-          </div>
-        ))}
+      <div style={{ display:"flex", gap:10, marginBottom:12, flexWrap:"wrap" }}>
+        <KSC label="ACTIVE"        val={active.length}                   color={KC.blue}   minWidth={110} value={active.length} />
+        <KSC label="WIN RATE"      value={`${stats.win_rate||0}%`}       color={(stats.win_rate||0)>=50?KC.green:KC.red} minWidth={110} />
+        <KSC label="AVG P&L"       value={`${stats.avg_pnl||0}%`}        color={pnlColor(stats.avg_pnl||0)} minWidth={110} />
+        <KSC label="PROFIT FACTOR" value={stats.profit_factor||0}         color={(stats.profit_factor||0)>=1.5?KC.green:(stats.profit_factor||0)>=1?KC.yellow:KC.red} sub="> 1.5 = strong" minWidth={130} />
+        <KSC label="WINS"          value={stats.wins||0}                  color={KC.green}  minWidth={90} />
+        <KSC label="LOSSES"        value={stats.losses||0}                color={KC.red}    minWidth={90} />
+        <KSC label="TP1 HIT%"      value={`${stats.tp1_hit_rate||0}%`}   color={KC.yellow} minWidth={100} />
+        <KSC label="AVG MAE"       value={`${stats.avg_mae||0}%`}         color={KC.red}    sub="max drawdown" minWidth={110} />
+        <KSC label="AVG MFE"       value={`${stats.avg_mfe||0}%`}         color={KC.green}  sub="max runup"   minWidth={110} />
+        <KSC label="GAP TRADES"    value={stats.gap_affected_trades||0}   color={KC.orange} sub={`slip ${stats.total_gap_slippage||0}%`} minWidth={110} />
       </div>
 
       {(stats.avg_conviction_winners>0||stats.avg_conviction_losers>0) && (
-        <div style={{ display:"flex", gap:12, marginBottom:16 }}>
-          <div style={{ flex:1, background:"rgba(0,255,136,0.05)", border:"1px solid #00ff8822", borderRadius:8, padding:"8px 12px", textAlign:"center" }}>
-            <div style={{ fontSize:8, color:"#2a4a5a", fontFamily:"sans-serif" }}>AVG CONVICTION (WINNERS)</div>
-            <div style={{ fontSize:16, fontWeight:"bold", color:"#00ff88" }}>{stats.avg_conviction_winners||0}%</div>
-          </div>
-          <div style={{ flex:1, background:"rgba(255,68,102,0.05)", border:"1px solid #ff446622", borderRadius:8, padding:"8px 12px", textAlign:"center" }}>
-            <div style={{ fontSize:8, color:"#2a4a5a", fontFamily:"sans-serif" }}>AVG CONVICTION (LOSERS)</div>
-            <div style={{ fontSize:16, fontWeight:"bold", color:"#ff4466" }}>{stats.avg_conviction_losers||0}%</div>
-          </div>
+        <div style={{ display:"flex", gap:10, marginBottom:16 }}>
+          <KSC label="AVG CONVICTION (WINNERS)" value={`${stats.avg_conviction_winners||0}%`} color={KC.green} accent={KC.green} />
+          <KSC label="AVG CONVICTION (LOSERS)"  value={`${stats.avg_conviction_losers||0}%`}  color={KC.red}   accent={KC.red}   />
         </div>
       )}
 

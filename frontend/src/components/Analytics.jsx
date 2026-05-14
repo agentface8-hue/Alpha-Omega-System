@@ -1,34 +1,13 @@
 import { useState, useEffect } from 'react';
-import { TrendingUp, TrendingDown, Target, Activity, BarChart3, AlertTriangle } from 'lucide-react';
+import { Activity, BarChart3, AlertTriangle, TrendingUp } from 'lucide-react';
+import { C, StatCard, SectionCard, PageHeader, BarRow, Badge, EmptyState, LoadingSpinner } from './UIKit';
 
 const API = import.meta.env.VITE_API_URL || 'http://127.0.0.1:8000';
 
-const StatBox = ({ label, value, color, sub }) => (
-  <div style={{ background:'#0a0f18', border:'1px solid #1a2535', borderRadius:8, padding:'12px 16px', flex:1, minWidth:120 }}>
-    <div style={{ color:'#3a5060', fontSize:9, letterSpacing:1.5, fontFamily:'sans-serif', marginBottom:4 }}>{label}</div>
-    <div style={{ color:color||'#c9d8e8', fontSize:22, fontWeight:'bold', fontFamily:'monospace' }}>{value}</div>
-    {sub && <div style={{ color:'#8899aa', fontSize:9, fontFamily:'sans-serif', marginTop:2 }}>{sub}</div>}
-  </div>
-);
-
-const BarRow = ({ label, pct, count, color }) => (
-  <div style={{ marginBottom:8 }}>
-    <div style={{ display:'flex', justifyContent:'space-between', marginBottom:3 }}>
-      <span style={{ color:'#94a3b8', fontSize:10, fontFamily:'sans-serif' }}>{label}</span>
-      <span style={{ color:color||'#c9d8e8', fontSize:10, fontFamily:'monospace', fontWeight:'bold' }}>
-        {pct}% <span style={{ color:'#8899aa', fontWeight:'normal' }}>({count} trades)</span>
-      </span>
-    </div>
-    <div style={{ background:'#1a2535', borderRadius:3, height:6, overflow:'hidden' }}>
-      <div style={{ background:color||'#00d4ff', width:`${Math.min(pct,100)}%`, height:'100%', borderRadius:3, transition:'width 0.5s' }} />
-    </div>
-  </div>
-);
-
 const Analytics = () => {
-  const [data, setData]     = useState(null);
-  const [risk, setRisk]     = useState(null);
-  const [source, setSource] = useState(null);
+  const [data,    setData]    = useState(null);
+  const [risk,    setRisk]    = useState(null);
+  const [source,  setSource]  = useState(null);
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
@@ -49,122 +28,125 @@ const Analytics = () => {
     load();
   }, []);
 
-  const riskColor = risk?.risk_level === 'HIGH' ? '#ff4466' : risk?.risk_level === 'MEDIUM' ? '#fbbf24' : '#00ff88';
+  const riskColor = risk?.risk_level === 'HIGH' ? C.red : risk?.risk_level === 'MEDIUM' ? C.yellow : C.green;
 
   return (
-    <div style={{ padding:'24px 20px', maxWidth:1040, margin:'0 auto', fontFamily:"'Courier New',monospace" }}>
+    <div style={{ padding: '28px 28px', maxWidth: 1060, margin: '0 auto' }}>
 
-      {/* ── Header ── */}
-      <div style={{ display:'flex', alignItems:'center', justifyContent:'space-between', marginBottom:20 }}>
-        <div style={{ display:'flex', alignItems:'center', gap:10 }}>
-          <Activity size={16} color="#00d4ff" />
-          <span style={{ color:'#00d4ff', fontSize:13, fontWeight:'bold', letterSpacing:2 }}>INTELLIGENCE DASHBOARD</span>
-          <span style={{ color:'#2a4a5a', fontSize:9, fontFamily:'sans-serif', letterSpacing:1 }}>LEARNING LOOP + RISK</span>
-        </div>
-        {source && (
-          <div style={{ background: source.realtime ? '#00ff8820' : '#fbbf2420',
-            border:`1px solid ${source.realtime ? '#00ff88' : '#fbbf24'}`,
-            borderRadius:4, padding:'3px 10px', fontSize:9, fontFamily:'sans-serif',
-            color: source.realtime ? '#00ff88' : '#fbbf24', fontWeight:'bold', letterSpacing:1 }}>
-            {source.label}
-          </div>
+      <PageHeader
+        icon={<Activity size={18} />}
+        title="ANALYTICS"
+        subtitle="LEARNING LOOP · RISK · PERFORMANCE"
+        right={source && (
+          <Badge
+            label={source.label}
+            color={source.realtime ? C.green : C.yellow}
+            size="lg"
+          />
         )}
-      </div>
+      />
 
-      {loading && <div style={{ color:'#8899aa', textAlign:'center', padding:40, fontFamily:'sans-serif' }}>Loading analytics...</div>}
+      {loading && <LoadingSpinner text="Loading analytics..." />}
 
       {!loading && (
-        <div style={{ display:'flex', flexDirection:'column', gap:20 }}>
+        <div style={{ display: 'flex', flexDirection: 'column', gap: 20 }}>
 
-          {/* ── Portfolio Risk ── */}
+          {/* Portfolio Risk */}
           {risk && (
-            <div style={{ background:'#080c14', border:`1px solid ${riskColor}33`, borderRadius:10, padding:'16px 20px' }}>
-              <div style={{ display:'flex', alignItems:'center', justifyContent:'space-between', marginBottom:14 }}>
-                <div style={{ display:'flex', alignItems:'center', gap:8 }}>
-                  <AlertTriangle size={13} color={riskColor} />
-                  <span style={{ color:riskColor, fontSize:11, fontWeight:'bold', letterSpacing:2 }}>PORTFOLIO RISK</span>
-                </div>
-                <div style={{ background:`${riskColor}20`, border:`1px solid ${riskColor}44`, borderRadius:4,
-                  padding:'2px 12px', color:riskColor, fontSize:11, fontWeight:'bold', letterSpacing:2 }}>
-                  {risk.risk_level}
-                </div>
-              </div>
-
-              <div style={{ display:'flex', gap:12, flexWrap:'wrap', marginBottom:14 }}>
-                <StatBox label="OPEN SIGNALS" value={risk.signals} color="#c9d8e8" />
-                <StatBox label="WORST CASE" value={`${risk.worst_case_loss_pct}%`}
-                  color={risk.worst_case_loss_pct < -2 ? '#ff4466' : '#fbbf24'} sub="if all SLs hit" />
-                {Object.entries(risk.sector_exposure||{}).map(([sec, cnt]) => (
-                  <StatBox key={sec} label={sec.toUpperCase()} value={cnt}
-                    color={cnt >= 3 ? '#ff4466' : cnt === 2 ? '#fbbf24' : '#00ff88'} sub="signals" />
+            <SectionCard
+              title="PORTFOLIO RISK"
+              subtitle={`${risk.signals || 0} open signals · worst-case ${risk.worst_case_loss_pct || 0}% drawdown`}
+              accent={riskColor}
+              action={<Badge label={risk.risk_level} color={riskColor} size="lg" />}
+            >
+              <div style={{ display: 'flex', gap: 12, flexWrap: 'wrap', marginBottom: risk.warnings?.length ? 16 : 0 }}>
+                <StatCard label="Open Signals"  value={risk.signals}     color={C.text}  minWidth={110} />
+                <StatCard label="Worst Case"    value={`${risk.worst_case_loss_pct}%`}
+                  color={risk.worst_case_loss_pct < -2 ? C.red : C.yellow}
+                  sub="if all SLs hit" minWidth={120} />
+                {Object.entries(risk.sector_exposure || {}).map(([sec, cnt]) => (
+                  <StatCard key={sec} label={sec} value={cnt}
+                    color={cnt >= 3 ? C.red : cnt === 2 ? C.yellow : C.green}
+                    sub="signals" minWidth={100} />
                 ))}
               </div>
 
               {risk.warnings?.length > 0 && (
-                <div style={{ display:'flex', flexDirection:'column', gap:5 }}>
+                <div style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
                   {risk.warnings.map((w, i) => (
-                    <div key={i} style={{ background:'#1a0a0a', border:'1px solid #ff446633', borderRadius:4,
-                      padding:'6px 12px', color:'#ff8899', fontSize:10, fontFamily:'sans-serif' }}>{w}</div>
+                    <div key={i} style={{
+                      background: '#1a0a0a', border: `1px solid ${C.red}25`,
+                      borderRadius: 6, padding: '8px 14px',
+                      color: '#ff8899', fontSize: 10, fontFamily: 'sans-serif',
+                      display: 'flex', alignItems: 'center', gap: 8,
+                    }}>
+                      <AlertTriangle size={11} color={C.red} />
+                      {w}
+                    </div>
                   ))}
                 </div>
               )}
-            </div>
+            </SectionCard>
           )}
 
-          {/* ── Performance Stats ── */}
+          {/* Overall Performance */}
           {data?.total > 0 ? (
             <>
-              <div style={{ background:'#080c14', border:'1px solid #1a2535', borderRadius:10, padding:'16px 20px' }}>
-                <div style={{ color:'#2a4a5a', fontSize:9, letterSpacing:2, fontFamily:'sans-serif', marginBottom:14 }}>OVERALL PERFORMANCE</div>
-                <div style={{ display:'flex', gap:10, flexWrap:'wrap' }}>
-                  <StatBox label="TOTAL TRADES"   value={data.total}          color="#c9d8e8" />
-                  <StatBox label="WIN RATE"        value={`${data.win_rate}%`} color={data.win_rate >= 55 ? '#00ff88' : data.win_rate >= 45 ? '#fbbf24' : '#ff4466'} />
-                  <StatBox label="AVG WIN"         value={`+${data.avg_win_pct}%`}  color="#00ff88" />
-                  <StatBox label="AVG LOSS"        value={`${data.avg_loss_pct}%`}  color="#ff4466" />
-                  <StatBox label="PROFIT FACTOR"   value={data.profit_factor}  color={data.profit_factor >= 1.5 ? '#00ff88' : data.profit_factor >= 1 ? '#fbbf24' : '#ff4466'} sub=">1.5 = excellent" />
-                  <StatBox label="TP1 HIT RATE"    value={`${data.tp1_hit_rate}%`}  color="#00d4ff" />
-                  <StatBox label="STOPPED OUT"     value={`${data.stopped_out_rate}%`} color="#ff4466" />
-                  <StatBox label="AVG MFE"         value={`+${data.avg_mfe_pct}%`} color="#00ff88" sub="best unrealized" />
-                  <StatBox label="AVG MAE"         value={`${data.avg_mae_pct}%`}  color="#ff4466" sub="worst drawdown" />
+              <SectionCard title="PERFORMANCE" subtitle={`${data.total} closed trades`} accent={C.blue}>
+                <div style={{ display: 'flex', gap: 12, flexWrap: 'wrap' }}>
+                  <StatCard label="Total Trades"   value={data.total}              color={C.text}   minWidth={110} />
+                  <StatCard label="Win Rate"        value={`${data.win_rate}%`}
+                    color={data.win_rate >= 55 ? C.green : data.win_rate >= 45 ? C.yellow : C.red}
+                    accent={data.win_rate >= 55 ? C.green : data.win_rate >= 45 ? C.yellow : C.red}
+                    minWidth={110} />
+                  <StatCard label="Profit Factor"  value={data.profit_factor}
+                    color={data.profit_factor >= 1.5 ? C.green : data.profit_factor >= 1 ? C.yellow : C.red}
+                    sub="> 1.5 = strong" minWidth={120} />
+                  <StatCard label="Avg Win"         value={`+${data.avg_win_pct}%`}  color={C.green}  minWidth={110} />
+                  <StatCard label="Avg Loss"         value={`${data.avg_loss_pct}%`}  color={C.red}    minWidth={110} />
+                  <StatCard label="TP1 Hit Rate"     value={`${data.tp1_hit_rate}%`}  color={C.blue}   minWidth={110} />
+                  <StatCard label="Stopped Out"      value={`${data.stopped_out_rate}%`} color={C.red} minWidth={110} />
+                  <StatCard label="Avg MFE"          value={`+${data.avg_mfe_pct}%`}  color={C.green}  sub="best unrealized" minWidth={110} />
+                  <StatCard label="Avg MAE"          value={`${data.avg_mae_pct}%`}   color={C.red}    sub="worst drawdown"  minWidth={110} />
                 </div>
-              </div>
+              </SectionCard>
 
-              {/* Conviction breakdown */}
-              {Object.keys(data.conviction_breakdown||{}).length > 0 && (
-                <div style={{ background:'#080c14', border:'1px solid #1a2535', borderRadius:10, padding:'16px 20px' }}>
-                  <div style={{ color:'#2a4a5a', fontSize:9, letterSpacing:2, fontFamily:'sans-serif', marginBottom:14 }}>
-                    WIN RATE BY CONVICTION — does higher conviction actually win more?
-                  </div>
+              {Object.keys(data.conviction_breakdown || {}).length > 0 && (
+                <SectionCard title="WIN RATE BY CONVICTION" subtitle="Does higher conviction actually win more?" accent={C.purple}>
                   {Object.entries(data.conviction_breakdown).map(([bucket, d]) => (
-                    <BarRow key={bucket} label={`${bucket}% conviction`}
-                      pct={d.win_rate} count={d.trades}
-                      color={d.win_rate >= 60 ? '#00ff88' : d.win_rate >= 50 ? '#fbbf24' : '#ff4466'} />
+                    <BarRow key={bucket}
+                      label={`${bucket}% conviction`}
+                      pct={d.win_rate}
+                      count={d.trades}
+                      color={d.win_rate >= 60 ? C.green : d.win_rate >= 50 ? C.yellow : C.red}
+                    />
                   ))}
-                </div>
+                </SectionCard>
               )}
 
-              {/* Regime breakdown */}
-              {Object.keys(data.regime_breakdown||{}).length > 0 && (
-                <div style={{ background:'#080c14', border:'1px solid #1a2535', borderRadius:10, padding:'16px 20px' }}>
-                  <div style={{ color:'#2a4a5a', fontSize:9, letterSpacing:2, fontFamily:'sans-serif', marginBottom:14 }}>
-                    WIN RATE BY MARKET REGIME — when does the system perform best?
-                  </div>
+              {Object.keys(data.regime_breakdown || {}).length > 0 && (
+                <SectionCard title="WIN RATE BY REGIME" subtitle="When does the system perform best?" accent={C.yellow}>
                   {Object.entries(data.regime_breakdown).map(([reg, d]) => (
-                    <BarRow key={reg} label={reg || 'Unknown'} pct={d.win_rate} count={d.trades}
-                      color={d.win_rate >= 60 ? '#00ff88' : d.win_rate >= 50 ? '#fbbf24' : '#ff4466'} />
+                    <BarRow key={reg}
+                      label={reg || 'Unknown'}
+                      pct={d.win_rate}
+                      count={d.trades}
+                      color={d.win_rate >= 60 ? C.green : d.win_rate >= 50 ? C.yellow : C.red}
+                    />
                   ))}
-                </div>
+                </SectionCard>
               )}
             </>
           ) : (
-            <div style={{ background:'#080c14', border:'1px solid #1a2535', borderRadius:10, padding:32, textAlign:'center' }}>
-              <BarChart3 size={32} color="#1a2535" style={{ margin:'0 auto 12px' }} />
-              <div style={{ color:'#8899aa', fontSize:12, fontFamily:'sans-serif' }}>No closed signals yet</div>
-              <div style={{ color:'#2a4a5a', fontSize:10, fontFamily:'sans-serif', marginTop:6 }}>
-                Run Auto-Pilot to generate signals. The learning loop activates once signals close.
-              </div>
-            </div>
+            <SectionCard title="PERFORMANCE" accent={C.blue}>
+              <EmptyState
+                icon={<BarChart3 size={36} />}
+                title="No closed trades yet"
+                subtitle="Run Auto-Pilot to generate signals. Analytics appear once trades close."
+              />
+            </SectionCard>
           )}
+
         </div>
       )}
     </div>

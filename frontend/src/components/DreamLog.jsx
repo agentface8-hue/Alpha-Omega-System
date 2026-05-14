@@ -1,22 +1,24 @@
 import { useState, useEffect } from 'react';
+import { Moon, TrendingUp, AlertTriangle, Clock } from 'lucide-react';
+import { C, SectionCard, PageHeader, Badge, EmptyState, LoadingSpinner } from './UIKit';
 
 const API = import.meta.env.VITE_API_URL || 'http://127.0.0.1:8000';
 
-const EDGE_COLOR = { HIGH: '#ff4466', MEDIUM: '#fbbf24', LOW: '#4a6a8a' };
-const ACTION_COLOR = { WATCH_CLOSELY: '#00ff88', MONITOR: '#00d4ff', WAIT: '#4a6a8a' };
+const EDGE_COLOR  = { HIGH: C.red,    MEDIUM: C.yellow, LOW: C.textFaint };
+const ACTION_COLOR = { WATCH_CLOSELY: C.green, MONITOR: C.blue, WAIT: C.textFaint };
 
 export default function DreamLog() {
-  const [dreams, setDreams]     = useState([]);
-  const [loading, setLoading]   = useState(true);
-  const [running, setRunning]   = useState(false);
-  const [lastRun, setLastRun]   = useState(null);
+  const [dreams,  setDreams]  = useState([]);
+  const [loading, setLoading] = useState(true);
+  const [running, setRunning] = useState(false);
+  const [lastRun, setLastRun] = useState(null);
 
   const fetchDreams = async () => {
     try {
       const res  = await fetch(`${API}/api/dreams/latest?limit=20`);
       const json = await res.json();
       setDreams(json.dreams || []);
-    } catch (e) { console.error(e); }
+    } catch(e) { console.error(e); }
     setLoading(false);
   };
 
@@ -30,94 +32,120 @@ export default function DreamLog() {
       });
       setLastRun(new Date().toLocaleTimeString());
       setTimeout(fetchDreams, 3000);
-    } catch (e) { console.error(e); }
+    } catch(e) { console.error(e); }
     setRunning(false);
   };
 
   useEffect(() => { fetchDreams(); }, []);
 
-  const card = { background: '#0a0f18', border: '1px solid #1a2535', borderRadius: 12, padding: '20px 24px', marginBottom: 16 };
-
   return (
-    <div style={{ padding: '24px 28px', maxWidth: 900, margin: '0 auto' }}>
+    <div style={{ padding: '28px 28px', maxWidth: 900, margin: '0 auto' }}>
 
-      {/* Header */}
-      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 24 }}>
-        <div>
-          <div style={{ display: 'flex', alignItems: 'center', gap: 10, marginBottom: 4 }}>
-            <span style={{ fontSize: 22 }}>💭</span>
-            <span style={{ fontSize: 18, fontWeight: 'bold', color: '#c084fc', fontFamily: 'monospace', letterSpacing: 2 }}>DREAM LOG</span>
+      <PageHeader
+        icon={<Moon size={18} />}
+        title="DREAM LOG"
+        subtitle="GEMINI BACKGROUND ANALYSIS · RUNS EVERY 4H ON MARKET DAYS"
+        right={
+          <div style={{ display: 'flex', alignItems: 'center', gap: 12 }}>
+            {lastRun && (
+              <span style={{ fontSize: 9, color: C.textFaint, fontFamily: 'sans-serif', display: 'flex', alignItems: 'center', gap: 4 }}>
+                <Clock size={10} /> {lastRun}
+              </span>
+            )}
+            <button onClick={runCycle} disabled={running} style={{
+              background: running ? C.inner : 'rgba(192,132,252,0.12)',
+              border: `1px solid ${running ? C.border : C.purple + '55'}`,
+              color: running ? C.textFaint : C.purple,
+              borderRadius: 6, padding: '8px 20px',
+              fontSize: 11, fontWeight: 'bold', fontFamily: 'sans-serif',
+              cursor: running ? 'not-allowed' : 'pointer', letterSpacing: 1,
+            }}>
+              {running ? '⏳ RUNNING...' : '▶ RUN NOW'}
+            </button>
           </div>
-          <div style={{ fontSize: 10, color: '#4a6a8a', fontFamily: 'sans-serif', letterSpacing: 1 }}>
-            GEMINI BACKGROUND MARKET ANALYSIS · RUNS EVERY 4H ON MARKET DAYS
-          </div>
-        </div>
-        <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
-          {lastRun && <span style={{ fontSize: 9, color: '#4a6a8a', fontFamily: 'sans-serif' }}>Last run: {lastRun}</span>}
-          <button
-            onClick={runCycle}
-            disabled={running}
-            style={{ background: running ? '#1a2535' : 'rgba(192,132,252,0.15)', border: '1px solid #c084fc55', color: running ? '#4a6a8a' : '#c084fc', borderRadius: 6, padding: '8px 18px', fontSize: 11, fontWeight: 'bold', fontFamily: 'sans-serif', cursor: running ? 'not-allowed' : 'pointer', letterSpacing: 1 }}>
-            {running ? '⏳ RUNNING...' : '▶ RUN NOW'}
-          </button>
-        </div>
-      </div>
+        }
+      />
 
-      {/* Dream cards */}
-      {loading ? (
-        <div style={{ color: '#4a6a8a', fontFamily: 'sans-serif', fontSize: 12, textAlign: 'center', padding: 40 }}>Loading dream log...</div>
-      ) : dreams.length === 0 ? (
-        <div style={{ ...card, textAlign: 'center', padding: 40 }}>
-          <div style={{ fontSize: 32, marginBottom: 12 }}>💭</div>
-          <div style={{ color: '#4a6a8a', fontFamily: 'sans-serif', fontSize: 12 }}>No dreams yet. Hit Run Now to trigger the first cycle.</div>
-        </div>
-      ) : (
-        dreams.map((d, i) => {
-          const ec = EDGE_COLOR[d.edge_level] || '#4a6a8a';
-          const ac = ACTION_COLOR[d.action]   || '#4a6a8a';
-          const ts = d.ts ? d.ts.slice(0, 16).replace('T', ' ') + ' UTC' : '';
-          return (
-            <div key={i} style={{ ...card, borderLeft: `3px solid ${ec}` }}>
-              {/* Top row */}
-              <div style={{ display: 'flex', alignItems: 'center', gap: 10, marginBottom: 12 }}>
-                <span style={{ fontSize: 10, fontWeight: 'bold', color: ec, background: ec + '22', padding: '2px 8px', borderRadius: 4, fontFamily: 'sans-serif', letterSpacing: 1 }}>
-                  {d.edge_level}
+      {loading && <LoadingSpinner text="Loading dream log..." />}
+
+      {!loading && dreams.length === 0 && (
+        <SectionCard title="DREAM LOG" accent={C.purple}>
+          <EmptyState
+            icon={<Moon size={36} />}
+            title="No dreams yet"
+            subtitle="Hit Run Now to trigger the first cycle — Gemini will analyse the market and identify the best edge."
+          />
+        </SectionCard>
+      )}
+
+      {!loading && dreams.map((d, i) => {
+        const ec  = EDGE_COLOR[d.edge_level]   || C.textFaint;
+        const ac  = ACTION_COLOR[d.action]      || C.textFaint;
+        const ts  = d.ts ? d.ts.slice(0, 16).replace('T', ' ') + ' UTC' : '';
+        return (
+          <div key={i} style={{
+            background: C.card,
+            border: `1px solid ${C.border}`,
+            borderLeft: `3px solid ${ec}`,
+            borderRadius: 12,
+            padding: '18px 22px',
+            marginBottom: 14,
+          }}>
+            {/* Top row */}
+            <div style={{ display: 'flex', alignItems: 'center', gap: 10, marginBottom: 12, flexWrap: 'wrap' }}>
+              <Badge label={d.edge_level} color={ec} size="lg" />
+              {d.top_ticker && (
+                <span style={{ fontSize: 15, fontWeight: 'bold', color: C.blue, fontFamily: 'monospace' }}>
+                  {d.top_ticker}
                 </span>
-                {d.top_ticker && (
-                  <span style={{ fontSize: 14, fontWeight: 'bold', color: '#00d4ff', fontFamily: 'monospace' }}>
-                    {d.top_ticker}
-                  </span>
-                )}
-                <span style={{ fontSize: 9, fontWeight: 'bold', color: ac, background: ac + '18', padding: '2px 8px', borderRadius: 4, fontFamily: 'sans-serif' }}>
-                  {d.action}
-                </span>
-                <span style={{ fontSize: 9, color: '#2a4a5a', fontFamily: 'sans-serif', marginLeft: 'auto' }}>{ts}</span>
-              </div>
-
-              {/* Context row */}
-              <div style={{ display: 'flex', gap: 16, marginBottom: 10 }}>
-                {d.regime && <span style={{ fontSize: 9, color: '#8899aa', fontFamily: 'sans-serif' }}>📊 {d.regime}</span>}
-                {d.vix > 0 && <span style={{ fontSize: 9, color: '#8899aa', fontFamily: 'sans-serif' }}>VIX {d.vix}</span>}
-                {d.spy_change !== undefined && <span style={{ fontSize: 9, color: d.spy_change >= 0 ? '#00ff88' : '#ff4466', fontFamily: 'sans-serif' }}>SPY {d.spy_change >= 0 ? '+' : ''}{d.spy_change}%</span>}
-              </div>
-
-              {/* Analysis */}
-              {d.analysis && (
-                <div style={{ fontSize: 11, color: '#c9d8e8', fontFamily: 'sans-serif', lineHeight: 1.6, marginBottom: 10 }}>
-                  {d.analysis}
-                </div>
               )}
+              <Badge label={d.action} color={ac} />
+              <span style={{ fontSize: 9, color: C.textFaint, fontFamily: 'sans-serif', marginLeft: 'auto' }}>{ts}</span>
+            </div>
 
-              {/* Risk */}
-              {d.key_risk && (
-                <div style={{ fontSize: 10, color: '#fbbf24', fontFamily: 'sans-serif', background: '#fbbf2410', border: '1px solid #fbbf2420', borderRadius: 4, padding: '6px 10px' }}>
-                  ⚠️ {d.key_risk}
-                </div>
+            {/* Market context */}
+            <div style={{ display: 'flex', gap: 16, marginBottom: 12, flexWrap: 'wrap' }}>
+              {d.regime && (
+                <span style={{ fontSize: 10, color: C.textDim, fontFamily: 'sans-serif' }}>
+                  📊 {d.regime}
+                </span>
+              )}
+              {d.vix > 0 && (
+                <span style={{ fontSize: 10, color: C.textDim, fontFamily: 'sans-serif' }}>
+                  VIX {d.vix}
+                </span>
+              )}
+              {d.spy_change !== undefined && (
+                <span style={{ fontSize: 10, color: d.spy_change >= 0 ? C.green : C.red, fontFamily: 'sans-serif' }}>
+                  SPY {d.spy_change >= 0 ? '+' : ''}{d.spy_change}%
+                </span>
               )}
             </div>
-          );
-        })
-      )}
+
+            {/* Analysis */}
+            {d.analysis && (
+              <div style={{ fontSize: 12, color: C.text, fontFamily: 'sans-serif', lineHeight: 1.65, marginBottom: 12 }}>
+                {d.analysis}
+              </div>
+            )}
+
+            {/* Risk */}
+            {d.key_risk && (
+              <div style={{
+                background: C.yellow + '0e',
+                border: `1px solid ${C.yellow}22`,
+                borderRadius: 6, padding: '8px 12px',
+                fontSize: 10, color: C.yellow,
+                fontFamily: 'sans-serif',
+                display: 'flex', alignItems: 'flex-start', gap: 7,
+              }}>
+                <AlertTriangle size={11} style={{ marginTop: 1, flexShrink: 0 }} />
+                {d.key_risk}
+              </div>
+            )}
+          </div>
+        );
+      })}
     </div>
   );
 }

@@ -1,5 +1,6 @@
 import React, { useState, useEffect, useCallback } from 'react';
 import { RefreshCw, Zap, RotateCcw, Target, BarChart2, Clock, ChevronDown, ChevronRight, TrendingUp, TrendingDown, AlertTriangle, Shield } from 'lucide-react';
+import { C as KC, StatCard as KStatCard } from './UIKit';
 
 const API = () => import.meta.env.VITE_API_URL || 'http://127.0.0.1:8000';
 const fmt  = (n, d=2) => (n == null ? '—' : Number(n).toFixed(d));
@@ -788,49 +789,53 @@ export default function PortfolioTab() {
   const totalPnl = s.total_pnl || 0;
 
   return (
-    <div style={{ padding:20, fontFamily:"'Inter',sans-serif", color:'#e0e0e0', maxWidth:1200, margin:'0 auto' }}>
+    <div style={{ padding: '28px 24px', fontFamily:"'Inter',sans-serif", color:'#e0e0e0', maxWidth:1200, margin:'0 auto' }}>
       <style>{`@keyframes p-pulse { 0%,100%{opacity:1} 50%{opacity:0.45} }`}</style>
-      <div style={{ display:'flex', alignItems:'center', justifyContent:'space-between', marginBottom:20 }}>
+
+      {/* ── Header ── */}
+      <div style={{ display:'flex', alignItems:'center', justifyContent:'space-between', marginBottom:24 }}>
         <div style={{ display:'flex', alignItems:'center', gap:12 }}>
-          <div style={{ background:'linear-gradient(135deg,#00d4ff,#0088cc)', borderRadius:10, padding:10, display:'flex' }}>
-            <BarChart2 size={22} color='#fff' />
+          <div style={{ background:'linear-gradient(135deg,#00d4ff22,#0088cc22)', border:'1px solid #00d4ff33', borderRadius:10, padding:10, display:'flex' }}>
+            <BarChart2 size={20} color='#00d4ff' />
           </div>
           <div>
-            <div style={{ fontSize:18, fontWeight:'bold', color:'#fff', letterSpacing:1 }}>ACTIVE PORTFOLIO</div>
-            <div style={{ fontSize:11, color:'#8899aa' }}>Paper trading · $25K starting capital · Max {maxPositions} positions · $5,000/trade · $500 risk/trade</div>
+            <div style={{ fontSize:16, fontWeight:'bold', color:'#e0e0e0', letterSpacing:1.5, fontFamily:'monospace' }}>ACTIVE PORTFOLIO</div>
+            <div style={{ fontSize:10, color:KC.textFaint, fontFamily:'sans-serif', marginTop:3 }}>
+              Paper trading · $25K · Max {maxPositions} positions · $5,000/trade · $500 risk
+            </div>
           </div>
         </div>
         <div style={{ display:'flex', gap:8, alignItems:'center' }}>
           <button onClick={() => { setAutoRefresh(a => !a); setCountdown(30); }}
-            style={{ background: autoRefresh ? 'rgba(0,212,255,0.15)' : 'transparent', border:`1px solid ${autoRefresh?'#00d4ff':'#1a2535'}`, borderRadius:6, padding:'6px 12px', color: autoRefresh?'#00d4ff':'#8899aa', fontSize:11, cursor:'pointer' }}>
+            style={{ background: autoRefresh ? 'rgba(0,212,255,0.12)' : 'transparent', border:`1px solid ${autoRefresh?'#00d4ff':'#1a2535'}`, borderRadius:6, padding:'7px 14px', color: autoRefresh?'#00d4ff':'#8899aa', fontSize:11, cursor:'pointer', fontFamily:'monospace' }}>
             {autoRefresh ? `AUTO ${countdown}s` : 'AUTO OFF'}
           </button>
           <button onClick={checkPrices} disabled={checking}
-            style={{ background:'linear-gradient(135deg,#00d4ff,#0066aa)', border:'none', borderRadius:6, padding:'6px 14px', color:'#fff', fontSize:12, fontWeight:'bold', cursor:'pointer', display:'flex', alignItems:'center', gap:5 }}>
-            <RefreshCw size={13} className={checking?'spin':''} /> {checking?'CHECKING...':'CHECK PRICES'}
+            style={{ background:'linear-gradient(135deg,#00d4ff,#0066aa)', border:'none', borderRadius:6, padding:'7px 16px', color:'#fff', fontSize:12, fontWeight:'bold', cursor:'pointer', display:'flex', alignItems:'center', gap:6 }}>
+            <RefreshCw size={13} /> {checking?'CHECKING...':'CHECK PRICES'}
           </button>
-          <button onClick={reset} style={{ background:'transparent', border:'1px solid #ff4466', borderRadius:6, padding:'6px 10px', color:'#ff4466', fontSize:11, cursor:'pointer' }}>
+          <button onClick={reset} title="Reset portfolio" style={{ background:'transparent', border:'1px solid #ff446633', borderRadius:6, padding:'7px 10px', color:'#ff4466', fontSize:11, cursor:'pointer' }}>
             <RotateCcw size={12} />
           </button>
         </div>
       </div>
 
       {error && (
-        <div style={{ background:'rgba(255,68,102,0.1)', border:'1px solid #ff4466', borderRadius:8, padding:10, marginBottom:14, color:'#ff4466', fontSize:12 }}>
-          {error} <span style={{ cursor:'pointer', float:'right' }} onClick={() => setError(null)}>✕</span>
+        <div style={{ background:'rgba(255,68,102,0.08)', border:'1px solid #ff446633', borderRadius:8, padding:'10px 16px', marginBottom:16, color:'#ff8899', fontSize:12, display:'flex', justifyContent:'space-between', alignItems:'center' }}>
+          {error} <span style={{ cursor:'pointer', color:KC.red, fontSize:16 }} onClick={() => setError(null)}>✕</span>
         </div>
       )}
 
-      <div style={{ display:'flex', gap:10, marginBottom:20, flexWrap:'wrap' }}>
-        <StatCard label='TOTAL VALUE'  value={usd(s.total_value)}  color='#00d4ff' />
-        <StatCard label='CASH'         value={usd(s.cash)}          color='#7ee8ff' sub={`${slots} slot${slots!==1?'s':''} open`} />
-        <StatCard label='TOTAL P&L'    value={`${totalPnl>=0?'+':''}${fmt(totalPnl,0)}`} color={clr(totalPnl)} sub={pct(s.total_pnl_pct||0)} />
-        <StatCard label='UNREALIZED'   value={`${(s.total_unrealized_pnl||0)>=0?'+':''}${fmt(s.total_unrealized_pnl||0,0)}`} color={clr(s.total_unrealized_pnl||0)} />
-        <StatCard label='REALIZED'     value={`${(s.total_realized_pnl||0)>=0?'+':''}${fmt(s.total_realized_pnl||0,0)}`} color={clr(s.total_realized_pnl||0)} />
-        <StatCard label='OPEN'         value={s.open_count||0}      sub='positions' color='#fbbf24' />
-        <StatCard label='WIN RATE'     value={`${s.win_rate||0}%`}  sub={`${s.total_closed||0} closed`} color={s.win_rate>=60?'#00ff88':s.win_rate>=40?'#fbbf24':'#ff4466'} />
+      {/* ── Stats row ── */}
+      <div style={{ display:'flex', gap:10, marginBottom:24, flexWrap:'wrap' }}>
+        <KStatCard label='TOTAL VALUE'   value={usd(s.total_value)}  color='#00d4ff' accent='#00d4ff' />
+        <KStatCard label='CASH'          value={usd(s.cash)}          color='#7ee8ff' sub={`${slots} slot${slots!==1?'s':''} open`} />
+        <KStatCard label='TOTAL P&L'     value={`${totalPnl>=0?'+':''}${fmt(totalPnl,0)}`} color={clr(totalPnl)} sub={pct(s.total_pnl_pct||0)} accent={clr(totalPnl)} />
+        <KStatCard label='UNREALIZED'    value={`${(s.total_unrealized_pnl||0)>=0?'+':''}${fmt(s.total_unrealized_pnl||0,0)}`} color={clr(s.total_unrealized_pnl||0)} />
+        <KStatCard label='REALIZED'      value={`${(s.total_realized_pnl||0)>=0?'+':''}${fmt(s.total_realized_pnl||0,0)}`} color={clr(s.total_realized_pnl||0)} />
+        <KStatCard label='OPEN'          value={s.open_count||0}      sub='positions' color='#fbbf24' />
+        <KStatCard label='WIN RATE'      value={`${s.win_rate||0}%`}  sub={`${s.total_closed||0} closed`} color={s.win_rate>=60?KC.green:s.win_rate>=40?KC.yellow:KC.red} />
       </div>
-
       <div style={{ background:'#0a1018', border:'1px solid #1a2535', borderRadius:10, padding:16, marginBottom:20 }}>
         <div style={{ display:'flex', justifyContent:'space-between', alignItems:'center', marginBottom:8 }}>
           <div>
