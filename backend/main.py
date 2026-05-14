@@ -1844,6 +1844,7 @@ async def quick_health():
 
 
 # ── Login tracking ────────────────────────────────────────────────────────────
+from pydantic import BaseModel
 
 class LoginEventRequest(BaseModel):
     username:    str
