@@ -1,139 +1,379 @@
 """
-learning_loop.py — Self-improving calibration from closed signal history.
-Reads closed signals from Supabase, calculates what conviction thresholds
-actually worked, and updates calibration_params.json automatically.
-Runs weekly as a background thread.
+learning_loop.py — Self-improving calibration engine v2.0
+
+Architecture: Actor → Judge → Meta-Judge (inspired by Meta-RL research, 2025)
+
+  Actor    : Every closed trade is a data point
+  Judge    : Analyzes patterns across 5 dimensions after every 5 new closes
+  Meta-Judge: Weekly deep analysis — rewrites calibration_params.json
+
+The 5 dimensions analyzed:
+  1. Conviction brackets     — are 70% signals actually winning 70%?
+  2. Regime performance      — what works in Bull vs Bear vs Choppy?
+  3. Sector win rates        — which sectors are hot/cold right now?
+  4. Advisor accuracy        — is Sonnet's APPROVE/FLAG/VETO call correct?
+  5. DTP effectiveness       — do wider TPs at high conviction actually pay off?
+
+Output: calibration_params.json gets updated with:
+  - conviction_offsets       — per-bracket score adjustments
+  - regime_thresholds        — min conviction per regime
+  - sector_bias              — boost/penalty per sector
+  - advisor_weight           — how much to trust Sonnet veto
+  - dtp_effectiveness        — are TP scale multipliers calibrated?
+
+Triggers:
+  - After every 5 new closed signals (fast loop, lightweight)
+  - Weekly deep analysis (full Opus-powered Meta-Judge)
 """
 import threading
 import time
 import json
 import logging
 from pathlib import Path
-from typing import Dict, List, Any
+from typing import Dict, List, Any, Optional
 from datetime import datetime
+from collections import defaultdict
 
 logger = logging.getLogger(__name__)
 
 CALIBRATION_FILE = Path(__file__).parent.parent / "calibration" / "calibration_params.json"
 CALIBRATION_FILE.parent.mkdir(exist_ok=True)
 
-_INTERVAL = 7 * 24 * 3600   # weekly
-_MIN_SAMPLES = 20            # need at least 20 closed signals to learn
+_FAST_INTERVAL   = 3600        # check every hour if 5+ new closes
+_WEEKLY_INTERVAL = 7 * 24 * 3600
+_MIN_SAMPLES     = 10          # minimum closes to run fast analysis
+_DEEP_MIN        = 25          # minimum for deep weekly analysis
+_last_analyzed_count = 0       # track how many signals we've seen
 
 
-def _load_closed_signals() -> List[Dict]:
-    """Load closed signals — Supabase first, JSON fallback."""
+# ── Data loading ──────────────────────────────────────────────────────────────
+
+def _load_closed() -> List[Dict]:
     try:
         from core.signal_store import load_closed
         return load_closed()
     except Exception as e:
-        logger.error(f"[LEARN] load closed signals: {e}")
+        logger.error(f"[LEARN] load_closed failed: {e}")
         return []
 
 
-def _analyze(signals: List[Dict]) -> Dict[str, Any]:
-    """
-    Crunch closed signals into calibration insights.
-    Returns dict with conviction bracket performance + recommended offsets.
-    """
-    brackets = {
-        "85-100": [], "75-84": [], "65-74": [],
-        "60-64": [], "50-59": [], "40-49": [],
-    }
+def _load_calibration() -> Dict:
+    if CALIBRATION_FILE.exists():
+        try:
+            return json.loads(CALIBRATION_FILE.read_text())
+        except Exception:
+            pass
+    return {}
 
+
+def _save_calibration(params: Dict):
+    params["last_updated"] = datetime.utcnow().isoformat()
+    CALIBRATION_FILE.write_text(json.dumps(params, indent=2))
+
+
+# ── Dimension 1: Conviction bracket performance ───────────────────────────────
+
+def _analyze_conviction(signals: List[Dict]) -> Dict:
+    brackets = {"85-100": [], "75-84": [], "65-74": [], "60-64": [], "50-59": []}
     for s in signals:
         conv = s.get("conviction", 0)
-        status = s.get("status", "")
-        tp1_hit = status in ("TP1_HIT", "TP2_HIT", "TP3_HIT")
-        win     = tp1_hit or s.get("realized_pnl", 0) > 0
-
-        if conv >= 85:   brackets["85-100"].append(win)
+        win  = s.get("realized_pnl", s.get("pnl_pct", 0)) > 0
+        if   conv >= 85: brackets["85-100"].append(win)
         elif conv >= 75: brackets["75-84"].append(win)
         elif conv >= 65: brackets["65-74"].append(win)
         elif conv >= 60: brackets["60-64"].append(win)
         elif conv >= 50: brackets["50-59"].append(win)
-        elif conv >= 40: brackets["40-49"].append(win)
 
-    stats = {}
+    result = {}
     offsets = {}
-
-    for label, results in brackets.items():
-        if not results:
-            stats[label] = None
+    for label, wins in brackets.items():
+        if not wins:
             continue
-        win_rate  = round(sum(results) / len(results) * 100, 1)
-        mid_conv  = (int(label.split("-")[0]) + int(label.split("-")[1])) / 2
-        # If win_rate < mid_conviction - 10 → system is overconfident → negative offset
-        # If win_rate > mid_conviction + 10 → underrated → positive offset
-        offset = round((win_rate - mid_conv) * 0.3, 1)  # dampen to 30%
-        stats[label]   = {"win_rate": win_rate, "samples": len(results), "offset": offset}
+        wr = round(sum(wins) / len(wins) * 100, 1)
+        mid = (int(label.split("-")[0]) + int(label.split("-")[1])) / 2
+        offset = round((wr - mid) * 0.25, 1)  # dampen to 25%
+        result[label]  = {"win_rate": wr, "samples": len(wins), "offset": offset}
         offsets[label] = offset
-
-    return {"bracket_stats": stats, "offsets": offsets}
-
-
-def _apply_calibration(analysis: Dict):
-    """Write updated calibration params to file."""
-    existing = {}
-    if CALIBRATION_FILE.exists():
-        try:
-            existing = json.loads(CALIBRATION_FILE.read_text())
-        except:
-            pass
-
-    existing["conviction_offsets"] = analysis["offsets"]
-    existing["bracket_stats"]      = analysis["bracket_stats"]
-    existing["last_updated"]       = datetime.utcnow().isoformat()
-    existing["sample_count"]       = sum(
-        v["samples"] for v in analysis["bracket_stats"].values() if v
-    )
-
-    CALIBRATION_FILE.write_text(json.dumps(existing, indent=2))
-    logger.info(f"[LEARN] Calibration updated. Offsets: {analysis['offsets']}")
+    return {"stats": result, "offsets": offsets}
 
 
-def run_once() -> Dict:
-    """Run one learning cycle. Called manually or by scheduler."""
-    signals = _load_closed_signals()
+# ── Dimension 2: Regime performance ──────────────────────────────────────────
+
+def _analyze_regime(signals: List[Dict]) -> Dict:
+    regimes = defaultdict(list)
+    for s in signals:
+        regime = (s.get("entry_market_context") or {}).get("regime", s.get("regime", "Unknown"))
+        win    = s.get("realized_pnl", s.get("pnl_pct", 0)) > 0
+        regimes[regime].append(win)
+
+    result = {}
+    thresholds = {}
+    for regime, wins in regimes.items():
+        if len(wins) < 3:
+            continue
+        wr = round(sum(wins) / len(wins) * 100, 1)
+        # If win rate < 40% in a regime → raise minimum conviction threshold
+        if   wr < 40:  thresh = 75
+        elif wr < 50:  thresh = 70
+        elif wr < 60:  thresh = 65
+        else:          thresh = 60
+        result[regime]     = {"win_rate": wr, "samples": len(wins), "min_conviction": thresh}
+        thresholds[regime] = thresh
+    return {"stats": result, "thresholds": thresholds}
+
+
+# ── Dimension 3: Sector win rates ─────────────────────────────────────────────
+
+def _analyze_sectors(signals: List[Dict]) -> Dict:
+    sectors = defaultdict(list)
+    for s in signals:
+        sector = s.get("sector", "Unknown")
+        pnl    = s.get("realized_pnl", s.get("pnl_pct", 0))
+        sectors[sector].append(pnl)
+
+    result = {}
+    bias   = {}
+    for sector, pnls in sectors.items():
+        if len(pnls) < 3:
+            continue
+        wins   = [p for p in pnls if p > 0]
+        wr     = round(len(wins) / len(pnls) * 100, 1)
+        avg_pl = round(sum(pnls) / len(pnls), 2)
+        # Bias: HOT if win_rate > 60% and avg_pnl > 0, COLD if win_rate < 40%
+        b = "HOT" if wr > 60 and avg_pl > 0 else "COLD" if wr < 40 else "NEUTRAL"
+        result[sector] = {"win_rate": wr, "avg_pnl": avg_pl, "samples": len(pnls), "bias": b}
+        bias[sector]   = b
+    return {"stats": result, "bias": bias}
+
+
+# ── Dimension 4: Advisor accuracy ────────────────────────────────────────────
+
+def _analyze_advisor(signals: List[Dict]) -> Dict:
+    correct = wrong = 0
+    veto_saved = veto_wrong = 0
+    for s in signals:
+        verdict = s.get("advisor_verdict", "")
+        win     = s.get("realized_pnl", s.get("pnl_pct", 0)) > 0
+        if verdict == "APPROVE" and win:     correct    += 1
+        elif verdict == "APPROVE" and not win: wrong    += 1
+        elif verdict == "VETO" and not win:  veto_saved += 1
+        elif verdict == "VETO" and win:      veto_wrong += 1
+
+    total = correct + wrong + veto_saved + veto_wrong
+    if total == 0:
+        return {"accuracy_pct": None, "weight": 1.0}
+
+    accuracy = round((correct + veto_saved) / total * 100, 1)
+    # Advisor weight: 1.0 = trust fully, 0.5 = half weight
+    weight = round(min(1.0, max(0.5, accuracy / 100)), 2)
+    return {
+        "accuracy_pct": accuracy,
+        "correct": correct, "wrong": wrong,
+        "veto_saved": veto_saved, "veto_wrong": veto_wrong,
+        "weight": weight,
+    }
+
+
+# ── Dimension 5: DTP effectiveness ───────────────────────────────────────────
+
+def _analyze_dtp(signals: List[Dict]) -> Dict:
+    """Did higher conviction → wider TPs actually produce better outcomes?"""
+    high_conv   = [s for s in signals if s.get("conviction", 0) >= 75]
+    normal_conv = [s for s in signals if 60 <= s.get("conviction", 0) < 75]
+
+    def _avg_pnl(group):
+        pnls = [s.get("realized_pnl", s.get("pnl_pct", 0)) for s in group]
+        return round(sum(pnls) / len(pnls), 2) if pnls else 0
+
+    high_pnl   = _avg_pnl(high_conv)
+    normal_pnl = _avg_pnl(normal_conv)
+
+    # If high_conv trades are NOT outperforming → DTP is too aggressive
+    dtp_working = high_pnl > normal_pnl if (high_conv and normal_conv) else None
+    return {
+        "high_conv_avg_pnl":   high_pnl,
+        "normal_conv_avg_pnl": normal_pnl,
+        "dtp_working":         dtp_working,
+        "high_conv_samples":   len(high_conv),
+        "normal_conv_samples": len(normal_conv),
+    }
+
+
+# ── Fast analysis (every 5 new closes) ───────────────────────────────────────
+
+def run_fast(signals: Optional[List[Dict]] = None) -> Dict:
+    """
+    Lightweight analysis. Runs after every 5 new closed signals.
+    Updates calibration_params.json with conviction + regime data only.
+    """
+    global _last_analyzed_count
+    signals = signals or _load_closed()
     if len(signals) < _MIN_SAMPLES:
-        msg = f"Only {len(signals)} closed signals — need {_MIN_SAMPLES} to learn"
-        logger.info(f"[LEARN] {msg}")
-        return {"status": "insufficient_data", "message": msg, "count": len(signals)}
+        return {"status": "insufficient_data", "count": len(signals), "need": _MIN_SAMPLES}
 
-    analysis = _analyze(signals)
-    _apply_calibration(analysis)
+    conviction_data = _analyze_conviction(signals)
+    regime_data     = _analyze_regime(signals)
+    advisor_data    = _analyze_advisor(signals)
 
-    # Send Telegram summary
+    params = _load_calibration()
+    params["conviction_offsets"]   = conviction_data["offsets"]
+    params["conviction_stats"]     = conviction_data["stats"]
+    params["regime_thresholds"]    = regime_data["thresholds"]
+    params["regime_stats"]         = regime_data["stats"]
+    params["advisor_accuracy"]     = advisor_data
+    params["fast_run_count"]       = params.get("fast_run_count", 0) + 1
+    params["last_fast_run"]        = datetime.utcnow().isoformat()
+    params["signals_analyzed"]     = len(signals)
+    _save_calibration(params)
+
+    _last_analyzed_count = len(signals)
+    logger.info(f"[LEARN] Fast analysis done — {len(signals)} signals, "
+                f"offsets={conviction_data['offsets']}")
+    return {"status": "ok", "type": "fast", "signals": len(signals),
+            "conviction_offsets": conviction_data["offsets"],
+            "regime_thresholds": regime_data["thresholds"]}
+
+
+# ── Deep weekly analysis (Meta-Judge) ────────────────────────────────────────
+
+def run_deep(signals: Optional[List[Dict]] = None) -> Dict:
+    """
+    Full 5-dimension analysis. Runs weekly.
+    Updates all calibration dimensions + sends Telegram summary.
+    """
+    signals = signals or _load_closed()
+    if len(signals) < _MIN_SAMPLES:
+        return {"status": "insufficient_data", "count": len(signals), "need": _MIN_SAMPLES}
+
+    conviction_data = _analyze_conviction(signals)
+    regime_data     = _analyze_regime(signals)
+    sector_data     = _analyze_sectors(signals)
+    advisor_data    = _analyze_advisor(signals)
+    dtp_data        = _analyze_dtp(signals)
+
+    params = _load_calibration()
+    params["conviction_offsets"]   = conviction_data["offsets"]
+    params["conviction_stats"]     = conviction_data["stats"]
+    params["regime_thresholds"]    = regime_data["thresholds"]
+    params["regime_stats"]         = regime_data["stats"]
+    params["sector_bias"]          = sector_data["bias"]
+    params["sector_stats"]         = sector_data["stats"]
+    params["advisor_accuracy"]     = advisor_data
+    params["dtp_effectiveness"]    = dtp_data
+    params["deep_run_count"]       = params.get("deep_run_count", 0) + 1
+    params["last_deep_run"]        = datetime.utcnow().isoformat()
+    params["signals_analyzed"]     = len(signals)
+    _save_calibration(params)
+
+    _send_deep_summary(signals, conviction_data, regime_data,
+                       sector_data, advisor_data, dtp_data)
+
+    logger.info(f"[LEARN] Deep analysis done — {len(signals)} signals analyzed")
+    return {
+        "status":       "ok",
+        "type":         "deep",
+        "signals":      len(signals),
+        "conviction":   conviction_data,
+        "regimes":      regime_data,
+        "sectors":      sector_data,
+        "advisor":      advisor_data,
+        "dtp":          dtp_data,
+    }
+
+
+# ── Telegram summary ──────────────────────────────────────────────────────────
+
+def _send_deep_summary(signals, conviction, regime, sector, advisor, dtp):
     try:
         from core.telegram_alerts import _send
-        lines = [f"🧠 <b>Weekly Self-Calibration Complete</b>"]
-        lines.append(f"📊 Signals analyzed: {len(signals)}")
-        for label, stat in analysis["bracket_stats"].items():
-            if stat:
-                sign = "+" if stat["offset"] > 0 else ""
-                lines.append(
-                    f"  {label}%: win {stat['win_rate']}% "
-                    f"({stat['samples']} trades) → offset {sign}{stat['offset']}"
-                )
-        lines.append(f"🕐 {datetime.utcnow().strftime('%Y-%m-%d %H:%M UTC')}")
+
+        lines = ["🧠 <b>Weekly Self-Calibration</b>",
+                 f"📊 {len(signals)} trades analyzed",
+                 ""]
+
+        # Conviction
+        lines.append("📈 <b>Conviction brackets:</b>")
+        for label, stat in conviction["stats"].items():
+            sign = "+" if stat["offset"] > 0 else ""
+            lines.append(f"  {label}%: {stat['win_rate']}% WR "
+                         f"({stat['samples']} trades) → offset {sign}{stat['offset']}")
+
+        # Regime
+        if regime["stats"]:
+            lines.append("\n🌍 <b>Regime performance:</b>")
+            for r, stat in regime["stats"].items():
+                lines.append(f"  {r}: {stat['win_rate']}% WR → min conviction {stat['min_conviction']}%")
+
+        # Sectors
+        hot   = [s for s, v in sector["bias"].items() if v == "HOT"]
+        cold  = [s for s, v in sector["bias"].items() if v == "COLD"]
+        if hot:   lines.append(f"\n🟢 Hot sectors: {', '.join(hot)}")
+        if cold:  lines.append(f"🔴 Cold sectors: {', '.join(cold)}")
+
+        # Advisor
+        if advisor.get("accuracy_pct") is not None:
+            lines.append(f"\n🤖 Advisor accuracy: {advisor['accuracy_pct']}% "
+                         f"(weight={advisor['weight']})")
+
+        # DTP
+        if dtp.get("dtp_working") is not None:
+            status = "✅ working" if dtp["dtp_working"] else "⚠️ needs review"
+            lines.append(f"\n🎯 DTP: {status} | high-conv avg {dtp['high_conv_avg_pnl']:+.1f}% "
+                         f"vs normal {dtp['normal_conv_avg_pnl']:+.1f}%")
+
+        lines.append(f"\n🕐 {datetime.utcnow().strftime('%Y-%m-%d %H:%M UTC')}")
         _send("\n".join(lines))
     except Exception as e:
-        logger.warning(f"[LEARN] Telegram notify failed: {e}")
-
-    return {"status": "ok", "signals_analyzed": len(signals), **analysis}
+        logger.warning(f"[LEARN] Telegram summary failed: {e}")
 
 
-def _loop():
-    time.sleep(3600)   # wait 1 hour after startup before first run
+# ── Public API ─────────────────────────────────────────────────────────────────
+
+def run_once() -> Dict:
+    """Alias for run_fast — called by scheduler and API endpoint."""
+    return run_fast()
+
+
+def trigger_if_new_closes(threshold: int = 5) -> Optional[Dict]:
+    """
+    Called after every signal close. Runs fast analysis if
+    >= threshold new closes have happened since last analysis.
+    """
+    global _last_analyzed_count
+    signals = _load_closed()
+    new_closes = len(signals) - _last_analyzed_count
+    if new_closes >= threshold:
+        logger.info(f"[LEARN] {new_closes} new closes → triggering fast analysis")
+        return run_fast(signals)
+    return None
+
+
+# ── Background threads ─────────────────────────────────────────────────────────
+
+def _fast_loop():
+    time.sleep(1800)   # 30 min warm-up
     while True:
         try:
-            run_once()
+            trigger_if_new_closes(threshold=5)
         except Exception as e:
-            logger.error(f"[LEARN] Loop error: {e}")
-        time.sleep(_INTERVAL)
+            logger.error(f"[LEARN] Fast loop error: {e}")
+        time.sleep(_FAST_INTERVAL)
+
+
+def _deep_loop():
+    time.sleep(3600)   # 1 hour warm-up
+    while True:
+        try:
+            run_deep()
+        except Exception as e:
+            logger.error(f"[LEARN] Deep loop error: {e}")
+        time.sleep(_WEEKLY_INTERVAL)
 
 
 def start():
-    t = threading.Thread(target=_loop, daemon=True, name="learning_loop")
-    t.start()
-    logger.info("[LEARN] Self-improvement loop started (weekly)")
+    """Start both loops as daemon threads."""
+    t1 = threading.Thread(target=_fast_loop, daemon=True, name="learn_fast")
+    t2 = threading.Thread(target=_deep_loop, daemon=True, name="learn_deep")
+    t1.start()
+    t2.start()
+    logger.info("[LEARN] Self-improvement engine started (fast=hourly, deep=weekly)")

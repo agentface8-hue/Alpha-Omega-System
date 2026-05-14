@@ -912,6 +912,13 @@ def check_signals() -> Dict[str, Any]:
             grade_outcome(_nc)
         except Exception as _ge:
             print(f"  [GRADER] could not launch grader for {_nc.get('ticker','?')}: {_ge}")
+    # Trigger self-learning fast analysis if 5+ new closes since last run
+    if newly_closed:
+        try:
+            from core.learning_loop import trigger_if_new_closes
+            trigger_if_new_closes(threshold=5)
+        except Exception as _le:
+            print(f"  [LEARN] trigger failed: {_le}")
     return {"active":still_active,"recently_closed":newly_closed,
             "closed":closed,"stats":_calc_stats(closed),
             "market_status":market_status,"warnings":warnings}

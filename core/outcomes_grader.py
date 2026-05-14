@@ -108,9 +108,13 @@ def _call_opus_grade(prompt: str) -> Dict[str, Any]:
 def _save_outcome(outcome: Dict) -> bool:
     """Persist to Supabase outcomes table, JSON fallback."""
     try:
-        from core import signal_store as store
-        if store._sb():
-            store._sb().table("outcomes").insert(outcome).execute()
+        import os
+        from supabase import create_client
+        url = os.environ.get("SUPABASE_URL", "")
+        key = os.environ.get("SUPABASE_ANON_KEY", "")
+        if url and key:
+            sb = create_client(url, key)
+            sb.table("outcomes").insert(outcome).execute()
             return True
     except Exception as e:
         logger.debug(f"[GRADER] Supabase save failed: {e}")

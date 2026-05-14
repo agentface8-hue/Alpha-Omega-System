@@ -1784,3 +1784,32 @@ async def executor_test(request: Request):
     body = await request.json()
     result = execute_signal(body)
     return result
+
+
+# ── Learning Loop endpoints ──────────────────────────────────────────────────
+
+@app.get("/api/learning/summary")
+async def learning_summary():
+    """Current calibration params + outcomes summary."""
+    from core.learning_loop import _load_calibration, _load_closed
+    from core.outcomes_grader import load_outcomes_summary
+    params   = _load_calibration()
+    outcomes = load_outcomes_summary()
+    closed   = _load_closed()
+    return {
+        "calibration":  params,
+        "outcomes":     outcomes,
+        "total_closed": len(closed),
+    }
+
+@app.post("/api/learning/run-fast")
+async def run_fast_learning():
+    """Trigger a fast learning cycle manually."""
+    from core.learning_loop import run_fast
+    return run_fast()
+
+@app.post("/api/learning/run-deep")
+async def run_deep_learning():
+    """Trigger a full deep learning cycle (all 5 dimensions)."""
+    from core.learning_loop import run_deep
+    return run_deep()
