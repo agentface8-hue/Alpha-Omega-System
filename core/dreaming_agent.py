@@ -100,41 +100,25 @@ def _build_dream_prompt(market_ctx: Dict, scan_results: List[Dict]) -> str:
     return "\n".join(lines)
 
 
-def _call_gemini(prompt: str) -> Dict[str, Any]:
-    """Call Gemini Flash for the dream analysis. Retries once on 429."""
-    import time
-    import urllib.error as _ue
-    api_key = os.environ.get("GOOGLE_API_KEY", "").strip()
+def _call_claude(prompt: str) -> Dict[str, Any]:
+    """Call Claude Sonnet for dream analysis. Uses same Anthropic key as Advisor."""
+    api_key = os.environ.get("ANTHROPIC_API_KEY", "").strip()
     if not api_key:
-        raise RuntimeError("GOOGLE_API_KEY not set")
-
-    import urllib.request as _ur
-    url = (f"https://generativelanguage.googleapis.com/v1beta/models/"
-           f"gemini-2.0-flash:generateContent?key={api_key}")
+        raise RuntimeError("ANTHROPIC_API_KEY not set")
+    import anthropic
+    client = anthropic.Anthropic(api_key=api_key)
     full_prompt = _DREAM_SYSTEM + "\n\nMarket snapshot:\n" + prompt
-    body = json.dumps({
-        "contents": [{"parts": [{"text": full_prompt}]}],
-        "generationConfig": {"maxOutputTokens": 250},
-    }).encode()
-    req = _ur.Request(url, data=body, headers={"Content-Type": "application/json"})
-
-    for attempt in range(2):  # try twice
-        try:
-            with _ur.urlopen(req, timeout=20) as r:
-                resp = json.loads(r.read().decode())
-            raw = resp["candidates"][0]["content"]["parts"][0]["text"].strip()
-            if raw.startswith("```"):
-                raw = raw.split("```")[1]
-                if raw.startswith("json"):
-                    raw = raw[4:]
-            return json.loads(raw.strip())
-        except _ue.HTTPError as e:
-            if e.code == 429 and attempt == 0:
-                logger.warning("[DREAM] Gemini 429 rate limit — waiting 15s then retrying...")
-                time.sleep(15)
-                continue
-            raise
-    raise RuntimeError("Gemini call failed after retry")
+    msg = client.messages.create(
+        model="claude-sonnet-4-6",
+        max_tokens=300,
+        messages=[{"role": "user", "content": full_prompt}],
+    )
+    raw = msg.content[0].text.strip()
+    if raw.startswith("```"):
+        raw = raw.split("```")[1]
+        if raw.startswith("json"):
+            raw = raw[4:]
+    return json.loads(raw.strip())
 
 
 def _save_dream(dream: Dict) -> bool:
@@ -252,9 +236,9 @@ def run_dream_cycle(force: bool = False) -> Dict[str, Any]:
 
     try:
         prompt   = _build_dream_prompt(market_ctx, scan_results)
-        analysis = _call_gemini(prompt)
+        analysis = _call_claude(prompt)
     except Exception as e:
-        logger.error(f"[DREAM] Gemini call failed: {e}")
+        logger.error(f"[DREAM] Claude call failed: {e}")
         analysis = {
             "edge_level": "LOW",
             "top_ticker": None,
@@ -273,7 +257,7 @@ def run_dream_cycle(force: bool = False) -> Dict[str, Any]:
         "analysis":     analysis.get("analysis", ""),
         "key_risk":     analysis.get("key_risk", ""),
         "action":       analysis.get("action", "WAIT"),
-        "model":        "gemini-2.0-flash",
+        "model":        "claude-sonnet-4-6",
         "scan_tickers": [r["ticker"] for r in scan_results[:5]],
     }
 
