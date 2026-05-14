@@ -22,11 +22,11 @@ def fetch_ticker_data(symbol: str) -> Dict[str, Any]:
         if daily.empty:
             return {"error": f"No data for {symbol}", "symbol": symbol}
 
-        # Weekly data
-        weekly = tk.history(period="2y", interval="1wk")
+        # Weekly data (1 year is enough for EMA9/21 on weekly)
+        weekly = tk.history(period="1y", interval="1wk")
 
-        # Hourly data (for 65m/240m approximation — yfinance max 730d for 1h)
-        hourly = tk.history(period="60d", interval="1h")
+        # Hourly data (30d is enough for 65m/240m signals — saves ~50% RAM vs 60d)
+        hourly = tk.history(period="30d", interval="1h")
 
         # Info
         info = {}
@@ -240,6 +240,11 @@ def fetch_ticker_data(symbol: str) -> Dict[str, Any]:
         sector = info.get("sector", "Unknown")
         name = info.get("shortName", symbol)
 
+        # Free large DataFrames before returning — reduces peak RAM on Render
+        import gc as _gc
+        del daily, weekly, hourly
+        _gc.collect()
+
         return {
             "symbol": symbol,
             "name": name,
@@ -339,12 +344,14 @@ def _rsi(series: pd.Series, period: int = 14) -> pd.Series:
 
 
 def fetch_multiple_tickers(symbols: List[str]) -> List[Dict[str, Any]]:
-    """Fetch data for multiple tickers."""
+    """Fetch data for multiple tickers — gc.collect() after each to keep RAM low on Render."""
+    import gc
     results = []
     for sym in symbols:
         print(f"  [DATA] Fetching {sym}...")
         data = fetch_ticker_data(sym)
         results.append(data)
+        gc.collect()   # free DataFrames from previous ticker immediately
     return results
 
 
