@@ -1,16 +1,8 @@
 import React, { useState } from 'react';
-import { Activity, Lock, User, Eye, EyeOff } from 'lucide-react';
+import { Activity, Lock, User, Eye, EyeOff, UserPlus } from 'lucide-react';
 
-const VALID_USER = 'aviandjhon';
-const VALID_HASH = '3b233de2d3124fbd02ba28cf35824c76725c020258fb347f5a20f9f077ace9db';
 const API = import.meta.env.VITE_API_URL || 'http://127.0.0.1:8000';
 
-async function sha256(str) {
-  const buf = await crypto.subtle.digest('SHA-256', new TextEncoder().encode(str));
-  return Array.from(new Uint8Array(buf)).map(b => b.toString(16).padStart(2,'0')).join('');
-}
-
-// Get or create a persistent visitor ID
 function getVisitorId() {
   let id = localStorage.getItem('ao_visitor_id');
   if (!id) {
@@ -20,52 +12,105 @@ function getVisitorId() {
   return id;
 }
 
-// Increment visit counter
 function getVisitCount() {
   const count = parseInt(localStorage.getItem('ao_visit_count') || '0') + 1;
   localStorage.setItem('ao_visit_count', String(count));
   return count;
 }
 
-// Fire-and-forget login event to backend
-async function reportLogin(username) {
-  try {
-    await fetch(`${API}/api/login-event`, {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({
-        username,
-        user_agent:  navigator.userAgent,
-        screen:      `${screen.width}×${screen.height}`,
-        timezone:    Intl.DateTimeFormat().resolvedOptions().timeZone,
-        language:    navigator.language,
-        visitor_id:  getVisitorId(),
-        visit_count: getVisitCount(),
-      }),
-    });
-  } catch { /* silent — never block login */ }
-}
+const INPUT = {
+  display:'flex', alignItems:'center', background:'#050810',
+  border:'1px solid #1a2535', borderRadius:6, padding:'10px 12px', gap:8,
+};
+const BTN_PRIMARY = {
+  background:'linear-gradient(135deg,#0d2040,#0a1628)',
+  border:'1px solid #1e3a5a', borderRadius:8, padding:'12px',
+  color:'#00d4ff', fontSize:12, fontWeight:'bold', letterSpacing:2,
+  cursor:'pointer', fontFamily:'sans-serif', marginTop:4,
+};
 
 const LoginScreen = ({ onLogin }) => {
-  const [user, setUser]       = useState('');
-  const [pass, setPass]       = useState('');
+  const [tab,      setTab]      = useState('signin');  // 'signin' | 'register'
+  const [username, setUsername] = useState('');
+  const [name,     setName]     = useState('');
+  const [pass,     setPass]     = useState('');
+  const [pass2,    setPass2]    = useState('');
   const [showPass, setShowPass] = useState(false);
-  const [error, setError]     = useState('');
-  const [loading, setLoading] = useState(false);
+  const [error,    setError]    = useState('');
+  const [loading,  setLoading]  = useState(false);
 
-  const handle = async (e) => {
+  const reset = (newTab) => {
+    setTab(newTab); setError('');
+    setUsername(''); setPass(''); setPass2(''); setName('');
+  };
+
+  const handleSignIn = async (e) => {
     e.preventDefault();
     setLoading(true); setError('');
-    const hash = await sha256(pass);
-    if (user === VALID_USER && hash === VALID_HASH) {
+    try {
+      const res  = await fetch(`${API}/api/auth/login`, {
+        method:'POST', headers:{'Content-Type':'application/json'},
+        body: JSON.stringify({ username: username.trim().toLowerCase(), password: pass }),
+      });
+      const data = await res.json();
+      if (!res.ok) throw new Error(data.detail || 'Login failed');
+
+      // Store session
       localStorage.setItem('ao_auth', '1');
-      reportLogin(user); // fire-and-forget — never blocks login
-      onLogin();
-    } else {
-      setError('Invalid username or password.');
+      localStorage.setItem('ao_username', data.username);
+      localStorage.setItem('ao_display_name', data.display_name || data.username);
+      localStorage.setItem('ao_role', data.role);
+
+      // Fire browser fingerprint in background
+      fetch(`${API}/api/login-event`, {
+        method:'POST', headers:{'Content-Type':'application/json'},
+        body: JSON.stringify({
+          username:    data.username,
+          user_agent:  navigator.userAgent,
+          screen:      `${screen.width}×${screen.height}`,
+          timezone:    Intl.DateTimeFormat().resolvedOptions().timeZone,
+          language:    navigator.language,
+          visitor_id:  getVisitorId(),
+          visit_count: getVisitCount(),
+        }),
+      }).catch(() => {});
+
+      onLogin({ username: data.username, role: data.role, display_name: data.display_name });
+    } catch (err) {
+      setError(err.message);
     }
     setLoading(false);
   };
+
+  const handleRegister = async (e) => {
+    e.preventDefault();
+    setError('');
+    if (pass !== pass2) { setError("Passwords don't match"); return; }
+    if (pass.length < 6) { setError("Password must be at least 6 characters"); return; }
+    setLoading(true);
+    try {
+      const res  = await fetch(`${API}/api/auth/register`, {
+        method:'POST', headers:{'Content-Type':'application/json'},
+        body: JSON.stringify({
+          username: username.trim().toLowerCase(),
+          password: pass,
+          display_name: name.trim(),
+        }),
+      });
+      const data = await res.json();
+      if (!res.ok) throw new Error(data.detail || 'Registration failed');
+      // Auto-login after register
+      setTab('signin');
+      setError('');
+      setPass(''); setPass2('');
+      setError('✅ Account created! Sign in now.');
+    } catch (err) {
+      setError(err.message);
+    }
+    setLoading(false);
+  };
+
+  const isSuccess = error.startsWith('✅');
 
   return (
     <div style={{ minHeight:'100vh', background:'#050810', display:'flex', flexDirection:'column',
@@ -88,59 +133,131 @@ const LoginScreen = ({ onLogin }) => {
       </div>
 
       {/* Card */}
-      <form onSubmit={handle} style={{ background:'#080c14', border:'1px solid #1a2535', borderRadius:12,
-        padding:'32px 36px', width:340, display:'flex', flexDirection:'column', gap:20 }}>
+      <div style={{ background:'#080c14', border:'1px solid #1a2535', borderRadius:12,
+        padding:'28px 36px', width:360, display:'flex', flexDirection:'column', gap:0 }}>
 
-        <div style={{ display:'flex', alignItems:'center', gap:8, color:'#8899aa', fontSize:11,
-          letterSpacing:2, fontFamily:'sans-serif', marginBottom:4 }}>
-          <Lock size={12} /> SECURE ACCESS
-        </div>
-
-        {/* Username */}
-        <div>
-          <div style={{ color:'#2a4a5a', fontSize:9, letterSpacing:1.5, fontFamily:'sans-serif', marginBottom:6 }}>USERNAME</div>
-          <div style={{ display:'flex', alignItems:'center', background:'#050810', border:'1px solid #1a2535',
-            borderRadius:6, padding:'10px 12px', gap:8 }}>
-            <User size={14} color="#8899aa" />
-            <input value={user} onChange={e => setUser(e.target.value)}
-              placeholder="Enter username"
-              style={{ background:'transparent', border:'none', outline:'none', color:'#c9d8e8',
-                fontFamily:"'Courier New',monospace", fontSize:13, flex:1 }} />
-          </div>
-        </div>
-
-        {/* Password */}
-        <div>
-          <div style={{ color:'#2a4a5a', fontSize:9, letterSpacing:1.5, fontFamily:'sans-serif', marginBottom:6 }}>PASSWORD</div>
-          <div style={{ display:'flex', alignItems:'center', background:'#050810', border:'1px solid #1a2535',
-            borderRadius:6, padding:'10px 12px', gap:8 }}>
-            <Lock size={14} color="#8899aa" />
-            <input value={pass} onChange={e => setPass(e.target.value)}
-              type={showPass ? 'text' : 'password'} placeholder="Enter password"
-              style={{ background:'transparent', border:'none', outline:'none', color:'#c9d8e8',
-                fontFamily:"'Courier New',monospace", fontSize:13, flex:1 }} />
-            <button type="button" onClick={() => setShowPass(p => !p)}
-              style={{ background:'transparent', border:'none', cursor:'pointer', padding:0, display:'flex' }}>
-              {showPass ? <EyeOff size={14} color="#8899aa" /> : <Eye size={14} color="#8899aa" />}
+        {/* Tabs */}
+        <div style={{ display:'flex', marginBottom:24, borderBottom:'1px solid #1a2535' }}>
+          {[['signin','SIGN IN',<Lock size={11}/>], ['register','REGISTER',<UserPlus size={11}/>]].map(([id,label,icon]) => (
+            <button key={id} onClick={() => reset(id)}
+              style={{ flex:1, background:'transparent', border:'none',
+                borderBottom: tab===id ? '2px solid #00d4ff' : '2px solid transparent',
+                color: tab===id ? '#00d4ff' : '#4a6a8a',
+                padding:'8px 0', fontSize:10, fontWeight:'bold', letterSpacing:2,
+                fontFamily:'sans-serif', cursor:'pointer',
+                display:'flex', alignItems:'center', justifyContent:'center', gap:5 }}>
+              {icon} {label}
             </button>
-          </div>
+          ))}
         </div>
 
-        {error && (
-          <div style={{ background:'rgba(255,68,102,0.08)', border:'1px solid rgba(255,68,102,0.3)',
-            borderRadius:6, padding:'8px 12px', color:'#ff4466', fontSize:11, fontFamily:'sans-serif' }}>
-            ⚠ {error}
-          </div>
+        {/* Sign In Form */}
+        {tab === 'signin' && (
+          <form onSubmit={handleSignIn} style={{ display:'flex', flexDirection:'column', gap:16 }}>
+            <div>
+              <div style={{ color:'#2a4a5a', fontSize:9, letterSpacing:1.5, fontFamily:'sans-serif', marginBottom:6 }}>USERNAME</div>
+              <div style={INPUT}>
+                <User size={14} color="#8899aa" />
+                <input value={username} onChange={e => setUsername(e.target.value)}
+                  placeholder="Enter username" autoComplete="username"
+                  style={{ background:'transparent', border:'none', outline:'none', color:'#c9d8e8',
+                    fontFamily:"'Courier New',monospace", fontSize:13, flex:1 }} />
+              </div>
+            </div>
+            <div>
+              <div style={{ color:'#2a4a5a', fontSize:9, letterSpacing:1.5, fontFamily:'sans-serif', marginBottom:6 }}>PASSWORD</div>
+              <div style={INPUT}>
+                <Lock size={14} color="#8899aa" />
+                <input value={pass} onChange={e => setPass(e.target.value)}
+                  type={showPass ? 'text' : 'password'} placeholder="Enter password" autoComplete="current-password"
+                  style={{ background:'transparent', border:'none', outline:'none', color:'#c9d8e8',
+                    fontFamily:"'Courier New',monospace", fontSize:13, flex:1 }} />
+                <button type="button" onClick={() => setShowPass(p => !p)}
+                  style={{ background:'transparent', border:'none', cursor:'pointer', padding:0, display:'flex' }}>
+                  {showPass ? <EyeOff size={14} color="#8899aa" /> : <Eye size={14} color="#8899aa" />}
+                </button>
+              </div>
+            </div>
+            {error && (
+              <div style={{ background: isSuccess ? 'rgba(0,255,136,0.08)' : 'rgba(255,68,102,0.08)',
+                border: `1px solid ${isSuccess ? 'rgba(0,255,136,0.3)' : 'rgba(255,68,102,0.3)'}`,
+                borderRadius:6, padding:'8px 12px',
+                color: isSuccess ? '#00ff88' : '#ff4466',
+                fontSize:11, fontFamily:'sans-serif' }}>
+                {error}
+              </div>
+            )}
+            <button type="submit" disabled={loading || !username || !pass}
+              style={{ ...BTN_PRIMARY, opacity: !username || !pass ? 0.5 : 1 }}>
+              {loading ? 'SIGNING IN...' : 'ACCESS SYSTEM'}
+            </button>
+          </form>
         )}
 
-        <button type="submit" disabled={loading || !user || !pass}
-          style={{ background:'linear-gradient(135deg,#0d2040,#0a1628)', border:'1px solid #1e3a5a',
-            borderRadius:8, padding:'12px', color:'#00d4ff', fontSize:12, fontWeight:'bold',
-            letterSpacing:2, cursor: loading || !user || !pass ? 'not-allowed' : 'pointer',
-            fontFamily:'sans-serif', opacity: !user || !pass ? 0.5 : 1, marginTop:4 }}>
-          {loading ? 'VERIFYING...' : 'ACCESS SYSTEM'}
-        </button>
-      </form>
+        {/* Register Form */}
+        {tab === 'register' && (
+          <form onSubmit={handleRegister} style={{ display:'flex', flexDirection:'column', gap:14 }}>
+            <div>
+              <div style={{ color:'#2a4a5a', fontSize:9, letterSpacing:1.5, fontFamily:'sans-serif', marginBottom:6 }}>DISPLAY NAME</div>
+              <div style={INPUT}>
+                <User size={14} color="#8899aa" />
+                <input value={name} onChange={e => setName(e.target.value)}
+                  placeholder="Your name (e.g. John)"
+                  style={{ background:'transparent', border:'none', outline:'none', color:'#c9d8e8',
+                    fontFamily:"'Courier New',monospace", fontSize:13, flex:1 }} />
+              </div>
+            </div>
+            <div>
+              <div style={{ color:'#2a4a5a', fontSize:9, letterSpacing:1.5, fontFamily:'sans-serif', marginBottom:6 }}>USERNAME</div>
+              <div style={INPUT}>
+                <User size={14} color="#8899aa" />
+                <input value={username} onChange={e => setUsername(e.target.value)}
+                  placeholder="Choose a username"
+                  style={{ background:'transparent', border:'none', outline:'none', color:'#c9d8e8',
+                    fontFamily:"'Courier New',monospace", fontSize:13, flex:1 }} />
+              </div>
+            </div>
+            <div>
+              <div style={{ color:'#2a4a5a', fontSize:9, letterSpacing:1.5, fontFamily:'sans-serif', marginBottom:6 }}>PASSWORD</div>
+              <div style={INPUT}>
+                <Lock size={14} color="#8899aa" />
+                <input value={pass} onChange={e => setPass(e.target.value)}
+                  type={showPass ? 'text' : 'password'} placeholder="Min 6 characters"
+                  style={{ background:'transparent', border:'none', outline:'none', color:'#c9d8e8',
+                    fontFamily:"'Courier New',monospace", fontSize:13, flex:1 }} />
+                <button type="button" onClick={() => setShowPass(p => !p)}
+                  style={{ background:'transparent', border:'none', cursor:'pointer', padding:0, display:'flex' }}>
+                  {showPass ? <EyeOff size={14} color="#8899aa" /> : <Eye size={14} color="#8899aa" />}
+                </button>
+              </div>
+            </div>
+            <div>
+              <div style={{ color:'#2a4a5a', fontSize:9, letterSpacing:1.5, fontFamily:'sans-serif', marginBottom:6 }}>CONFIRM PASSWORD</div>
+              <div style={INPUT}>
+                <Lock size={14} color="#8899aa" />
+                <input value={pass2} onChange={e => setPass2(e.target.value)}
+                  type="password" placeholder="Repeat password"
+                  style={{ background:'transparent', border:'none', outline:'none', color:'#c9d8e8',
+                    fontFamily:"'Courier New',monospace", fontSize:13, flex:1 }} />
+              </div>
+            </div>
+            {error && (
+              <div style={{ background:'rgba(255,68,102,0.08)', border:'1px solid rgba(255,68,102,0.3)',
+                borderRadius:6, padding:'8px 12px', color:'#ff4466', fontSize:11, fontFamily:'sans-serif' }}>
+                {error}
+              </div>
+            )}
+            <div style={{ color:'#2a4a5a', fontSize:9, fontFamily:'sans-serif', textAlign:'center' }}>
+              Visitor accounts have read-only access
+            </div>
+            <button type="submit" disabled={loading || !username || !pass || !pass2}
+              style={{ ...BTN_PRIMARY, color:'#c084fc', borderColor:'#3a1a5a',
+                opacity: !username || !pass || !pass2 ? 0.5 : 1 }}>
+              {loading ? 'CREATING ACCOUNT...' : 'CREATE ACCOUNT'}
+            </button>
+          </form>
+        )}
+      </div>
 
       <div style={{ color:'#1a2535', fontSize:9, marginTop:24, letterSpacing:1, fontFamily:'sans-serif' }}>
         AUTHORIZED PERSONNEL ONLY

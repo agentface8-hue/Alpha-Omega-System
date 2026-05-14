@@ -26,21 +26,31 @@ const PANELS = [
 ];
 
 // ── Panel renderer ────────────────────────────────────────────────────────────
-const PanelContent = ({ id, autoRun, compact = false }) => {
-  if (id === 'portfolio')  return <PortfolioTab compact={compact} />;
-  if (id === 'tracker')    return <SignalTracker compact={compact} />;
-  if (id === 'scan')       return <ScanDashboard autoScan={autoRun} compact={compact} />;
+const PanelContent = ({ id, autoRun, compact = false, isOwner = false }) => {
+  if (id === 'portfolio')  return <PortfolioTab compact={compact} isOwner={isOwner} />;
+  if (id === 'tracker')    return <SignalTracker compact={compact} isOwner={isOwner} />;
+  if (id === 'scan')       return <ScanDashboard autoScan={autoRun} compact={compact} isOwner={isOwner} />;
   if (id === 'dreams')     return <DreamLog />;
   return null;
 };
 
 const App = () => {
   const [authed,        setAuthed]        = useState(() => localStorage.getItem('ao_auth') === '1');
+  const [userRole,      setUserRole]      = useState(() => localStorage.getItem('ao_role') || 'visitor');
+  const [displayName,   setDisplayName]   = useState(() => localStorage.getItem('ao_display_name') || '');
   const [viewMode,      setViewMode]      = useState('dashboard');
   const [focusedPanel,  setFocusedPanel]  = useState(null);
   const [activeTab,     setActiveTab]     = useState('analyze');
   const [mountedPanels, setMountedPanels] = useState([]);
-  const [backendStatus, setBackendStatus] = useState('waking'); // 'waking' | 'slow' | 'ready'
+  const [backendStatus, setBackendStatus] = useState('waking');
+
+  const isOwner = userRole === 'owner';
+
+  const handleLogin = ({ username, role, display_name }) => {
+    setUserRole(role);
+    setDisplayName(display_name || username);
+    setAuthed(true);
+  };
 
   // ── Step 1: Wake backend, then stagger panels ──────────────────────────────
   React.useEffect(() => {
@@ -226,7 +236,7 @@ const App = () => {
             {/* Content — mount only when backend is ready and it's this panel's turn */}
             <div style={{ flex:1, overflow:'auto', minHeight:0 }}>
               {mountedPanels.includes(panel.id)
-                ? <PanelContent id={panel.id} autoRun={true} compact={true} />
+                ? <PanelContent id={panel.id} autoRun={true} compact={true} isOwner={isOwner} />
                 : <div style={{ display:'flex', alignItems:'center', justifyContent:'center',
                     height:'100%', color:'#2a4a5a', fontSize:10, fontFamily:'monospace',
                     letterSpacing:2, flexDirection:'column', gap:8 }}>
@@ -276,7 +286,7 @@ const App = () => {
 
   return (
     <div>
-      {!authed && <LoginScreen onLogin={() => setAuthed(true)} />}
+      {!authed && <LoginScreen onLogin={handleLogin} />}
       {authed && <>
         <LiveTicker />
 
@@ -290,6 +300,13 @@ const App = () => {
             </div>
           </div>
           <div className="system-status">
+            {displayName && (
+              <span style={{ fontSize:10, color: isOwner ? '#00ff88' : '#c084fc',
+                fontFamily:'monospace', marginRight:12, letterSpacing:1 }}>
+                {isOwner ? '👑' : '👤'} {displayName}
+                {!isOwner && <span style={{ color:'#4a6a8a', fontSize:9 }}> · VIEWER</span>}
+              </span>
+            )}
             <span className="status-dot"></span>SYSTEM ONLINE
           </div>
         </header>

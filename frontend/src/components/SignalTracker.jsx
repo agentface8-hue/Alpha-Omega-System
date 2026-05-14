@@ -485,7 +485,7 @@ const SLHistoryPanel = ({ signal, entryTime, onClose }) => {
 };
 
 // ================================================
-const SignalTracker = ({ compact = false }) => {
+const SignalTracker = ({ compact = false, isOwner = false }) => {
   const [data,             setData]             = useState(null);
   const [loading,          setLoading]          = useState(false);
   const [refreshing,       setRefreshing]       = useState(false);
@@ -708,7 +708,7 @@ const SignalTracker = ({ compact = false }) => {
             style={{ background:"#0d1520", border:"1px solid #1a2535", borderRadius:4, padding:"6px 12px", color:"#c084fc", fontSize:10, fontFamily:"sans-serif", cursor:"pointer", display:"flex", alignItems:"center", gap:4 }}>
             <RefreshCw size={12} />{refreshing?"CHECKING...":"CHECK PRICES"}
           </button>
-          <button onClick={clearAll} style={{ background:"#0d1520", border:"1px solid #ff446633", borderRadius:4, padding:"6px 12px", color:"#ff4466", fontSize:10, fontFamily:"sans-serif", cursor:"pointer" }}>RESET ALL</button>
+          <button onClick={clearAll} style={{ background:"#0d1520", border:"1px solid #ff446633", borderRadius:4, padding:"6px 12px", color:"#ff4466", fontSize:10, fontFamily:"sans-serif", cursor:"pointer", display: isOwner ? "block" : "none" }}>RESET ALL</button>
         </div>
       </div>
 
@@ -719,8 +719,9 @@ const SignalTracker = ({ compact = false }) => {
         </div>
       )}
 
-      {/* Turbo + Auto Refresh */}
+      {/* Turbo + Auto Refresh — owner only for LAUNCH */}
       <div style={{ display:"flex", gap:12, marginBottom:16, alignItems:"center", flexWrap:"wrap" }}>
+        {isOwner && (
         <div style={{ display:"flex", gap:6, alignItems:"center", background:"#0a0f18", border:"1px solid #1a2535", borderRadius:8, padding:"8px 12px", flex:1, minWidth:250 }}>
           <span style={{ fontSize:10, color:"#c084fc", fontWeight:"bold", fontFamily:"sans-serif", whiteSpace:"nowrap" }}>&#9889; TURBO</span>
           <input value={turboTicker} onChange={e => setTurboTicker(e.target.value.toUpperCase())} placeholder="AAPL" onKeyDown={e => e.key==='Enter'&&launchTurbo()}
@@ -730,6 +731,7 @@ const SignalTracker = ({ compact = false }) => {
             {turboLoading?"...":"LAUNCH"}
           </button>
         </div>
+        )}
         <div style={{ display:"flex", alignItems:"center", gap:8, background:"#0a0f18", border:"1px solid #1a2535", borderRadius:8, padding:"8px 12px" }}>
           <span style={{ fontSize:10, color:"#8899aa", fontFamily:"sans-serif" }}>AUTO-REFRESH</span>
           <button onClick={() => setAutoRefresh(!autoRefresh)}
@@ -740,7 +742,8 @@ const SignalTracker = ({ compact = false }) => {
         </div>
       </div>
 
-      {/* Auto-Pilot */}
+      {/* Auto-Pilot — owner only */}
+      {isOwner && (
       <div style={{ background:"linear-gradient(135deg,rgba(0,212,255,0.06),rgba(124,58,237,0.06))", border:"1px solid #7c3aed44", borderRadius:10, padding:16, marginBottom:16 }}>
         <div style={{ display:"flex", alignItems:"center", justifyContent:"space-between", flexWrap:"wrap", gap:10 }}>
           <div>
@@ -779,8 +782,7 @@ const SignalTracker = ({ compact = false }) => {
           </div>
         )}
       </div>
-
-      {/* Stats */}
+      )} {/* end isOwner auto-pilot */}
       <div style={{ display:"flex", gap: compact ? 6 : 10, marginBottom: compact ? 8 : 12, flexWrap:"wrap" }}>
         <KSC label="ACTIVE"        value={active.length}                   color={KC.blue}   compact={compact} />
         <KSC label="WIN RATE"      value={`${stats.win_rate||0}%`}         color={(stats.win_rate||0)>=50?KC.green:KC.red} compact={compact} />

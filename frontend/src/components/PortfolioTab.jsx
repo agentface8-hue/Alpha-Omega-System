@@ -627,7 +627,7 @@ const ClosedRow = ({ pos }) => {
   );
 };
 
-export default function PortfolioTab({ compact = false }) {
+export default function PortfolioTab({ compact = false, isOwner = false }) {
   const [data, setData]             = useState(null);
   const [loading, setLoading]       = useState(false);
   const [checking, setChecking]     = useState(false);
@@ -845,6 +845,7 @@ export default function PortfolioTab({ compact = false }) {
             <div style={{ fontSize:10, color:'#2a4a5a', marginTop:2, fontFamily:'sans-serif' }}>Click any position to expand details</div>
           </div>
           <div style={{ display:'flex', gap:8 }}>
+            {isOwner && <>
             <input value={openTicker} onChange={e => setOpenTicker(e.target.value.toUpperCase())}
               onKeyDown={e => e.key==='Enter' && openFromScan()}
               placeholder='TICKER' maxLength={6}
@@ -857,6 +858,13 @@ export default function PortfolioTab({ compact = false }) {
               style={{ background: slots===0?'#1a2535':'linear-gradient(135deg,#7c3aed,#a855f7)', border: slots===0?'1px solid #2a3545':'none', borderRadius:6, padding:'6px 14px', color: slots===0?'#4a5568':'#fff', fontSize:12, fontWeight:'bold', cursor: slots===0?'not-allowed':'pointer', display:'flex', alignItems:'center', gap:5 }}>
               <Zap size={13} /> {slots===0 ? 'PORTFOLIO FULL' : `AUTO-FILL ${slots} SLOTS`}
             </button>
+            </>}
+            {!isOwner && (
+              <div style={{ fontSize:10, color:'#4a6a8a', fontFamily:'sans-serif',
+                display:'flex', alignItems:'center', gap:4 }}>
+                👁 View only
+              </div>
+            )}
           </div>
         </div>
         {loading && <div style={{ padding:10, color:'#fbbf24', fontSize:11, fontFamily:'monospace' }}>⧑ Processing...</div>}

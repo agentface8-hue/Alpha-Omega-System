@@ -75,6 +75,17 @@ def _run_scan_background(job_id: str, symbols: list):
 
 app = FastAPI(title="Alpha-Omega API")
 
+# ── Seed owner account on startup ─────────────────────────────────────────────
+@app.on_event("startup")
+async def startup_event():
+    try:
+        owner_pass = os.environ.get("OWNER_PASSWORD", "")
+        if owner_pass:
+            from backend.auth import ensure_owner_exists
+            ensure_owner_exists("avi", owner_pass)
+    except Exception as e:
+        print(f"[STARTUP] Auth seed skipped: {e}")
+
 app.add_middleware(
     CORSMiddleware,
     allow_origins=[
@@ -1867,3 +1878,58 @@ async def login_event(payload: LoginEventRequest, request: Request):
         visit_count=payload.visit_count,
     )
     return result
+
+
+# ── User auth endpoints ───────────────────────────────────────────────────────
+
+class AuthLoginRequest(BaseModel):
+    username: str
+    password: str
+
+class AuthRegisterRequest(BaseModel):
+    username:     str
+    password:     str
+    display_name: str = ""
+
+@app.post("/api/auth/login")
+async def auth_login(payload: AuthLoginRequest, request: Request):
+    """Validate credentials → return role + display name."""
+    try:
+        from backend.auth import login
+        user = login(payload.username, payload.password)
+        # Fire login tracking async (don't block)
+        real_ip = (
+            request.headers.get("X-Forwarded-For", "").split(",")[0].strip()
+            or request.headers.get("X-Real-IP", "")
+            or request.client.host
+        )
+        try:
+            from core.login_tracker import track_login
+            track_login(
+                username=user["username"],
+                real_ip=real_ip,
+                user_agent=request.headers.get("user-agent", ""),
+                screen="", timezone="", language="",
+                visitor_id="", visit_count=1,
+            )
+        except Exception:
+            pass
+        return user
+    except ValueError as e:
+        raise HTTPException(status_code=401, detail=str(e))
+
+@app.post("/api/auth/register")
+async def auth_register(payload: AuthRegisterRequest):
+    """Create a new visitor account."""
+    try:
+        from backend.auth import register
+        user = register(payload.username, payload.password, payload.display_name)
+        return user
+    except ValueError as e:
+        raise HTTPException(status_code=400, detail=str(e))
+
+@app.get("/api/auth/users")
+async def auth_users():
+    """List all users — owner dashboard."""
+    from backend.auth import list_users
+    return {"users": list_users()}
