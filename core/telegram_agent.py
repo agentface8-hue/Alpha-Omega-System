@@ -33,6 +33,7 @@ FIX LOG:
   2026-05-01 — New bot created: @AlphaOmegaCEO_bot (old bot deleted)
 """
 import os, json, time, logging, threading, urllib.request, urllib.parse
+from concurrent.futures import ThreadPoolExecutor
 from datetime import datetime
 from typing import Optional, Dict, Any
 
@@ -461,6 +462,10 @@ def _handle_message(update: dict):
 
 # ------ Polling loop ---------------------------------------------------
 
+# Max 3 concurrent heavy operations (scan, portfolio, autopilot)
+# Prevents unbounded thread spawning → OOM on Render
+_executor = ThreadPoolExecutor(max_workers=3, thread_name_prefix="tg_agent")
+
 def _poll_loop():
     global _last_update_id
     logger.info("[AGENT] Telegram polling loop started")
@@ -469,9 +474,7 @@ def _poll_loop():
             updates = _get_updates(_last_update_id + 1)
             for update in updates:
                 _last_update_id = max(_last_update_id, update.get("update_id", 0))
-                threading.Thread(
-                    target=_handle_message, args=(update,), daemon=True
-                ).start()
+                _executor.submit(_handle_message, update)
         except Exception as e:
             logger.error(f"[AGENT] Poll error: {e}")
         time.sleep(4)

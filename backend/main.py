@@ -6,6 +6,7 @@ import random
 import time
 import uuid
 import threading
+import os
 from typing import Dict, Any
 
 # ── In-memory async scan job store ──────────────────────────────────────────
@@ -76,15 +77,7 @@ def _run_scan_background(job_id: str, symbols: list):
 app = FastAPI(title="Alpha-Omega API")
 
 # ── Seed owner account on startup ─────────────────────────────────────────────
-@app.on_event("startup")
-async def startup_event():
-    try:
-        owner_pass = os.environ.get("OWNER_PASSWORD", "")
-        if owner_pass:
-            from backend.auth import ensure_owner_exists
-            ensure_owner_exists("avi", owner_pass)
-    except Exception as e:
-        print(f"[STARTUP] Auth seed skipped: {e}")
+
 
 app.add_middleware(
     CORSMiddleware,
@@ -105,24 +98,41 @@ async def health():
     return {"status": "online", "ts": __import__("datetime").datetime.utcnow().isoformat()}
 
 @app.on_event("startup")
-async def startup_background_services():
+async def startup_all():
+    """Single startup handler — auth seed + background services."""
     import logging
     log = logging.getLogger(__name__)
+
+    # 1. Seed owner account
+    try:
+        owner_pass = os.environ.get("OWNER_PASSWORD", "")
+        if owner_pass:
+            from backend.auth import ensure_owner_exists
+            ensure_owner_exists("avi", owner_pass)
+            log.info("[STARTUP] Owner account seeded")
+    except Exception as e:
+        log.warning(f"[STARTUP] Auth seed skipped: {e}")
+
+    # 2. Keepalive pinger
     try:
         from core.keepalive import start as start_keepalive
-        start_keepalive(); log.info("Keepalive started")
+        start_keepalive(); log.info("[STARTUP] Keepalive started")
     except Exception as e:
-        log.warning(f"Keepalive failed to start: {e}")
+        log.warning(f"[STARTUP] Keepalive failed: {e}")
+
+    # 3. Telegram AI agent
     try:
         from core.telegram_agent import start as start_agent
-        start_agent(); log.info("Telegram AI Agent started")
+        start_agent(); log.info("[STARTUP] Telegram agent started")
     except Exception as e:
-        log.warning(f"Telegram agent failed to start: {e}")
+        log.warning(f"[STARTUP] Telegram agent failed: {e}")
+
+    # 4. Learning loop
     try:
         from core.learning_loop import start as start_learning
-        start_learning(); log.info("Learning loop started")
+        start_learning(); log.info("[STARTUP] Learning loop started")
     except Exception as e:
-        log.warning(f"Learning loop failed to start: {e}")
+        log.warning(f"[STARTUP] Learning loop failed: {e}")
 
 # --- Demo Mode Data ---
 DEMO_SCENARIOS = {

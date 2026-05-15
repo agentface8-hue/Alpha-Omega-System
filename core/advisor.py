@@ -16,7 +16,7 @@ from typing import Dict, Any, List, Optional
 logger = logging.getLogger(__name__)
 
 SONNET_MODEL = "claude-sonnet-4-6"
-OPUS_MODEL   = "claude-opus-4-7"   # upgraded from 4.6 — 13% better reasoning, stronger finance
+OPUS_MODEL   = "claude-opus-4-6"
 
 _SCREEN_SYSTEM = """You are a trading signal screener for the Alpha-Omega AI system.
 Review the conviction data and return ONLY a valid JSON object — no markdown, no explanation.
@@ -263,16 +263,6 @@ def ask_opus(signal: Dict, question: str) -> Dict[str, Any]:
             "answer": f"Opus unavailable: {str(e)[:120]}",
             "model":  OPUS_MODEL,
             "error":  str(e),
-        }
-}")
-        return {
-            "verdict": "PROCEED_CAUTIOUS",
-            "reasoning": f"Council unavailable: {str(e)[:80]}",
-            "key_factor": "System error",
-            "size_guidance": "HALF",
-            "bull_case": "", "bull_reasons": [], "bull_confidence": 50,
-            "bear_case": "", "bear_risks":   [], "bear_confidence": 50,
-            "error": str(e),
         }
 
 

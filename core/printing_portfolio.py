@@ -16,14 +16,10 @@ SPLIT_TP3 = 0.20
 
 
 def _live_price(ticker: str) -> Optional[float]:
-    try:
-        tk = yf.Ticker(ticker)
-        d  = tk.history(period="1d", interval="1m")
-        if not d.empty: return round(float(d["Close"].iloc[-1]), 4)
-        d  = tk.history(period="2d")
-        if not d.empty: return round(float(d["Close"].iloc[-1]), 4)
-    except: pass
-    return None
+    """Real-time price via Alpha Vantage (yfinance fallback)."""
+    from core.price_feed import get_price
+    asset_type = "crypto" if "-USD" in ticker.upper() else "stock"
+    return get_price(ticker, asset_type)
 
 
 def open_position(ticker: str, direction: str, entry_price: float,

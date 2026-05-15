@@ -1,9 +1,9 @@
-import urllib.request, urllib.parse
+import urllib.request, urllib.parse, os
 
-token = "8246500243:AAFXsq94Fia3RimL4_Q-AM6sdDJpZNoxTYM"
-chat_id = "5812682751"
+token = os.environ.get("TELEGRAM_TOKEN", "")
+chat_id = os.environ.get("TELEGRAM_PERSONAL_CHAT_ID", "")
 
-date = "2026-05-14"
+date = "2026-05-15"
 trades = 0
 pnl = 0.0
 wr = 0.0

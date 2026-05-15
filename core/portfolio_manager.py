@@ -45,17 +45,9 @@ def _dtp_scale(conviction: int) -> tuple:
 
 
 def _live_price(ticker: str, asset_type: str = "stock") -> Optional[float]:
-    try:
-        sym = ticker.upper()
-        if asset_type == "crypto":
-            sym = sym + "-USD" if not sym.endswith("-USD") else sym
-        tk   = yf.Ticker(sym)
-        data = tk.history(period="1d", interval="1m")
-        if not data.empty: return round(float(data["Close"].iloc[-1]), 4)
-        data = tk.history(period="2d")
-        if not data.empty: return round(float(data["Close"].iloc[-1]), 4)
-    except: pass
-    return None
+    """Real-time price via Alpha Vantage (yfinance fallback)."""
+    from core.price_feed import get_price
+    return get_price(ticker, asset_type)
 
 
 def _size_position(entry: float, sl: float) -> Dict:

@@ -50,7 +50,7 @@ class Settings(BaseSettings):
     # Model Configuration
     DEFAULT_LLM_MODEL: str = "gemini-pro"
     FAST_LLM_MODEL: str = "gemini-pro"
-    REASONING_LLM_MODEL: str = "claude-opus-4-7"
+    REASONING_LLM_MODEL: str = "claude-opus-4-6"
 
     # Risk Management
     MAX_DRAWDOWN_LIMIT: float = 0.15 # 15%

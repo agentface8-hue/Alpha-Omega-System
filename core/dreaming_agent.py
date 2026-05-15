@@ -122,15 +122,28 @@ def _call_claude(prompt: str) -> Dict[str, Any]:
 
 
 def _save_dream(dream: Dict) -> bool:
-    """Persist dream to Supabase dream_log table. Falls back to local JSON."""
+    """Persist dream to Supabase dream_log table. Falls back to local JSON.
+    Uses direct HTTP (not supabase-py) to avoid WebSocket memory leak on Render.
+    """
     try:
-        import os
-        from supabase import create_client
         url = os.environ.get("SUPABASE_URL", "")
         key = os.environ.get("SUPABASE_ANON_KEY", "")
         if url and key:
-            sb = create_client(url, key)
-            sb.table("dream_log").insert(dream).execute()
+            import urllib.request, urllib.error
+            payload = json.dumps(dream, default=str).encode()
+            req = urllib.request.Request(
+                f"{url}/rest/v1/dream_log",
+                data=payload,
+                headers={
+                    "apikey": key,
+                    "Authorization": f"Bearer {key}",
+                    "Content-Type": "application/json",
+                    "Prefer": "return=minimal",
+                },
+                method="POST"
+            )
+            with urllib.request.urlopen(req, timeout=10) as r:
+                r.read()
             return True
     except Exception as e:
         logger.debug(f"[DREAM] Supabase save failed: {e}")
@@ -155,20 +168,24 @@ def _save_dream(dream: Dict) -> bool:
 
 
 def load_dream_log(limit: int = 10) -> List[Dict]:
-    """Load recent dream log entries (Supabase first, JSON fallback)."""
+    """Load recent dream log entries (Supabase first, JSON fallback).
+    Uses direct HTTP (not supabase-py) to avoid WebSocket memory leak on Render.
+    """
     try:
-        import os
-        from supabase import create_client
         url = os.environ.get("SUPABASE_URL", "")
         key = os.environ.get("SUPABASE_ANON_KEY", "")
         if url and key:
-            sb = create_client(url, key)
-            result = (sb.table("dream_log")
-                      .select("*")
-                      .order("ts", desc=True)
-                      .limit(limit)
-                      .execute())
-            return result.data or []
+            import urllib.request
+            req = urllib.request.Request(
+                f"{url}/rest/v1/dream_log?order=ts.desc&limit={limit}",
+                headers={
+                    "apikey": key,
+                    "Authorization": f"Bearer {key}",
+                    "Accept": "application/json",
+                }
+            )
+            with urllib.request.urlopen(req, timeout=10) as r:
+                return json.loads(r.read().decode()) or []
     except Exception:
         pass
 

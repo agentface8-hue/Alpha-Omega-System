@@ -48,6 +48,16 @@ create_table.py
 signals/active_signals.json
 signals/closed_signals.json
 signals/reports/
+signals/portfolio_positions.json
+signals/portfolio_state.json
+signals/printing_positions.json
+signals/printing_state.json
+signals/dream_log.json
+
+# Calibration caches (runtime, rebuilt automatically)
+calibration/universe_cache.json
+calibration/momentum_screen_cache.json
+calibration/sector_rank_cache.json
 
 # Test files
 test_tracker_v2.py

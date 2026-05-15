@@ -45,16 +45,24 @@ def _now() -> str:
 # ── Individual checks ─────────────────────────────────────────────────────────
 
 def check_supabase() -> Dict:
-    """Test Supabase read — verifies URL, key, and connectivity."""
+    """Test Supabase read — verifies URL, key, and connectivity via direct HTTP."""
     try:
         url = os.environ.get("SUPABASE_URL", "")
         key = os.environ.get("SUPABASE_ANON_KEY", "")
         if not url or not key:
             return _fail("Supabase", "SUPABASE_URL or SUPABASE_ANON_KEY missing from env")
-        from supabase import create_client
-        sb = create_client(url, key)
-        r = sb.table("portfolio_positions").select("id").limit(1).execute()
-        return _ok("Supabase", f"Connected — portfolio_positions readable")
+        import urllib.request
+        req = urllib.request.Request(
+            f"{url}/rest/v1/portfolio_positions?limit=1",
+            headers={
+                "apikey": key,
+                "Authorization": f"Bearer {key}",
+                "Accept": "application/json",
+            }
+        )
+        with urllib.request.urlopen(req, timeout=10) as r:
+            r.read()
+        return _ok("Supabase", "Connected — portfolio_positions readable")
     except Exception as e:
         return _fail("Supabase", f"{type(e).__name__}: {str(e)[:80]}")
 
@@ -235,7 +243,7 @@ def check_learning_loop() -> Dict:
 
 
 def check_dream_log() -> Dict:
-    """Check if dream log has run recently on market days."""
+    """Check if dream log has run recently on market days. Uses direct HTTP."""
     try:
         import pytz
         now_et = datetime.datetime.now(pytz.timezone("US/Eastern"))
@@ -252,15 +260,23 @@ def check_dream_log() -> Dict:
                     return _warn("Dream Log", f"Last dream {age_h:.0f}h ago — expected every 4h on market days")
                 return _ok("Dream Log", f"Last dream {age_h:.0f}h ago — model: {entries[-1].get('model','?')}")
 
-        # Check Supabase
+        # Check Supabase via direct HTTP (no supabase-py WebSocket)
         url = os.environ.get("SUPABASE_URL", "")
         key = os.environ.get("SUPABASE_ANON_KEY", "")
         if url and key:
-            from supabase import create_client
-            sb = create_client(url, key)
-            r = sb.table("dream_log").select("ts, model").order("ts", desc=True).limit(1).execute()
-            if r.data:
-                dt = datetime.datetime.fromisoformat(r.data[0]["ts"])
+            import urllib.request
+            req = urllib.request.Request(
+                f"{url}/rest/v1/dream_log?order=ts.desc&limit=1&select=ts,model",
+                headers={
+                    "apikey": key,
+                    "Authorization": f"Bearer {key}",
+                    "Accept": "application/json",
+                }
+            )
+            with urllib.request.urlopen(req, timeout=10) as r:
+                data = json.loads(r.read().decode())
+            if data:
+                dt = datetime.datetime.fromisoformat(data[0]["ts"])
                 age_h = (datetime.datetime.utcnow() - dt).total_seconds() / 3600
                 if age_h > 12 and is_market_day:
                     return _warn("Dream Log", f"Last dream {age_h:.0f}h ago on Supabase")
