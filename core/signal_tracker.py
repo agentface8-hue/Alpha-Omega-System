@@ -218,61 +218,51 @@ def _fetch_indicator_snapshot(symbol: str, asset_type: str = "stock") -> Dict[st
 
 
 
-def _fetch_live_price_alphavantage(symbol: str, asset_type: str) -> Dict[str, Any]:
-    """Try Alpha Vantage for a real-time quote. Returns {"valid":False} on any failure."""
-    import os as _os, requests as _req
-    key = _os.environ.get("ALPHA_VANTAGE_API_KEY", "").strip()
+def _fetch_live_price_finnhub(symbol: str, asset_type: str) -> Dict[str, Any]:
+    """Fetch real-time quote via Finnhub. Free tier: 60 calls/min. Returns {"valid":False} on failure."""
+    import os as _os
+    key = _os.environ.get("FINNHUB_API_KEY", "").strip()
     if not key:
-        return {"valid": False, "reason": "no_av_key"}
+        return {"valid": False, "reason": "no_finnhub_key"}
     try:
+        import urllib.request as _ur
         if asset_type == "crypto":
-            from_ccy = symbol.replace("-USD", "")
-            url = (f"https://www.alphavantage.co/query"
-                   f"?function=CURRENCY_EXCHANGE_RATE"
-                   f"&from_currency={from_ccy}&to_currency=USD&apikey={key}")
-            r = _req.get(url, timeout=6)
-            data = r.json()
-            if "Note" in data or "Information" in data:
-                return {"valid": False, "reason": "av_rate_limit"}
-            rd = data.get("Realtime Currency Exchange Rate", {})
-            price = float(rd.get("5. Exchange Rate", 0))
-            prev_close = price  # exchange rate has no prev-close concept
+            # Map BTC -> BINANCE:BTCUSDT etc.
+            base = symbol.replace("-USD", "").replace("USDT", "").upper()
+            fh_symbol = f"BINANCE:{base}USDT"
         else:
-            url = (f"https://www.alphavantage.co/query"
-                   f"?function=GLOBAL_QUOTE&symbol={symbol}&apikey={key}")
-            r = _req.get(url, timeout=6)
-            data = r.json()
-            if "Note" in data or "Information" in data:
-                return {"valid": False, "reason": "av_rate_limit"}
-            q = data.get("Global Quote", {})
-            price = float(q.get("05. price", 0))
-            prev_close = float(q.get("08. previous close", price) or price)
+            fh_symbol = symbol.upper()
+        url = f"https://finnhub.io/api/v1/quote?symbol={fh_symbol}&token={key}"
+        with _ur.urlopen(url, timeout=8) as r:
+            data = json.loads(r.read())
+        price      = float(data.get("c", 0) or 0)   # current price
+        prev_close = float(data.get("pc", 0) or 0)  # previous close
         if not price or price <= 0:
-            return {"valid": False, "reason": "av_no_price"}
-        market = _is_us_market_open()
+            return {"valid": False, "reason": "finnhub_no_price"}
+        market  = _is_us_market_open()
         gap_pct = round((price - prev_close) / prev_close * 100, 2) if prev_close else 0
         return {
-            "price":      round(price, 4),
-            "prev_close": round(prev_close, 4),
-            "gap_pct":    gap_pct,
-            "is_stale":   False,
-            "valid":      True,
-            "source":     "alphavantage",
-            "session":    market["session"],
+            "price":         round(price, 4),
+            "prev_close":    round(prev_close, 4),
+            "gap_pct":       gap_pct,
+            "is_stale":      False,
+            "valid":         True,
+            "source":        "finnhub",
+            "session":       market["session"],
             "delay_warning": "realtime" if asset_type != "crypto" else "near-realtime",
         }
     except Exception as e:
-        return {"valid": False, "reason": f"av_error:{e}"}
+        return {"valid": False, "reason": f"finnhub_error:{e}"}
 
 def _fetch_live_price(symbol: str, asset_type: str = "stock") -> Dict[str, Any]:
-    """Fetch live price. Tries Alpha Vantage first, falls back to yfinance silently."""
+    """Fetch live price. Tries Finnhub first (60/min, realtime), falls back to yfinance."""
     lookup = f"{symbol}-USD" if asset_type=="crypto" and not symbol.endswith("-USD") else symbol
-    # ── Alpha Vantage (real-time) ─────────────────────────────────────────────
-    av = _fetch_live_price_alphavantage(symbol, asset_type)
-    if av["valid"]:
-        return av
-    if av.get("reason") != "no_av_key":
-        print(f"  [AV] {symbol}: {av.get('reason')} → yfinance fallback")
+    # ── Finnhub (real-time, 60 calls/min free) ────────────────────────────────
+    fh = _fetch_live_price_finnhub(symbol, asset_type)
+    if fh["valid"]:
+        return fh
+    if fh.get("reason") != "no_finnhub_key":
+        print(f"  [FH] {symbol}: {fh.get('reason')} -> yfinance fallback")
     # ── yfinance fallback (15-20min delayed) ──────────────────────────────────
     try:
         tk=yf.Ticker(lookup); fi=tk.fast_info
