@@ -1,5 +1,5 @@
 # ALPHA-OMEGA SYSTEM — MASTER KNOWLEDGE BASE
-# Last Updated: 2026-05-14
+# Last Updated: 2026-05-16
 # Location: C:\Users\asus\Alpha-Omega-System\MASTER-KNOWLEDGE.md
 
 ## ⚠️ INSTRUCTIONS FOR CLAUDE — READ THIS FIRST EVERY SESSION
@@ -510,3 +510,52 @@ Use GET /api/health/full to verify all 9 integrations before assuming things wor
 Live repo: C:\Users\asus\Alpha-Omega-System (git connected)
 Downloads folder has dead ZIP copies from April 29 — ignore them.
 Always deploy from: git push origin main (triggers both Render + Vercel)
+
+## 16. RECENT SESSION CHANGES
+*Auto-updated: 2026-05-16 04:41 UTC*
+
+### `c011350` 2026-05-16 07:40 - feat: permanent session memory - auto-updates knowledge files nightly
+- `session_memory.py`
+
+### `e3395ea` 2026-05-16 06:58 - feat: AI health agent, block closed-session autopilot, raise Trending Bull threshold to 72
+- `backend/main.py`
+- `core/ai_health_agent.py`
+- `core/portfolio_manager.py`
+- `patch_fixes2.py`
+
+### `dfbcc38` 2026-05-16 06:35 - fix: 409 deploy guard, gc collect, memory endpoint, psutil
+- `backend/main.py`
+- `core/telegram_agent.py`
+- `patch_system.py`
+- `requirements.txt`
+
+### `e5691c9` 2026-05-15 18:52 - fix: system audit - OOM memory models prices cleanup
+- `.gitignore`
+- `_check_env.py`
+- `_daily_tg_notify.py`
+- `_scan.py`
+- `backend/main.py`
+
+### `42eeb37` 2026-05-15 09:46 - fix: remove bad vercel.json
+- `vercel.json`
+
+### `ad4276d` 2026-05-14 23:12 - fix: instant dashboard load
+- `CHANGES-LOG.md`
+- `CLAUDE.md`
+- `SYSTEM-BUILD-RECORD.md`
+- `_check_env.py`
+- `_daily_tg_notify.py`
+
+### `a6b33e1` 2026-05-14 22:04 - feat: mobile responsive layout
+- `frontend/src/App.jsx`
+- `frontend/src/components/UIKit.jsx`
+
+### `2a29bb5` 2026-05-14 20:18 - fix: clear old session, force re-login for new auth system
+- `frontend/src/App.jsx`
+
+### `65e642b` 2026-05-14 19:59 - fix: auth uses direct HTTP to Supabase REST - removes supabase-py WebSocket hang
+- `backend/auth.py`
+
+### `411c124` 2026-05-14 19:41 - fix: add BaseModel import - Render crash on startup
+- `backend/main.py`
+
