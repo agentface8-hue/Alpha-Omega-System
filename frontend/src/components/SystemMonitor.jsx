@@ -49,6 +49,21 @@ function safeNum(val) {
   return (isNaN(n) || val == null) ? null : Math.round(n);
 }
 
+// WhatsApp/Telegram style date label
+function formatLogDate(date) {
+  const now   = new Date();
+  const today = new Date(now.getFullYear(), now.getMonth(), now.getDate());
+  const d     = new Date(date.getFullYear(), date.getMonth(), date.getDate());
+  const diff  = Math.round((today - d) / 86400000);
+  if (diff === 0) return "Today";
+  if (diff === 1) return "Yesterday";
+  return date.toLocaleDateString(undefined, { day: "2-digit", month: "short", year: "numeric" });
+}
+
+function formatLogTime(date) {
+  return date.toLocaleTimeString(undefined, { hour: "2-digit", minute: "2-digit", hour12: false });
+}
+
 export default function SystemMonitor() {
   const [health, setHealth]           = useState(null);
   const [agentStatus, setAgentStatus] = useState(null);
@@ -63,8 +78,8 @@ export default function SystemMonitor() {
   const countRef = useRef(null);
 
   function addLog(msg, level = "info") {
-    const ts = new Date().toLocaleTimeString();
-    setLog(prev => [{ ts, msg, level }, ...prev].slice(0, 50));
+    const now = new Date();
+    setLog(prev => [{ date: now, msg, level }, ...prev].slice(0, 200));
   }
 
   async function fetchAll() {
@@ -90,16 +105,14 @@ export default function SystemMonitor() {
       }
       if (p.status === "fulfilled") setPerf(p.value);
       if (m.status === "fulfilled") {
-        const md = m.value || {};
-        // API returns process_rss_mb (not rss_mb)
-        const rss      = md.process_rss_mb ?? md.rss_mb ?? md.memory?.rss_mb ?? null;
-        const headroom  = md.headroom_mb    ?? md.memory?.headroom_mb ?? null;
-        const ok        = md.status === "OK" || md.ok || (rss != null && rss < 1600);
-        setMemData({ rss_mb: rss, headroom_mb: headroom, ok });
+        const md  = m.value || {};
+        const rss = md.process_rss_mb ?? md.rss_mb ?? md.memory?.rss_mb ?? null;
+        const ok  = md.status === "OK" || md.ok || (rss != null && rss < 1600);
+        setMemData({ rss_mb: rss, headroom_mb: md.headroom_mb ?? null, ok });
         if (rss != null && rss > 1600) addLog(`Memory WARNING: ${rss}MB used`, "warn");
       }
 
-      setLastRefresh(new Date().toLocaleTimeString());
+      setLastRefresh(new Date());
       addLog("Health check complete", "info");
     } catch (e) {
       addLog(`Fetch error: ${e.message}`, "error");
@@ -138,12 +151,52 @@ export default function SystemMonitor() {
   const memLabel = rssNum != null ? `${rssNum} MB` : "…";
   const memWarn  = rssNum != null && rssNum > 1600;
 
+  // Format last refresh like "Today 14:32"
+  const lastRefreshLabel = lastRefresh
+    ? `${formatLogDate(lastRefresh)} ${formatLogTime(lastRefresh)}`
+    : null;
+
   const stats = [
     { label: "overall",       value: overall,                                              color: STATUS_COLOR[overall] || "#888780" },
     { label: "memory",        value: memLabel,                                             color: memWarn ? "#BA7517" : "#1D9E75"   },
     { label: "win rate",      value: perf?.win_rate      != null ? `${perf.win_rate}%`     : "…", color: "#1D9E75" },
     { label: "profit factor", value: perf?.profit_factor != null ? `${perf.profit_factor}` : "…", color: "#1D9E75" },
   ];
+
+  // Group log entries by date label for WhatsApp-style separators
+  function renderLog() {
+    if (log.length === 0) return <div style={{ color: "var(--color-text-tertiary)" }}>waiting for events...</div>;
+    const items = [];
+    let lastDateLabel = null;
+    for (let i = 0; i < log.length; i++) {
+      const e = log[i];
+      const dateLabel = formatLogDate(e.date);
+      if (dateLabel !== lastDateLabel) {
+        lastDateLabel = dateLabel;
+        items.push(
+          <div key={`sep-${i}`} style={{ display: "flex", alignItems: "center", gap: 8, margin: "8px 0 4px" }}>
+            <div style={{ flex: 1, height: "0.5px", background: "var(--color-border-tertiary)" }} />
+            <span style={{ fontSize: 10, color: "var(--color-text-tertiary)", fontWeight: 500, whiteSpace: "nowrap",
+              background: "var(--color-background-secondary)", padding: "1px 8px", borderRadius: 10 }}>
+              {dateLabel}
+            </span>
+            <div style={{ flex: 1, height: "0.5px", background: "var(--color-border-tertiary)" }} />
+          </div>
+        );
+      }
+      items.push(
+        <div key={i} style={{ display: "flex", alignItems: "baseline", gap: 8, padding: "3px 0",
+          borderBottom: "0.5px solid var(--color-border-tertiary)",
+          color: e.level === "error" ? "#E24B4A" : e.level === "warn" ? "#BA7517" : "var(--color-text-secondary)" }}>
+          <span style={{ color: "var(--color-text-tertiary)", fontSize: 11, flexShrink: 0, minWidth: 38 }}>
+            {formatLogTime(e.date)}
+          </span>
+          <span style={{ flex: 1 }}>{e.msg}</span>
+        </div>
+      );
+    }
+    return items;
+  }
 
   return (
     <div style={{ padding: "1rem", fontFamily: "var(--font-sans)", maxWidth: 900 }}>
@@ -152,9 +205,11 @@ export default function SystemMonitor() {
         <div style={{ display: "flex", alignItems: "center", gap: 10 }}>
           <Dot status={overall} />
           <span style={{ fontSize: 18, fontWeight: 500, color: "var(--color-text-primary)" }}>System Monitor</span>
-          <span style={{ fontSize: 12, color: "var(--color-text-secondary)", background: "var(--color-background-secondary)", padding: "2px 8px", borderRadius: 4 }}>
-            {loading ? "refreshing..." : `updated ${lastRefresh}`}
-          </span>
+          {lastRefreshLabel && (
+            <span style={{ fontSize: 12, color: "var(--color-text-secondary)", background: "var(--color-background-secondary)", padding: "2px 8px", borderRadius: 4 }}>
+              {loading ? "refreshing..." : `updated ${lastRefreshLabel}`}
+            </span>
+          )}
         </div>
         <div style={{ display: "flex", gap: 8 }}>
           <button onClick={fetchAll} style={{ fontSize: 12, padding: "4px 12px", cursor: "pointer" }}>Refresh</button>
@@ -228,13 +283,8 @@ export default function SystemMonitor() {
       </div>
 
       <Card title="live activity log">
-        <div style={{ fontFamily: "var(--font-mono)", fontSize: 12, maxHeight: 200, overflowY: "auto" }}>
-          {log.length === 0 && <div style={{ color: "var(--color-text-tertiary)" }}>waiting for events...</div>}
-          {log.map((e, i) => (
-            <div key={i} style={{ padding: "3px 0", borderBottom: "0.5px solid var(--color-border-tertiary)", color: e.level === "error" ? "#E24B4A" : e.level === "warn" ? "#BA7517" : "var(--color-text-secondary)" }}>
-              <span style={{ color: "var(--color-text-tertiary)", marginRight: 8 }}>{e.ts}</span>{e.msg}
-            </div>
-          ))}
+        <div style={{ fontFamily: "var(--font-mono)", fontSize: 12, maxHeight: 260, overflowY: "auto" }}>
+          {renderLog()}
         </div>
       </Card>
 
