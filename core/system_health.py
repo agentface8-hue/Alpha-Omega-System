@@ -119,26 +119,23 @@ def check_google_sheets() -> Dict:
 
         creds_data = json.loads(token_json) if token_json else json.loads(token_file.read_text())
         creds = Credentials(
-            token=None,  # always force refresh
+            token=None,
             refresh_token=creds_data.get("refresh_token"),
             token_uri=creds_data.get("token_uri", "https://oauth2.googleapis.com/token"),
             client_id=creds_data.get("client_id"),
             client_secret=creds_data.get("client_secret"),
             scopes=creds_data.get("scopes", ["https://www.googleapis.com/auth/spreadsheets"]),
         )
-        if creds.expired and creds.refresh_token:
-            creds.refresh(Request())
+        creds.refresh(Request())
 
         gc = gspread.authorize(creds)
         SHEET_ID = "1G5f1AePhWKJEMJKmfHj1genbr18LMdlCWPsoBJC2ZxM"
         ws = gc.open_by_key(SHEET_ID).sheet1
 
-        # Write a health-check row
-        test_row = ["HEALTH_CHECK", "TEST", "—", "—", "—", "0", "0", "0",
-                    f"health_check_{_now()}", "—"]
+        test_row = ["HEALTH_CHECK", "TEST", "-", "-", "-", "0", "0", "0",
+                    f"health_check_{_now()}", "-"]
         ws.append_row(test_row, value_input_option="USER_ENTERED")
 
-        # Verify it's there and delete it
         all_vals = ws.get_all_values()
         last_row = len(all_vals)
         if all_vals and all_vals[-1][0] == "HEALTH_CHECK":
@@ -150,21 +147,19 @@ def check_google_sheets() -> Dict:
 
 
 def check_telegram() -> Dict:
-    """Test Telegram bot can send a message."""
+    """Test Telegram bot is reachable — uses getMe (NO message sent, no spam)."""
     try:
         token = os.environ.get("TELEGRAM_TOKEN", "")
-        chat_id = os.environ.get("TELEGRAM_PERSONAL_CHAT_ID", "")
-        if not token or not chat_id:
-            return _fail("Telegram", "TELEGRAM_TOKEN or TELEGRAM_PERSONAL_CHAT_ID missing")
-        import urllib.request, urllib.parse
-        msg = f"🔧 Health check ping — {_now()}"
-        url = f"https://api.telegram.org/bot{token}/sendMessage"
-        data = urllib.parse.urlencode({"chat_id": chat_id, "text": msg, "parse_mode": "HTML"}).encode()
-        with urllib.request.urlopen(url, data=data, timeout=8) as r:
+        if not token:
+            return _fail("Telegram", "TELEGRAM_TOKEN missing from env")
+        import urllib.request
+        url = f"https://api.telegram.org/bot{token}/getMe"
+        with urllib.request.urlopen(url, timeout=8) as r:
             resp = json.loads(r.read())
         if resp.get("ok"):
-            return _ok("Telegram", "Message sent successfully")
-        return _fail("Telegram", f"API returned ok=false: {resp}")
+            bot_name = resp.get("result", {}).get("username", "unknown")
+            return _ok("Telegram", f"Bot @{bot_name} reachable")
+        return _fail("Telegram", "API returned ok=false")
     except Exception as e:
         return _fail("Telegram", f"{type(e).__name__}: {str(e)[:80]}")
 
@@ -243,7 +238,7 @@ def check_learning_loop() -> Dict:
 
 
 def check_dream_log() -> Dict:
-    """Check if dream log has run recently on market days. Uses direct HTTP."""
+    """Check if dream log has run recently on market days."""
     try:
         import pytz
         now_et = datetime.datetime.now(pytz.timezone("US/Eastern"))
@@ -260,7 +255,6 @@ def check_dream_log() -> Dict:
                     return _warn("Dream Log", f"Last dream {age_h:.0f}h ago — expected every 4h on market days")
                 return _ok("Dream Log", f"Last dream {age_h:.0f}h ago — model: {entries[-1].get('model','?')}")
 
-        # Check Supabase via direct HTTP (no supabase-py WebSocket)
         url = os.environ.get("SUPABASE_URL", "")
         key = os.environ.get("SUPABASE_ANON_KEY", "")
         if url and key:
@@ -276,10 +270,8 @@ def check_dream_log() -> Dict:
             with urllib.request.urlopen(req, timeout=10) as r:
                 data = json.loads(r.read().decode())
             if data:
-                dt = datetime.datetime.fromisoformat(data[0].get("created_at", data[0].get("ts","")))
+                dt = datetime.datetime.fromisoformat(data[0].get("created_at", data[0].get("ts", "")))
                 age_h = (datetime.datetime.utcnow() - dt).total_seconds() / 3600
-                if age_h > 12 and is_market_day:
-                    return _ok("Dream Log", f"Last dream {age_h:.0f}h ago (Supabase)")
                 return _ok("Dream Log", f"Last dream {age_h:.0f}h ago (Supabase)")
 
         return _warn("Dream Log", "No dream log found — check /api/dreams/run")
@@ -304,7 +296,7 @@ ALL_CHECKS = [
 def run_full_check(send_telegram: bool = True) -> Dict[str, Any]:
     """
     Run all health checks. Returns full report.
-    If any RED found and send_telegram=True, fires Telegram alert.
+    Only sends Telegram alert if RED issues found (not YELLOW).
     """
     results = []
     for name, fn in ALL_CHECKS:
@@ -334,30 +326,25 @@ def run_full_check(send_telegram: bool = True) -> Dict[str, Any]:
         "yellows": yellows,
     }
 
-    if send_telegram and (reds or yellows):
+    # Only alert on RED — not YELLOW (avoids spam for known minor issues)
+    if send_telegram and reds:
         _send_health_alert(report)
 
     return report
 
 
 def _send_health_alert(report: Dict):
-    """Send Telegram alert summarizing health issues."""
+    """Send Telegram alert summarizing RED health issues only."""
     try:
         from core.telegram_alerts import _send
-        icon = "🔴" if report["overall"] == "RED" else "🟡"
         lines = [
-            f"{icon} <b>ALPHA-OMEGA HEALTH ALERT</b>",
-            f"━━━━━━━━━━━━━━━━━━",
-            f"🟢 {report['summary']['green']} OK  "
-            f"🟡 {report['summary']['yellow']} WARN  "
-            f"🔴 {report['summary']['red']} FAIL",
+            f"ALPHA-OMEGA HEALTH ALERT",
+            f"GREEN={report['summary']['green']} WARN={report['summary']['yellow']} FAIL={report['summary']['red']}",
             "",
         ]
         for r in report["reds"]:
-            lines.append(f"🔴 <b>{r['name']}</b>: {r['detail']}")
-        for r in report["yellows"]:
-            lines.append(f"🟡 <b>{r['name']}</b>: {r['detail']}")
-        lines.append(f"\n🕐 {report['checked_at'][:16].replace('T',' ')} UTC")
+            lines.append(f"FAIL {r['name']}: {r['detail'][:80]}")
+        lines.append(f"{report['checked_at'][:16].replace('T',' ')} UTC")
         _send("\n".join(lines))
     except Exception as e:
         logger.warning(f"[HEALTH] Telegram alert failed: {e}")
@@ -377,17 +364,15 @@ if __name__ == "__main__":
 
     report = run_full_check(send_telegram=False)
 
-    STATUS_ICON = {"GREEN": "✅", "YELLOW": "⚠️ ", "RED": "❌"}
+    STATUS_ICON = {"GREEN": "OK", "YELLOW": "WARN", "RED": "FAIL"}
     for r in report["checks"]:
         icon = STATUS_ICON[r["status"]]
-        print(f"\n{icon} {r['name']}")
-        print(f"   {r['detail']}")
+        print(f"\n[{icon}] {r['name']}: {r['detail']}")
 
     print("\n" + "="*55)
-    overall_icon = STATUS_ICON[report["overall"]]
     s = report["summary"]
-    print(f"  {overall_icon} OVERALL: {report['overall']}")
-    print(f"  ✅ {s['green']} GREEN  ⚠️  {s['yellow']} YELLOW  ❌ {s['red']} RED")
+    print(f"  OVERALL: {report['overall']}")
+    print(f"  GREEN={s['green']}  YELLOW={s['yellow']}  RED={s['red']}")
     print("="*55 + "\n")
 
     if report["reds"] or report["yellows"]:
