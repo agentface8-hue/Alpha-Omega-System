@@ -44,22 +44,21 @@ function Row({ status, label, detail }) {
   );
 }
 
-function safeNum(val, decimals = 0) {
+function safeNum(val) {
   const n = Number(val);
-  if (isNaN(n) || val == null) return null;
-  return decimals > 0 ? n.toFixed(decimals) : Math.round(n);
+  return (isNaN(n) || val == null) ? null : Math.round(n);
 }
 
 export default function SystemMonitor() {
-  const [health, setHealth]         = useState(null);
+  const [health, setHealth]           = useState(null);
   const [agentStatus, setAgentStatus] = useState(null);
-  const [aiHealth, setAiHealth]     = useState(null);
-  const [perf, setPerf]             = useState(null);
-  const [memData, setMemData]       = useState(null);
-  const [log, setLog]               = useState([]);
+  const [aiHealth, setAiHealth]       = useState(null);
+  const [perf, setPerf]               = useState(null);
+  const [memData, setMemData]         = useState(null);
+  const [log, setLog]                 = useState([]);
   const [lastRefresh, setLastRefresh] = useState(null);
-  const [loading, setLoading]       = useState(true);
-  const [countdown, setCountdown]   = useState(30);
+  const [loading, setLoading]         = useState(true);
+  const [countdown, setCountdown]     = useState(30);
   const timerRef = useRef(null);
   const countRef = useRef(null);
 
@@ -79,6 +78,7 @@ export default function SystemMonitor() {
         fetch(`${API}/api/analytics/performance`).then(r => r.json()),
         fetch(`${API}/api/memory`).then(r => r.json()),
       ]);
+
       if (h.status === "fulfilled") {
         setHealth(h.value);
         if (h.value.reds?.length) addLog(`${h.value.reds.length} RED: ${h.value.reds.map(r => r.name).join(", ")}`, "error");
@@ -91,11 +91,14 @@ export default function SystemMonitor() {
       if (p.status === "fulfilled") setPerf(p.value);
       if (m.status === "fulfilled") {
         const md = m.value || {};
-        const rss      = md.rss_mb      ?? md.memory?.rss_mb      ?? null;
-        const headroom = md.headroom_mb ?? md.memory?.headroom_mb ?? null;
-        setMemData({ rss_mb: rss, headroom_mb: headroom, ok: md.ok ?? md.memory?.ok ?? true });
+        // API returns process_rss_mb (not rss_mb)
+        const rss      = md.process_rss_mb ?? md.rss_mb ?? md.memory?.rss_mb ?? null;
+        const headroom  = md.headroom_mb    ?? md.memory?.headroom_mb ?? null;
+        const ok        = md.status === "OK" || md.ok || (rss != null && rss < 1600);
+        setMemData({ rss_mb: rss, headroom_mb: headroom, ok });
         if (rss != null && rss > 1600) addLog(`Memory WARNING: ${rss}MB used`, "warn");
       }
+
       setLastRefresh(new Date().toLocaleTimeString());
       addLog("Health check complete", "info");
     } catch (e) {
@@ -134,14 +137,12 @@ export default function SystemMonitor() {
   const rssNum   = safeNum(memData?.rss_mb);
   const memLabel = rssNum != null ? `${rssNum} MB` : "…";
   const memWarn  = rssNum != null && rssNum > 1600;
-  const wrLabel  = perf?.win_rate      != null ? `${perf.win_rate}%`      : "…";
-  const pfLabel  = perf?.profit_factor != null ? `${perf.profit_factor}`  : "…";
 
   const stats = [
-    { label: "overall",       value: overall,  color: STATUS_COLOR[overall] || "#888780" },
-    { label: "memory",        value: memLabel, color: memWarn ? "#BA7517" : "#1D9E75"   },
-    { label: "win rate",      value: wrLabel,  color: "#1D9E75"                          },
-    { label: "profit factor", value: pfLabel,  color: "#1D9E75"                          },
+    { label: "overall",       value: overall,                                              color: STATUS_COLOR[overall] || "#888780" },
+    { label: "memory",        value: memLabel,                                             color: memWarn ? "#BA7517" : "#1D9E75"   },
+    { label: "win rate",      value: perf?.win_rate      != null ? `${perf.win_rate}%`     : "…", color: "#1D9E75" },
+    { label: "profit factor", value: perf?.profit_factor != null ? `${perf.profit_factor}` : "…", color: "#1D9E75" },
   ];
 
   return (
