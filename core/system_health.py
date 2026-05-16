@@ -1,33 +1,20 @@
 """
-system_health.py — Alpha-Omega full system health monitor v1.0
+system_health.py - Alpha-Omega full system health monitor v2.1
 
-Checks every integration is ACTUALLY WORKING, not just running.
-The Google Sheet was empty for months because syscheck.py never tested it.
-This module tests real writes/reads to every external service.
-
-Health levels:
-  GREEN  = working perfectly
-  YELLOW = working but degraded (stale data, slow, etc.)
-  RED    = broken — needs immediate fix
-
-Run via:
-  - GET /api/health/full          → full check, returns JSON
-  - python core/system_health.py  → terminal output
-  - Scheduled Cowork task         → daily Telegram alert
-
-Every check is isolated — one failure never blocks the others.
+Changes:
+  - Replaced Google Sheets with Airtable
+  - Dream Log now uses /api/dreams/latest (correct endpoint)
+  - Only alerts on RED, not YELLOW
 """
 import os
 import json
 import datetime
-import time
 import logging
 from typing import Dict, List, Any
 from pathlib import Path
 
 logger = logging.getLogger(__name__)
 
-# ── Result builder ────────────────────────────────────────────────────────────
 
 def _ok(name: str, detail: str = "") -> Dict:
     return {"name": name, "status": "GREEN", "detail": detail, "ts": _now()}
@@ -42,42 +29,33 @@ def _now() -> str:
     return datetime.datetime.utcnow().strftime("%H:%M:%S UTC")
 
 
-# ── Individual checks ─────────────────────────────────────────────────────────
-
 def check_supabase() -> Dict:
-    """Test Supabase read — verifies URL, key, and connectivity via direct HTTP."""
     try:
         url = os.environ.get("SUPABASE_URL", "")
         key = os.environ.get("SUPABASE_ANON_KEY", "")
         if not url or not key:
-            return _fail("Supabase", "SUPABASE_URL or SUPABASE_ANON_KEY missing from env")
+            return _fail("Supabase", "SUPABASE_URL or SUPABASE_ANON_KEY missing")
         import urllib.request
         req = urllib.request.Request(
             f"{url}/rest/v1/portfolio_positions?limit=1",
-            headers={
-                "apikey": key,
-                "Authorization": f"Bearer {key}",
-                "Accept": "application/json",
-            }
+            headers={"apikey": key, "Authorization": f"Bearer {key}", "Accept": "application/json"}
         )
         with urllib.request.urlopen(req, timeout=10) as r:
             r.read()
-        return _ok("Supabase", "Connected — portfolio_positions readable")
+        return _ok("Supabase", "Connected - portfolio_positions readable")
     except Exception as e:
         return _fail("Supabase", f"{type(e).__name__}: {str(e)[:80]}")
 
 
 def check_anthropic_api() -> Dict:
-    """Test Anthropic API with minimal call."""
     try:
         key = os.environ.get("ANTHROPIC_API_KEY", "")
         if not key:
-            return _fail("Anthropic API", "ANTHROPIC_API_KEY missing from env")
+            return _fail("Anthropic API", "ANTHROPIC_API_KEY missing")
         import anthropic
         client = anthropic.Anthropic(api_key=key)
         msg = client.messages.create(
-            model="claude-haiku-4-5-20251001",
-            max_tokens=10,
+            model="claude-haiku-4-5-20251001", max_tokens=10,
             messages=[{"role": "user", "content": "Reply: OK"}],
         )
         return _ok("Anthropic API", f"claude-haiku responded: {msg.content[0].text[:20]}")
@@ -86,25 +64,24 @@ def check_anthropic_api() -> Dict:
 
 
 def check_alpha_vantage() -> Dict:
-    """Test Alpha Vantage price fetch for SPY."""
     try:
         key = os.environ.get("ALPHA_VANTAGE_API_KEY", "")
         if not key:
-            return _warn("Alpha Vantage", "ALPHA_VANTAGE_API_KEY missing — yfinance fallback active")
+            return _warn("Alpha Vantage", "API key missing - yfinance fallback active")
         import urllib.request
         url = f"https://www.alphavantage.co/query?function=GLOBAL_QUOTE&symbol=SPY&apikey={key}"
         with urllib.request.urlopen(url, timeout=10) as r:
             data = json.loads(r.read().decode())
         price = data.get("Global Quote", {}).get("05. price", "")
         if not price:
-            return _warn("Alpha Vantage", "API responded but no price data — possible rate limit")
+            return _warn("Alpha Vantage", "API responded but no price - possible rate limit")
         return _ok("Alpha Vantage", f"SPY @ ${float(price):.2f}")
     except Exception as e:
         return _fail("Alpha Vantage", f"{type(e).__name__}: {str(e)[:80]}")
 
 
 def check_airtable() -> Dict:
-    """Test Airtable write+delete - permanent API key, no OAuth needed."""
+    """Test Airtable write+delete - permanent API key, no OAuth."""
     try:
         from core.airtable import check_connection
         result = check_connection()
@@ -116,139 +93,122 @@ def check_airtable() -> Dict:
 
 
 def check_telegram() -> Dict:
-    """Test Telegram bot is reachable — uses getMe (NO message sent, no spam)."""
+    """Uses getMe - no message sent, no spam."""
     try:
         token = os.environ.get("TELEGRAM_TOKEN", "")
         if not token:
-            return _fail("Telegram", "TELEGRAM_TOKEN missing from env")
+            return _fail("Telegram", "TELEGRAM_TOKEN missing")
         import urllib.request
         url = f"https://api.telegram.org/bot{token}/getMe"
         with urllib.request.urlopen(url, timeout=8) as r:
             resp = json.loads(r.read())
         if resp.get("ok"):
-            bot_name = resp.get("result", {}).get("username", "unknown")
-            return _ok("Telegram", f"Bot @{bot_name} reachable")
+            return _ok("Telegram", f"Bot @{resp.get('result',{}).get('username','?')} reachable")
         return _fail("Telegram", "API returned ok=false")
     except Exception as e:
         return _fail("Telegram", f"{type(e).__name__}: {str(e)[:80]}")
 
 
 def check_portfolio_state() -> Dict:
-    """Verify portfolio state is valid — no corrupted positions."""
     try:
         from core import portfolio_store as store
-        state = store.load_state()
+        state     = store.load_state()
         positions = store.load_positions("open")
-        cash = float(state.get("cash", 0))
+        cash  = float(state.get("cash", 0))
         total = float(state.get("total_value", 0))
-
         if cash < 0:
-            return _fail("Portfolio State", f"Negative cash: ${cash:.2f} — data corruption")
+            return _fail("Portfolio State", f"Negative cash: ${cash:.2f}")
         if total < 0:
-            return _fail("Portfolio State", f"Negative total value: ${total:.2f}")
-
+            return _fail("Portfolio State", f"Negative total: ${total:.2f}")
         corrupted = [p["ticker"] for p in positions if not p.get("entry_price") or p.get("entry_price", 0) <= 0]
         if corrupted:
-            return _warn("Portfolio State", f"Positions with missing entry price: {corrupted}")
-
-        return _ok("Portfolio State",
-                   f"{len(positions)} open | Cash: ${cash:.0f} | Total: ${total:.0f}")
+            return _warn("Portfolio State", f"Missing entry price: {corrupted}")
+        return _ok("Portfolio State", f"{len(positions)} open | Cash: ${cash:.0f} | Total: ${total:.0f}")
     except Exception as e:
         return _fail("Portfolio State", f"{type(e).__name__}: {str(e)[:80]}")
 
 
 def check_signal_tracker() -> Dict:
-    """Verify signal store is readable and active signals are fresh."""
     try:
         from core import signal_store as store
         active = store.load_active()
         closed = store.load_closed()
-
-        stale = []
+        stale  = []
         cutoff = datetime.datetime.utcnow() - datetime.timedelta(hours=48)
         for s in active:
             updated = s.get("updated_at", "")
             if updated:
                 try:
-                    dt = datetime.datetime.fromisoformat(updated)
-                    if dt < cutoff:
+                    if datetime.datetime.fromisoformat(updated) < cutoff:
                         stale.append(s.get("ticker", "?"))
                 except Exception:
                     pass
-
         detail = f"{len(active)} active, {len(closed)} closed"
         if stale:
-            return _warn("Signal Tracker", f"{detail} — {len(stale)} signals not updated in 48h: {stale}")
+            return _warn("Signal Tracker", f"{detail} - {len(stale)} stale: {stale}")
         return _ok("Signal Tracker", detail)
     except Exception as e:
         return _fail("Signal Tracker", f"{type(e).__name__}: {str(e)[:80]}")
 
 
 def check_learning_loop() -> Dict:
-    """Verify calibration file is present and reasonably fresh."""
     try:
-        cal_path = Path(__file__).parent.parent / "calibration" / "calibration_params.json"
-        if not cal_path.exists():
-            return _warn("Learning Loop", "calibration_params.json missing — will be created on first close")
-        data = json.loads(cal_path.read_text())
+        cal = Path(__file__).parent.parent / "calibration" / "calibration_params.json"
+        if not cal.exists():
+            return _warn("Learning Loop", "calibration_params.json missing")
+        data = json.loads(cal.read_text())
         last = data.get("last_updated", "")
         if last:
-            try:
-                dt = datetime.datetime.fromisoformat(last)
-                age_days = (datetime.datetime.utcnow() - dt).days
-                if age_days > 14:
-                    return _warn("Learning Loop", f"Calibration is {age_days} days old — run /api/learning/run-deep")
-                return _ok("Learning Loop", f"Last updated {age_days}d ago | {data.get('signals_analyzed', '?')} signals analyzed")
-            except Exception:
-                pass
+            age_days = (datetime.datetime.utcnow() - datetime.datetime.fromisoformat(last)).days
+            if age_days > 14:
+                return _warn("Learning Loop", f"Calibration {age_days}d old - run /api/learning/run-deep")
+            return _ok("Learning Loop", f"Last updated {age_days}d ago | {data.get('signals_analyzed','?')} signals")
         return _ok("Learning Loop", "Calibration file present")
     except Exception as e:
         return _fail("Learning Loop", f"{type(e).__name__}: {str(e)[:80]}")
 
 
 def check_dream_log() -> Dict:
-    """Check if dream log has run recently on market days."""
+    """Uses /api/dreams/latest - the correct endpoint."""
     try:
-        import pytz
-        now_et = datetime.datetime.now(pytz.timezone("US/Eastern"))
-        is_market_day = now_et.weekday() < 5
+        import pytz, urllib.request
+        is_market_day = datetime.datetime.now(pytz.timezone("US/Eastern")).weekday() < 5
 
-        log_path = Path(__file__).parent.parent / "signals" / "dream_log.json"
-        if log_path.exists():
-            entries = json.loads(log_path.read_text())
-            if entries:
-                last_ts = entries[-1].get("ts", "")
-                dt = datetime.datetime.fromisoformat(last_ts)
-                age_h = (datetime.datetime.utcnow() - dt).total_seconds() / 3600
-                if age_h > 12 and is_market_day:
-                    return _warn("Dream Log", f"Last dream {age_h:.0f}h ago — expected every 4h on market days")
-                return _ok("Dream Log", f"Last dream {age_h:.0f}h ago — model: {entries[-1].get('model','?')}")
+        # Hit the actual dreams endpoint on our own backend
+        backend = os.environ.get("RENDER_EXTERNAL_URL", "https://alpha-omega-system.onrender.com")
+        try:
+            with urllib.request.urlopen(f"{backend}/api/dreams/latest", timeout=8) as r:
+                data = json.loads(r.read())
+            if data and not data.get("detail"):
+                ts = data.get("created_at") or data.get("ts", "")
+                if ts:
+                    dt    = datetime.datetime.fromisoformat(ts.replace("Z", "+00:00").replace("+00:00", ""))
+                    age_h = (datetime.datetime.utcnow() - dt).total_seconds() / 3600
+                    if age_h > 12 and is_market_day:
+                        return _warn("Dream Log", f"Last dream {age_h:.0f}h ago - expected every 4h")
+                    return _ok("Dream Log", f"Last dream {age_h:.0f}h ago")
+        except Exception:
+            pass
 
+        # Fallback: check Supabase directly
         url = os.environ.get("SUPABASE_URL", "")
         key = os.environ.get("SUPABASE_ANON_KEY", "")
         if url and key:
-            import urllib.request
             req = urllib.request.Request(
-                f"{url}/rest/v1/dream_log?order=created_at.desc&limit=1&select=created_at,model",
-                headers={
-                    "apikey": key,
-                    "Authorization": f"Bearer {key}",
-                    "Accept": "application/json",
-                }
+                f"{url}/rest/v1/dream_log?order=created_at.desc&limit=1",
+                headers={"apikey": key, "Authorization": f"Bearer {key}", "Accept": "application/json"}
             )
             with urllib.request.urlopen(req, timeout=10) as r:
-                data = json.loads(r.read().decode())
-            if data:
-                dt = datetime.datetime.fromisoformat(data[0].get("created_at", data[0].get("ts", "")))
+                rows = json.loads(r.read().decode())
+            if rows:
+                dt    = datetime.datetime.fromisoformat(rows[0].get("created_at", "").replace("Z", ""))
                 age_h = (datetime.datetime.utcnow() - dt).total_seconds() / 3600
                 return _ok("Dream Log", f"Last dream {age_h:.0f}h ago (Supabase)")
 
-        return _warn("Dream Log", "No dream log found — check /api/dreams/run")
+        return _warn("Dream Log", "No dream log yet - run /api/dreams/run to start")
     except Exception as e:
         return _warn("Dream Log", f"Could not check: {str(e)[:60]}")
 
-
-# ── Master health check ───────────────────────────────────────────────────────
 
 ALL_CHECKS = [
     ("Supabase",        check_supabase),
@@ -262,90 +222,53 @@ ALL_CHECKS = [
     ("Dream Log",       check_dream_log),
 ]
 
+
 def run_full_check(send_telegram: bool = True) -> Dict[str, Any]:
-    """
-    Run all health checks. Returns full report.
-    Only sends Telegram alert if RED issues found (not YELLOW).
-    """
     results = []
     for name, fn in ALL_CHECKS:
         try:
-            result = fn()
+            results.append(fn())
         except Exception as e:
-            result = _fail(name, f"Check crashed: {str(e)[:80]}")
-        results.append(result)
+            results.append(_fail(name, f"Check crashed: {str(e)[:80]}"))
 
     reds    = [r for r in results if r["status"] == "RED"]
     yellows = [r for r in results if r["status"] == "YELLOW"]
     greens  = [r for r in results if r["status"] == "GREEN"]
-
     overall = "RED" if reds else "YELLOW" if yellows else "GREEN"
 
     report = {
-        "overall":  overall,
+        "overall": overall,
         "checked_at": datetime.datetime.utcnow().isoformat(),
-        "summary": {
-            "green":  len(greens),
-            "yellow": len(yellows),
-            "red":    len(reds),
-            "total":  len(results),
-        },
-        "checks": results,
-        "reds":    reds,
-        "yellows": yellows,
+        "summary": {"green": len(greens), "yellow": len(yellows), "red": len(reds), "total": len(results)},
+        "checks": results, "reds": reds, "yellows": yellows,
     }
-
-    # Only alert on RED — not YELLOW (avoids spam for known minor issues)
     if send_telegram and reds:
         _send_health_alert(report)
-
     return report
 
 
 def _send_health_alert(report: Dict):
-    """Send Telegram alert summarizing RED health issues only."""
     try:
         from core.telegram_alerts import _send
-        lines = [
-            f"ALPHA-OMEGA HEALTH ALERT",
-            f"GREEN={report['summary']['green']} WARN={report['summary']['yellow']} FAIL={report['summary']['red']}",
-            "",
-        ]
+        lines = ["ALPHA-OMEGA HEALTH ALERT",
+                 f"GREEN={report['summary']['green']} WARN={report['summary']['yellow']} FAIL={report['summary']['red']}", ""]
         for r in report["reds"]:
             lines.append(f"FAIL {r['name']}: {r['detail'][:80]}")
         lines.append(f"{report['checked_at'][:16].replace('T',' ')} UTC")
         _send("\n".join(lines))
     except Exception as e:
-        logger.warning(f"[HEALTH] Telegram alert failed: {e}")
+        logger.warning(f"[HEALTH] Alert failed: {e}")
 
-
-# ── Terminal runner ───────────────────────────────────────────────────────────
 
 if __name__ == "__main__":
     import sys
     sys.path.insert(0, str(Path(__file__).parent.parent))
     from dotenv import load_dotenv
     load_dotenv()
-
-    print("\n" + "="*55)
-    print("  ALPHA-OMEGA FULL SYSTEM HEALTH CHECK")
-    print("="*55)
-
+    print("\n" + "="*50 + "\n  ALPHA-OMEGA HEALTH CHECK\n" + "="*50)
     report = run_full_check(send_telegram=False)
-
-    STATUS_ICON = {"GREEN": "OK", "YELLOW": "WARN", "RED": "FAIL"}
     for r in report["checks"]:
-        icon = STATUS_ICON[r["status"]]
-        print(f"\n[{icon}] {r['name']}: {r['detail']}")
-
-    print("\n" + "="*55)
-    s = report["summary"]
-    print(f"  OVERALL: {report['overall']}")
-    print(f"  GREEN={s['green']}  YELLOW={s['yellow']}  RED={s['red']}")
-    print("="*55 + "\n")
-
+        print(f"[{r['status'][:2]}] {r['name']}: {r['detail']}")
+    print(f"\nOVERALL: {report['overall']}")
     if report["reds"] or report["yellows"]:
-        print("ACTION REQUIRED:")
-        for r in report["reds"] + report["yellows"]:
-            print(f"  [{r['status']}] {r['name']}: {r['detail']}")
         sys.exit(1)
