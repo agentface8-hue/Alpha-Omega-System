@@ -103,47 +103,16 @@ def check_alpha_vantage() -> Dict:
         return _fail("Alpha Vantage", f"{type(e).__name__}: {str(e)[:80]}")
 
 
-def check_google_sheets() -> Dict:
-    """Test Google Sheets — write a test row, verify it exists, then delete it."""
+def check_airtable() -> Dict:
+    """Test Airtable write+delete - permanent API key, no OAuth needed."""
     try:
-        token_json = os.environ.get("SHEETS_TOKEN_JSON", "")
-        base_dir = Path(__file__).parent.parent
-        token_file = base_dir / "data" / "sheets_token.json"
-
-        if not token_json and not token_file.exists():
-            return _warn("Google Sheets", "SHEETS_TOKEN_JSON env var not set and local token missing")
-
-        import gspread
-        from google.oauth2.credentials import Credentials
-        from google.auth.transport.requests import Request
-
-        creds_data = json.loads(token_json) if token_json else json.loads(token_file.read_text())
-        creds = Credentials(
-            token=None,
-            refresh_token=creds_data.get("refresh_token"),
-            token_uri=creds_data.get("token_uri", "https://oauth2.googleapis.com/token"),
-            client_id=creds_data.get("client_id"),
-            client_secret=creds_data.get("client_secret"),
-            scopes=creds_data.get("scopes", ["https://www.googleapis.com/auth/spreadsheets"]),
-        )
-        creds.refresh(Request())
-
-        gc = gspread.authorize(creds)
-        SHEET_ID = "1G5f1AePhWKJEMJKmfHj1genbr18LMdlCWPsoBJC2ZxM"
-        ws = gc.open_by_key(SHEET_ID).sheet1
-
-        test_row = ["HEALTH_CHECK", "TEST", "-", "-", "-", "0", "0", "0",
-                    f"health_check_{_now()}", "-"]
-        ws.append_row(test_row, value_input_option="USER_ENTERED")
-
-        all_vals = ws.get_all_values()
-        last_row = len(all_vals)
-        if all_vals and all_vals[-1][0] == "HEALTH_CHECK":
-            ws.delete_rows(last_row)
-            return _ok("Google Sheets", f"Write+delete verified — sheet has {last_row - 1} trade rows")
-        return _warn("Google Sheets", "Write succeeded but verify failed — check manually")
+        from core.airtable import check_connection
+        result = check_connection()
+        if result["status"] == "GREEN":
+            return _ok("Airtable", result["detail"])
+        return _warn("Airtable", result["detail"])
     except Exception as e:
-        return _warn("Google Sheets", f"{type(e).__name__}: {str(e)[:100]}")
+        return _warn("Airtable", f"{type(e).__name__}: {str(e)[:80]}")
 
 
 def check_telegram() -> Dict:
@@ -285,7 +254,7 @@ ALL_CHECKS = [
     ("Supabase",        check_supabase),
     ("Anthropic API",   check_anthropic_api),
     ("Alpha Vantage",   check_alpha_vantage),
-    ("Google Sheets",   check_google_sheets),
+    ("Airtable",        check_airtable),
     ("Telegram",        check_telegram),
     ("Portfolio State", check_portfolio_state),
     ("Signal Tracker",  check_signal_tracker),
