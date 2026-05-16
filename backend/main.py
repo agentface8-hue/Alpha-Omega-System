@@ -14,6 +14,7 @@ scan_jobs: Dict[str, Any] = {}
 
 
 def _run_scan_background(job_id: str, symbols: list):
+    import gc as _gc
     """Background thread: runs scan per-ticker so we can report real progress."""
     try:
         from core.market_data import fetch_market_regime, fetch_ticker_data
@@ -27,6 +28,7 @@ def _run_scan_background(job_id: str, symbols: list):
             scan_jobs[job_id]["progress"] = f"{i}/{n} stocks scanned"
             raw = score_ticker(fetch_ticker_data(sym), regime)
             results.append(raw)
+            _gc.collect()  # free DataFrame memory after each ticker
             scan_jobs[job_id]["progress"] = f"{i + 1}/{n} stocks scanned"
 
         # Sort: non-fails by conviction desc, then hard-fails
@@ -96,6 +98,28 @@ app.add_middleware(
 @app.get("/health")
 async def health():
     return {"status": "online", "ts": __import__("datetime").datetime.utcnow().isoformat()}
+
+@app.get("/api/memory")
+async def memory_status():
+    """Live memory usage — monitor Render instance health."""
+    try:
+        import psutil, os as _os
+        proc = psutil.Process(_os.getpid())
+        mem  = proc.memory_info()
+        vm   = psutil.virtual_memory()
+        rss  = round(mem.rss / 1024**2, 1)
+        limit = 2048  # Standard tier = 2GB
+        return {
+            "process_rss_mb":  rss,
+            "system_used_mb":  round(vm.used / 1024**2, 1),
+            "system_avail_mb": round(vm.available / 1024**2, 1),
+            "system_percent":  vm.percent,
+            "render_limit_mb": limit,
+            "headroom_mb":     round(limit - rss, 1),
+            "status":          "OK" if rss < limit * 0.8 else "WARNING",
+        }
+    except Exception as e:
+        return {"error": str(e)}
 
 @app.on_event("startup")
 async def startup_all():

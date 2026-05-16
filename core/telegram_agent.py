@@ -469,18 +469,31 @@ _executor = ThreadPoolExecutor(max_workers=3, thread_name_prefix="tg_agent")
 def _poll_loop():
     global _last_update_id
     logger.info("[AGENT] Telegram polling loop started")
+    _consecutive_409 = 0
     while True:
         try:
             updates = _get_updates(_last_update_id + 1)
+            _consecutive_409 = 0
             for update in updates:
                 _last_update_id = max(_last_update_id, update.get("update_id", 0))
                 _executor.submit(_handle_message, update)
         except Exception as e:
-            logger.error(f"[AGENT] Poll error: {e}")
+            if "409" in str(e):
+                _consecutive_409 += 1
+                wait = min(30, 5 * _consecutive_409)
+                logger.warning(f"[AGENT] 409 Conflict — another instance polling. Waiting {wait}s...")
+                time.sleep(wait)
+                continue
+            else:
+                logger.error(f"[AGENT] Poll error: {e}")
         time.sleep(4)
 
 
 def start():
+    # 10s delay: lets old Render instance die before new one polls
+    # Prevents 409 during zero-downtime redeploys on Standard tier
+    logger.info("[AGENT] Waiting 10s before polling (deploy guard)...")
+    time.sleep(10)
     logger.info("[AGENT] Deleting webhook before polling...")
     _delete_webhook()
 
