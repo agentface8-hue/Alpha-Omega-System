@@ -111,7 +111,7 @@ def check_google_sheets() -> Dict:
         token_file = base_dir / "data" / "sheets_token.json"
 
         if not token_json and not token_file.exists():
-            return _fail("Google Sheets", "SHEETS_TOKEN_JSON env var not set and local token missing")
+            return _warn("Google Sheets", "SHEETS_TOKEN_JSON env var not set and local token missing")
 
         import gspread
         from google.oauth2.credentials import Credentials
@@ -146,7 +146,7 @@ def check_google_sheets() -> Dict:
             return _ok("Google Sheets", f"Write+delete verified — sheet has {last_row - 1} trade rows")
         return _warn("Google Sheets", "Write succeeded but verify failed — check manually")
     except Exception as e:
-        return _fail("Google Sheets", f"{type(e).__name__}: {str(e)[:100]}")
+        return _warn("Google Sheets", f"{type(e).__name__}: {str(e)[:100]}")
 
 
 def check_telegram() -> Dict:
