@@ -49,7 +49,6 @@ function safeNum(val) {
   return (isNaN(n) || val == null) ? null : Math.round(n);
 }
 
-// WhatsApp/Telegram style date label
 function formatLogDate(date) {
   const now   = new Date();
   const today = new Date(now.getFullYear(), now.getMonth(), now.getDate());
@@ -57,11 +56,11 @@ function formatLogDate(date) {
   const diff  = Math.round((today - d) / 86400000);
   if (diff === 0) return "Today";
   if (diff === 1) return "Yesterday";
-  return date.toLocaleDateString(undefined, { day: "2-digit", month: "short", year: "numeric" });
+  return date.toLocaleDateString(undefined, { day: "numeric", month: "long" });
 }
 
 function formatLogTime(date) {
-  return date.toLocaleTimeString(undefined, { hour: "2-digit", minute: "2-digit", hour12: false });
+  return date.toLocaleTimeString(undefined, { hour: "2-digit", minute: "2-digit", hour12: true });
 }
 
 export default function SystemMonitor() {
@@ -76,6 +75,7 @@ export default function SystemMonitor() {
   const [countdown, setCountdown]     = useState(30);
   const timerRef = useRef(null);
   const countRef = useRef(null);
+  const logRef   = useRef(null);
 
   function addLog(msg, level = "info") {
     const now = new Date();
@@ -126,7 +126,7 @@ export default function SystemMonitor() {
       const r = await fetch(`${API}/api/health/agent/run`, { method: "POST" });
       const d = await r.json();
       setAiHealth(d);
-      addLog(`Agent: ${d.severity} - ${d.headline}`, d.severity === "RED" ? "error" : "info");
+      addLog(`Agent: ${d.severity} — ${d.headline}`, d.severity === "RED" ? "error" : "info");
     } catch (e) { addLog(`Agent run failed: ${e.message}`, "error"); }
   }
 
@@ -151,7 +151,6 @@ export default function SystemMonitor() {
   const memLabel = rssNum != null ? `${rssNum} MB` : "…";
   const memWarn  = rssNum != null && rssNum > 1600;
 
-  // Format last refresh like "Today 14:32"
   const lastRefreshLabel = lastRefresh
     ? `${formatLogDate(lastRefresh)} ${formatLogTime(lastRefresh)}`
     : null;
@@ -163,38 +162,66 @@ export default function SystemMonitor() {
     { label: "profit factor", value: perf?.profit_factor != null ? `${perf.profit_factor}` : "…", color: "#1D9E75" },
   ];
 
-  // Group log entries by date label for WhatsApp-style separators
+  // Telegram-style log: date pill centered, timestamp right-aligned
   function renderLog() {
-    if (log.length === 0) return <div style={{ color: "var(--color-text-tertiary)" }}>waiting for events...</div>;
-    const items = [];
-    let lastDateLabel = null;
-    for (let i = 0; i < log.length; i++) {
-      const e = log[i];
-      const dateLabel = formatLogDate(e.date);
-      if (dateLabel !== lastDateLabel) {
-        lastDateLabel = dateLabel;
-        items.push(
-          <div key={`sep-${i}`} style={{ display: "flex", alignItems: "center", gap: 8, margin: "8px 0 4px" }}>
-            <div style={{ flex: 1, height: "0.5px", background: "var(--color-border-tertiary)" }} />
-            <span style={{ fontSize: 10, color: "var(--color-text-tertiary)", fontWeight: 500, whiteSpace: "nowrap",
-              background: "var(--color-background-secondary)", padding: "1px 8px", borderRadius: 10 }}>
-              {dateLabel}
-            </span>
-            <div style={{ flex: 1, height: "0.5px", background: "var(--color-border-tertiary)" }} />
-          </div>
-        );
-      }
-      items.push(
-        <div key={i} style={{ display: "flex", alignItems: "baseline", gap: 8, padding: "3px 0",
-          borderBottom: "0.5px solid var(--color-border-tertiary)",
-          color: e.level === "error" ? "#E24B4A" : e.level === "warn" ? "#BA7517" : "var(--color-text-secondary)" }}>
-          <span style={{ color: "var(--color-text-tertiary)", fontSize: 11, flexShrink: 0, minWidth: 38 }}>
-            {formatLogTime(e.date)}
-          </span>
-          <span style={{ flex: 1 }}>{e.msg}</span>
+    if (log.length === 0) {
+      return (
+        <div style={{ textAlign: "center", color: "var(--color-text-tertiary)", padding: "16px 0", fontSize: 12 }}>
+          waiting for events...
         </div>
       );
     }
+
+    const items = [];
+    let lastDateLabel = null;
+
+    // log is newest-first; reverse to render oldest-first (like a chat)
+    const ordered = [...log].reverse();
+
+    for (let i = 0; i < ordered.length; i++) {
+      const e = log[ordered.length - 1 - i]; // get from original array
+      const entry = ordered[i];
+      const dateLabel = formatLogDate(entry.date);
+
+      // Date separator pill — Telegram style
+      if (dateLabel !== lastDateLabel) {
+        lastDateLabel = dateLabel;
+        items.push(
+          <div key={`sep-${i}`} style={{ display: "flex", justifyContent: "center", margin: "10px 0 6px" }}>
+            <span style={{
+              fontSize: 11, fontWeight: 600, padding: "3px 14px", borderRadius: 20,
+              background: "var(--color-background-tertiary, rgba(0,0,0,0.25))",
+              color: "var(--color-text-secondary)",
+              letterSpacing: "0.01em",
+            }}>
+              {dateLabel}
+            </span>
+          </div>
+        );
+      }
+
+      // Message row — text left, time right (like Telegram)
+      const msgColor =
+        entry.level === "error" ? "#E24B4A" :
+        entry.level === "warn"  ? "#BA7517" :
+        "var(--color-text-secondary)";
+
+      items.push(
+        <div key={i} style={{
+          display: "flex", alignItems: "flex-end", justifyContent: "space-between",
+          gap: 12, padding: "4px 2px",
+          borderBottom: "0.5px solid var(--color-border-tertiary)",
+        }}>
+          <span style={{ fontSize: 12, color: msgColor, flex: 1, lineHeight: 1.4 }}>
+            {entry.msg}
+          </span>
+          <span style={{ fontSize: 10, color: "var(--color-text-tertiary)", flexShrink: 0, whiteSpace: "nowrap" }}>
+            {formatLogTime(entry.date)}
+          </span>
+        </div>
+      );
+    }
+
     return items;
   }
 
@@ -247,7 +274,7 @@ export default function SystemMonitor() {
           ))}
         </Card>
 
-        <Card title="AI health agent - last check">
+        <Card title="AI health agent — last check">
           {aiHealth ? (
             <>
               <div style={{ display: "flex", alignItems: "center", gap: 8, marginBottom: 10 }}>
@@ -283,7 +310,7 @@ export default function SystemMonitor() {
       </div>
 
       <Card title="live activity log">
-        <div style={{ fontFamily: "var(--font-mono)", fontSize: 12, maxHeight: 260, overflowY: "auto" }}>
+        <div ref={logRef} style={{ fontSize: 12, maxHeight: 280, overflowY: "auto", paddingRight: 2 }}>
           {renderLog()}
         </div>
       </Card>
