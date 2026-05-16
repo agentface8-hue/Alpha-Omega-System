@@ -431,6 +431,18 @@ def autopilot_fill(watchlist_name: str = "full_scan", symbols_override: list = N
     """
     from core.conviction_engine import run_scan
     from core.market_data import fetch_market_regime
+    # â”€â”€ Block autopilot outside regular market hours â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
+    from core.signal_tracker import _is_us_market_open
+    mkt = _is_us_market_open()
+    if not mkt["market_open"]:
+        return {
+            "message":  f"Autopilot blocked â€” market not in regular session ({mkt['session']})",
+            "session":  mkt["session"],
+            "opened":   [],
+            "slots_used": 0,
+            "blocked":  True,
+        }
+
     state    = store.load_state()
     open_pos = store.load_positions("open")
     slots    = MAX_POSITIONS - len(open_pos)
@@ -476,7 +488,15 @@ def autopilot_fill(watchlist_name: str = "full_scan", symbols_override: list = N
         regime = fetch_market_regime().get("regime", "Trending Bull")
     except Exception:
         regime = "Trending Bull"
-    conv_threshold = 70 if regime in ("Choppy / Range", "Trending Bear", "High-Vol Event") else 60
+    # Regime-specific thresholds â€” Trending Bull raised to 72 (was 60)
+    # Data shows 41% win rate at 60 in Trending Bull â€” too many bad entries
+    REGIME_THRESHOLDS = {
+        "Trending Bull":  72,
+        "Choppy / Range": 65,
+        "High-Vol Event": 70,
+        "Trending Bear":  75,
+    }
+    conv_threshold = REGIME_THRESHOLDS.get(regime, 70)
     print(f"[AUTOPILOT] Regime: {regime} → conviction threshold: {conv_threshold}%")
 
     # ── Run conviction scan ───────────────────────────────────────────────────

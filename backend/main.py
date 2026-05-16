@@ -158,6 +158,13 @@ async def startup_all():
     except Exception as e:
         log.warning(f"[STARTUP] Learning loop failed: {e}")
 
+    # 5. AI Health Monitor
+    try:
+        from core.ai_health_agent import start as start_health_agent
+        start_health_agent(); log.info("[STARTUP] AI Health Monitor started")
+    except Exception as e:
+        log.warning(f"[STARTUP] AI Health Monitor failed: {e}")
+
 # --- Demo Mode Data ---
 DEMO_SCENARIOS = {
     "bullish": {
@@ -1867,6 +1874,21 @@ async def full_health_check(telegram: bool = False):
     """Run all 9 health checks. Set ?telegram=true to also fire Telegram alert."""
     from core.system_health import run_full_check
     return run_full_check(send_telegram=telegram)
+
+@app.get("/api/health/agent")
+async def agent_health_status():
+    """Last AI health agent check result."""
+    from core.ai_health_agent import get_last_result
+    return get_last_result()
+
+@app.post("/api/health/agent/run")
+async def agent_health_run_now():
+    """Force an immediate AI health agent check cycle."""
+    import asyncio
+    from core.ai_health_agent import run_check_cycle
+    loop = asyncio.get_event_loop()
+    result = await loop.run_in_executor(None, lambda: run_check_cycle(force=True))
+    return result
 
 @app.get("/api/health/quick")
 async def quick_health():
