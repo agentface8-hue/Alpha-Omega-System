@@ -1,10 +1,5 @@
 """
-system_health.py - Alpha-Omega full system health monitor v2.1
-
-Changes:
-  - Replaced Google Sheets with Airtable
-  - Dream Log now uses /api/dreams/latest (correct endpoint)
-  - Only alerts on RED, not YELLOW
+system_health.py - Alpha-Omega full system health monitor v2.2
 """
 import os
 import json
@@ -81,7 +76,6 @@ def check_alpha_vantage() -> Dict:
 
 
 def check_airtable() -> Dict:
-    """Test Airtable write+delete - permanent API key, no OAuth."""
     try:
         from core.airtable import check_connection
         result = check_connection()
@@ -93,7 +87,6 @@ def check_airtable() -> Dict:
 
 
 def check_telegram() -> Dict:
-    """Uses getMe - no message sent, no spam."""
     try:
         token = os.environ.get("TELEGRAM_TOKEN", "")
         if not token:
@@ -169,43 +162,39 @@ def check_learning_loop() -> Dict:
 
 
 def check_dream_log() -> Dict:
-    """Uses /api/dreams/latest - the correct endpoint."""
+    """Check dreaming agent via /api/dreams/latest endpoint."""
     try:
-        import pytz, urllib.request
-        is_market_day = datetime.datetime.now(pytz.timezone("US/Eastern")).weekday() < 5
-
-        # Hit the actual dreams endpoint on our own backend
+        import urllib.request
         backend = os.environ.get("RENDER_EXTERNAL_URL", "https://alpha-omega-system.onrender.com")
-        try:
-            with urllib.request.urlopen(f"{backend}/api/dreams/latest", timeout=8) as r:
-                data = json.loads(r.read())
-            if data and not data.get("detail"):
-                ts = data.get("created_at") or data.get("ts", "")
-                if ts:
-                    dt    = datetime.datetime.fromisoformat(ts.replace("Z", "+00:00").replace("+00:00", ""))
-                    age_h = (datetime.datetime.utcnow() - dt).total_seconds() / 3600
-                    if age_h > 12 and is_market_day:
-                        return _warn("Dream Log", f"Last dream {age_h:.0f}h ago - expected every 4h")
-                    return _ok("Dream Log", f"Last dream {age_h:.0f}h ago")
-        except Exception:
-            pass
 
-        # Fallback: check Supabase directly
-        url = os.environ.get("SUPABASE_URL", "")
-        key = os.environ.get("SUPABASE_ANON_KEY", "")
-        if url and key:
-            req = urllib.request.Request(
-                f"{url}/rest/v1/dream_log?order=created_at.desc&limit=1",
-                headers={"apikey": key, "Authorization": f"Bearer {key}", "Accept": "application/json"}
-            )
-            with urllib.request.urlopen(req, timeout=10) as r:
-                rows = json.loads(r.read().decode())
-            if rows:
-                dt    = datetime.datetime.fromisoformat(rows[0].get("created_at", "").replace("Z", ""))
-                age_h = (datetime.datetime.utcnow() - dt).total_seconds() / 3600
-                return _ok("Dream Log", f"Last dream {age_h:.0f}h ago (Supabase)")
+        with urllib.request.urlopen(f"{backend}/api/dreams/latest", timeout=8) as r:
+            data = json.loads(r.read())
 
-        return _warn("Dream Log", "No dream log yet - run /api/dreams/run to start")
+        # Response format: {"dreams": [...]} or single dream object
+        dreams = data.get("dreams", [])
+
+        # Handle both list and single object
+        if not dreams and isinstance(data, dict) and data.get("created_at"):
+            dreams = [data]
+
+        if not dreams:
+            # No dreams yet - dreaming agent hasn't run. Not an error, just new.
+            return _ok("Dream Log", "Dreaming agent active - no dreams logged yet")
+
+        # Get most recent dream
+        latest = dreams[0] if isinstance(dreams, list) else dreams
+        ts = latest.get("created_at") or latest.get("ts", "")
+        if ts:
+            dt    = datetime.datetime.fromisoformat(ts.replace("Z", "").replace("+00:00", ""))
+            age_h = (datetime.datetime.utcnow() - dt).total_seconds() / 3600
+            import pytz
+            is_market_day = datetime.datetime.now(pytz.timezone("US/Eastern")).weekday() < 5
+            if age_h > 12 and is_market_day:
+                return _warn("Dream Log", f"Last dream {age_h:.0f}h ago - expected every 4h")
+            return _ok("Dream Log", f"Last dream {age_h:.0f}h ago")
+
+        return _ok("Dream Log", f"{len(dreams)} dreams logged")
+
     except Exception as e:
         return _warn("Dream Log", f"Could not check: {str(e)[:60]}")
 
