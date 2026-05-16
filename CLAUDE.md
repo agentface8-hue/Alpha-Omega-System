@@ -385,7 +385,12 @@ This is the only way knowledge survives across sessions.
 | DTP guardrail fires | TP ordering inversion after scaling | Already handled in portfolio_manager.py |
 
 ## 16. RECENT SESSION CHANGES
-*Auto-updated: 2026-05-16 04:41 UTC*
+*Auto-updated: 2026-05-16 04:58 UTC*
+
+### `d2c2312` 2026-05-16 07:41 - auto: session memory 2026-05-16 04:41
+- `CLAUDE.md`
+- `MASTER-KNOWLEDGE.md`
+- `calibration/session_log.json`
 
 ### `c011350` 2026-05-16 07:40 - feat: permanent session memory - auto-updates knowledge files nightly
 - `session_memory.py`
@@ -429,6 +434,4 @@ This is the only way knowledge survives across sessions.
 ### `65e642b` 2026-05-14 19:59 - fix: auth uses direct HTTP to Supabase REST - removes supabase-py WebSocket hang
 - `backend/auth.py`
 
-### `411c124` 2026-05-14 19:41 - fix: add BaseModel import - Render crash on startup
-- `backend/main.py`
 

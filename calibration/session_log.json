@@ -14,5 +14,21 @@
       "fix: auth uses direct HTTP to Supabase REST - removes supabase-py WebSocket hang",
       "fix: add BaseModel import - Render crash on startup"
     ]
+  },
+  {
+    "ts": "2026-05-16T04:58:51.856940",
+    "commits": 32,
+    "messages": [
+      "auto: session memory 2026-05-16 04:41",
+      "feat: permanent session memory - auto-updates knowledge files nightly",
+      "feat: AI health agent, block closed-session autopilot, raise Trending Bull threshold to 72",
+      "fix: 409 deploy guard, gc collect, memory endpoint, psutil",
+      "fix: system audit - OOM memory models prices cleanup",
+      "fix: remove bad vercel.json",
+      "fix: instant dashboard load",
+      "feat: mobile responsive layout",
+      "fix: clear old session, force re-login for new auth system",
+      "fix: auth uses direct HTTP to Supabase REST - removes supabase-py WebSocket hang"
+    ]
   }
 ]
