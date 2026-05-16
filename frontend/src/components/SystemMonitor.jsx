@@ -4,8 +4,8 @@ const API = "https://alpha-omega-system.onrender.com";
 const REFRESH = 30000;
 
 const STATUS_COLOR = { GREEN: "#1D9E75", YELLOW: "#BA7517", RED: "#E24B4A", running: "#1D9E75", stopped: "#E24B4A", unknown: "#888780" };
-const STATUS_BG = { GREEN: "#EAF3DE", YELLOW: "#FAEEDA", RED: "#FCEBEB" };
-const STATUS_TEXT = { GREEN: "#27500A", YELLOW: "#633806", RED: "#791F1F" };
+const STATUS_BG    = { GREEN: "#EAF3DE", YELLOW: "#FAEEDA", RED: "#FCEBEB" };
+const STATUS_TEXT  = { GREEN: "#27500A", YELLOW: "#633806", RED: "#791F1F" };
 
 function Dot({ status }) {
   const c = STATUS_COLOR[status] || "#888780";
@@ -30,27 +30,36 @@ function Card({ title, children }) {
   );
 }
 
-function Row({ status, label, detail, action }) {
+function Row({ status, label, detail }) {
   return (
     <div style={{ display: "flex", alignItems: "center", padding: "7px 0", borderBottom: "0.5px solid var(--color-border-tertiary)", fontSize: 13 }}>
       <Dot status={status} />
       <span style={{ flex: 1, color: "var(--color-text-primary)" }}>{label}</span>
-      {detail && <span style={{ fontSize: 12, color: status === "RED" ? "#E24B4A" : status === "YELLOW" ? "#BA7517" : "var(--color-text-secondary)", textAlign: "right", maxWidth: 260 }}>{detail}</span>}
-      {action && <button onClick={action.fn} style={{ marginLeft: 8, fontSize: 11, padding: "2px 8px", cursor: "pointer" }}>{action.label}</button>}
+      {detail != null && (
+        <span style={{ fontSize: 12, color: status === "RED" ? "#E24B4A" : status === "YELLOW" ? "#BA7517" : "var(--color-text-secondary)", textAlign: "right", maxWidth: 260 }}>
+          {String(detail)}
+        </span>
+      )}
     </div>
   );
 }
 
+function safeNum(val, decimals = 0) {
+  const n = Number(val);
+  if (isNaN(n) || val == null) return null;
+  return decimals > 0 ? n.toFixed(decimals) : Math.round(n);
+}
+
 export default function SystemMonitor() {
-  const [health, setHealth] = useState(null);
+  const [health, setHealth]         = useState(null);
   const [agentStatus, setAgentStatus] = useState(null);
-  const [aiHealth, setAiHealth] = useState(null);
-  const [perf, setPerf] = useState(null);
-  const [memory, setMemory] = useState(null);
-  const [log, setLog] = useState([]);
+  const [aiHealth, setAiHealth]     = useState(null);
+  const [perf, setPerf]             = useState(null);
+  const [memData, setMemData]       = useState(null);
+  const [log, setLog]               = useState([]);
   const [lastRefresh, setLastRefresh] = useState(null);
-  const [loading, setLoading] = useState(true);
-  const [countdown, setCountdown] = useState(30);
+  const [loading, setLoading]       = useState(true);
+  const [countdown, setCountdown]   = useState(30);
   const timerRef = useRef(null);
   const countRef = useRef(null);
 
@@ -70,11 +79,23 @@ export default function SystemMonitor() {
         fetch(`${API}/api/analytics/performance`).then(r => r.json()),
         fetch(`${API}/api/memory`).then(r => r.json()),
       ]);
-      if (h.status === "fulfilled") { setHealth(h.value); if (h.value.reds?.length) addLog(`${h.value.reds.length} RED check(s): ${h.value.reds.map(r => r.name).join(", ")}`, "error"); }
-      if (a.status === "fulfilled") { setAgentStatus(a.value); }
-      if (ai.status === "fulfilled") { setAiHealth(ai.value); if (ai.value.applied_fixes?.length) addLog(`AI auto-fixed: ${ai.value.applied_fixes.map(f => f.action).join(", ")}`, "warn"); }
+      if (h.status === "fulfilled") {
+        setHealth(h.value);
+        if (h.value.reds?.length) addLog(`${h.value.reds.length} RED: ${h.value.reds.map(r => r.name).join(", ")}`, "error");
+      }
+      if (a.status === "fulfilled") setAgentStatus(a.value);
+      if (ai.status === "fulfilled") {
+        setAiHealth(ai.value);
+        if (ai.value.applied_fixes?.length) addLog(`AI fixed: ${ai.value.applied_fixes.map(f => f.action).join(", ")}`, "warn");
+      }
       if (p.status === "fulfilled") setPerf(p.value);
-      if (m.status === "fulfilled") { setMemory(m.value); if (m.value.status === "WARNING") addLog(`Memory WARNING: ${m.value.rss_mb}MB used`, "warn"); }
+      if (m.status === "fulfilled") {
+        const md = m.value || {};
+        const rss      = md.rss_mb      ?? md.memory?.rss_mb      ?? null;
+        const headroom = md.headroom_mb ?? md.memory?.headroom_mb ?? null;
+        setMemData({ rss_mb: rss, headroom_mb: headroom, ok: md.ok ?? md.memory?.ok ?? true });
+        if (rss != null && rss > 1600) addLog(`Memory WARNING: ${rss}MB used`, "warn");
+      }
       setLastRefresh(new Date().toLocaleTimeString());
       addLog("Health check complete", "info");
     } catch (e) {
@@ -89,7 +110,7 @@ export default function SystemMonitor() {
       const r = await fetch(`${API}/api/health/agent/run`, { method: "POST" });
       const d = await r.json();
       setAiHealth(d);
-      addLog(`Agent run: ${d.severity} — ${d.headline}`, d.severity === "RED" ? "error" : "info");
+      addLog(`Agent: ${d.severity} - ${d.headline}`, d.severity === "RED" ? "error" : "info");
     } catch (e) { addLog(`Agent run failed: ${e.message}`, "error"); }
   }
 
@@ -108,8 +129,20 @@ export default function SystemMonitor() {
     return () => { clearInterval(timerRef.current); clearInterval(countRef.current); };
   }, []);
 
-  const overall = health?.overall || "unknown";
-  const checks = health?.checks || [];
+  const overall  = health?.overall || "unknown";
+  const checks   = health?.checks  || [];
+  const rssNum   = safeNum(memData?.rss_mb);
+  const memLabel = rssNum != null ? `${rssNum} MB` : "…";
+  const memWarn  = rssNum != null && rssNum > 1600;
+  const wrLabel  = perf?.win_rate      != null ? `${perf.win_rate}%`      : "…";
+  const pfLabel  = perf?.profit_factor != null ? `${perf.profit_factor}`  : "…";
+
+  const stats = [
+    { label: "overall",       value: overall,  color: STATUS_COLOR[overall] || "#888780" },
+    { label: "memory",        value: memLabel, color: memWarn ? "#BA7517" : "#1D9E75"   },
+    { label: "win rate",      value: wrLabel,  color: "#1D9E75"                          },
+    { label: "profit factor", value: pfLabel,  color: "#1D9E75"                          },
+  ];
 
   return (
     <div style={{ padding: "1rem", fontFamily: "var(--font-sans)", maxWidth: 900 }}>
@@ -130,15 +163,10 @@ export default function SystemMonitor() {
       </div>
 
       <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit,minmax(130px,1fr))", gap: 10, marginBottom: 16 }}>
-        {[
-          { label: "overall", value: overall, color: STATUS_COLOR[overall] },
-          { label: "memory", value: memory ? `${Math.round(memory.rss_mb)} MB` : "…", color: memory?.status === "WARNING" ? "#BA7517" : "#1D9E75" },
-          { label: "win rate", value: perf ? `${perf.win_rate}%` : "…", color: "#1D9E75" },
-          { label: "profit factor", value: perf ? perf.profit_factor : "…", color: "#1D9E75" },
-        ].map(m => (
-          <div key={m.label} style={{ background: "var(--color-background-secondary)", borderRadius: 8, padding: "0.9rem", textAlign: "center" }}>
-            <div style={{ fontSize: 12, color: "var(--color-text-secondary)" }}>{m.label}</div>
-            <div style={{ fontSize: 22, fontWeight: 500, color: m.color, marginTop: 4 }}>{m.value}</div>
+        {stats.map(s => (
+          <div key={s.label} style={{ background: "var(--color-background-secondary)", borderRadius: 8, padding: "0.9rem", textAlign: "center" }}>
+            <div style={{ fontSize: 12, color: "var(--color-text-secondary)" }}>{s.label}</div>
+            <div style={{ fontSize: 22, fontWeight: 500, color: s.color, marginTop: 4 }}>{s.value}</div>
           </div>
         ))}
       </div>
@@ -163,14 +191,14 @@ export default function SystemMonitor() {
           ))}
         </Card>
 
-        <Card title="AI health agent — last check">
+        <Card title="AI health agent - last check">
           {aiHealth ? (
             <>
               <div style={{ display: "flex", alignItems: "center", gap: 8, marginBottom: 10 }}>
                 <Badge status={aiHealth.severity} label={aiHealth.severity} />
                 <span style={{ fontSize: 13, color: "var(--color-text-secondary)" }}>{aiHealth.headline}</span>
               </div>
-              {aiHealth.issues?.map((i, idx) => (
+              {(aiHealth.issues || []).map((i, idx) => (
                 <Row key={idx} status={i.severity === "HIGH" ? "RED" : "YELLOW"} label={i.issue} detail={i.data} />
               ))}
               {aiHealth.applied_fixes?.length > 0 && (
@@ -184,16 +212,16 @@ export default function SystemMonitor() {
         </Card>
 
         <Card title="performance">
-          {perf && perf.total > 0 ? (
+          {perf && (perf.total_trades > 0 || perf.total > 0) ? (
             <>
-              <Row status="GREEN" label="Total trades" detail={perf.total} />
-              <Row status="GREEN" label="Avg win" detail={`+${perf.avg_win_pct}%`} />
-              <Row status="GREEN" label="Avg loss" detail={`${perf.avg_loss_pct}%`} />
-              <Row status="GREEN" label="TP1 hit rate" detail={`${perf.tp1_hit_rate}%`} />
-              <Row status={perf.stopped_out_rate > 60 ? "YELLOW" : "GREEN"} label="Stopped out rate" detail={`${perf.stopped_out_rate}%`} />
+              <Row status="GREEN" label="Total trades" detail={perf.total_trades ?? perf.total} />
+              <Row status="GREEN" label="Avg win"      detail={perf.avg_win_pct  != null ? `+${perf.avg_win_pct}%`  : "-"} />
+              <Row status="GREEN" label="Avg loss"     detail={perf.avg_loss_pct != null ? `${perf.avg_loss_pct}%`  : "-"} />
+              <Row status="GREEN" label="TP1 hit rate" detail={perf.tp1_hit_rate != null ? `${perf.tp1_hit_rate}%`  : "-"} />
+              <Row status={(perf.stopped_out_rate ?? 0) > 60 ? "YELLOW" : "GREEN"} label="Stopped out" detail={perf.stopped_out_rate != null ? `${perf.stopped_out_rate}%` : "-"} />
               <button onClick={runLearning} style={{ marginTop: 10, fontSize: 12, padding: "4px 12px", cursor: "pointer", width: "100%" }}>Run learning loop</button>
             </>
-          ) : <div style={{ fontSize: 13, color: "var(--color-text-secondary)" }}>no closed trades yet</div>}
+          ) : <div style={{ fontSize: 13, color: "var(--color-text-secondary)" }}>loading performance...</div>}
         </Card>
 
       </div>
