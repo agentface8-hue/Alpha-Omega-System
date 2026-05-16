@@ -32,7 +32,10 @@
     }
   },
   "regime_thresholds": {
-    "Trending Bull": 60
+    "Trending Bull": 72,
+    "Choppy / Range": 65,
+    "High-Vol Event": 70,
+    "Trending Bear": 75
   },
   "regime_stats": {
     "Trending Bull": {
@@ -48,5 +51,6 @@
   "fast_run_count": 1,
   "last_fast_run": "2026-05-14T13:10:28.389467",
   "signals_analyzed": 10,
-  "last_updated": "2026-05-14T13:10:28.389467"
+  "last_updated": "2026-05-16T05:00:45.334587",
+  "march_fix_note": "March 2026 losses from loose initial settings (threshold=60). Fixed 2026-05-16: Trending Bull raised to 72, closed-session blocked."
 }

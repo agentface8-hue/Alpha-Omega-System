@@ -14,6 +14,7 @@ import Analytics          from './components/Analytics';
 import PortfolioTab       from './components/PortfolioTab';
 import PrintingProfits    from './components/PrintingProfits';
 import DreamLog           from './components/DreamLog';
+import SystemMonitor      from './components/SystemMonitor';
 import LoginScreen        from './components/LoginScreen';
 import { playThinkingSound, playSuccessSound, playErrorSound } from './utils/sounds';
 
@@ -153,6 +154,7 @@ const App = () => {
     { id:'analyze',   label:'COUNCIL ANALYZE',  color:'#00d4ff' },
     { id:'printing',  label:'PRINTING PROFITS', color:'#fbbf24' },
     { id:'backtest',  label:'BACKTESTER',        color:'#a855f7' },
+  { id:'monitor',   label:'LIVE MONITOR',       color:'#00ff88' },
   ];
 
   // ── Focus mode: single panel full screen ────────────────────────────────────
@@ -281,6 +283,7 @@ const App = () => {
     if (activeTab === 'analytics') return <Analytics />;
     if (activeTab === 'printing')  return <PrintingProfits />;
     if (activeTab === 'backtest')  return <BacktestDashboard />;
+    if (activeTab === 'monitor')   return <SystemMonitor />;
     // Council Analyze
     return (
       <main className="main-container">

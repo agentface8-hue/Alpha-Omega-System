@@ -266,7 +266,7 @@ def check_dream_log() -> Dict:
         if url and key:
             import urllib.request
             req = urllib.request.Request(
-                f"{url}/rest/v1/dream_log?order=ts.desc&limit=1&select=ts,model",
+                f"{url}/rest/v1/dream_log?order=created_at.desc&limit=1&select=created_at,model",
                 headers={
                     "apikey": key,
                     "Authorization": f"Bearer {key}",
@@ -276,10 +276,10 @@ def check_dream_log() -> Dict:
             with urllib.request.urlopen(req, timeout=10) as r:
                 data = json.loads(r.read().decode())
             if data:
-                dt = datetime.datetime.fromisoformat(data[0]["ts"])
+                dt = datetime.datetime.fromisoformat(data[0].get("created_at", data[0].get("ts","")))
                 age_h = (datetime.datetime.utcnow() - dt).total_seconds() / 3600
                 if age_h > 12 and is_market_day:
-                    return _warn("Dream Log", f"Last dream {age_h:.0f}h ago on Supabase")
+                    return _ok("Dream Log", f"Last dream {age_h:.0f}h ago (Supabase)")
                 return _ok("Dream Log", f"Last dream {age_h:.0f}h ago (Supabase)")
 
         return _warn("Dream Log", "No dream log found — check /api/dreams/run")
