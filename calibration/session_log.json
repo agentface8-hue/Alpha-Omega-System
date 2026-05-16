@@ -30,5 +30,21 @@
       "fix: clear old session, force re-login for new auth system",
       "fix: auth uses direct HTTP to Supabase REST - removes supabase-py WebSocket hang"
     ]
+  },
+  {
+    "ts": "2026-05-16T19:00:01.356288",
+    "commits": 36,
+    "messages": [
+      "docs-operational-files",
+      "test",
+      "fix: price_feed uses Finnhub not Alpha Vantage",
+      "fix: trade_log uses Airtable not Google Sheets",
+      "fix: Telegram-style log \u00e2\u20ac\u201d date pill centered, time on right",
+      "feat: WhatsApp-style date separators and timestamps in activity log",
+      "session-20260516",
+      "finnhub",
+      "fix: dream log handles empty dreams list as OK, not error",
+      "fix: dream log uses /api/dreams/latest, correct endpoint"
+    ]
   }
 ]

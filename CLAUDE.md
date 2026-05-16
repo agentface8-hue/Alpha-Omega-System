@@ -385,53 +385,40 @@ This is the only way knowledge survives across sessions.
 | DTP guardrail fires | TP ordering inversion after scaling | Already handled in portfolio_manager.py |
 
 ## 16. RECENT SESSION CHANGES
-*Auto-updated: 2026-05-16 04:58 UTC*
+*Auto-updated: 2026-05-16 19:00 UTC*
 
-### `d2c2312` 2026-05-16 07:41 - auto: session memory 2026-05-16 04:41
-- `CLAUDE.md`
-- `MASTER-KNOWLEDGE.md`
-- `calibration/session_log.json`
+### `ea5bf5c` 2026-05-16 13:24 - docs-operational-files
+- `DECISIONS-LOG.md`
+- `ERROR-HISTORY.md`
+- `ESCALATION-TRIGGERS.md`
+- `ROLLBACK-PROCEDURES.md`
+- `SESSION-CONTINUITY.md`
 
-### `c011350` 2026-05-16 07:40 - feat: permanent session memory - auto-updates knowledge files nightly
-- `session_memory.py`
+### `3b60258` 2026-05-16 13:22 - test
+- `DECISIONS-LOG.md`
 
-### `e3395ea` 2026-05-16 06:58 - feat: AI health agent, block closed-session autopilot, raise Trending Bull threshold to 72
-- `backend/main.py`
-- `core/ai_health_agent.py`
-- `core/portfolio_manager.py`
-- `patch_fixes2.py`
+### `669653b` 2026-05-16 13:15 - fix: price_feed uses Finnhub not Alpha Vantage
+- `core/price_feed.py`
 
-### `dfbcc38` 2026-05-16 06:35 - fix: 409 deploy guard, gc collect, memory endpoint, psutil
-- `backend/main.py`
-- `core/telegram_agent.py`
-- `patch_system.py`
-- `requirements.txt`
+### `19b3876` 2026-05-16 13:14 - fix: trade_log uses Airtable not Google Sheets
+- `core/trade_log.py`
 
-### `e5691c9` 2026-05-15 18:52 - fix: system audit - OOM memory models prices cleanup
-- `.gitignore`
-- `_check_env.py`
-- `_daily_tg_notify.py`
-- `_scan.py`
-- `backend/main.py`
+### `3ad157a` 2026-05-16 11:38 - fix: Telegram-style log â€” date pill centered, time on right
+- `frontend/src/components/SystemMonitor.jsx`
 
-### `42eeb37` 2026-05-15 09:46 - fix: remove bad vercel.json
-- `vercel.json`
+### `facccb5` 2026-05-16 11:35 - feat: WhatsApp-style date separators and timestamps in activity log
+- `frontend/src/components/SystemMonitor.jsx`
 
-### `ad4276d` 2026-05-14 23:12 - fix: instant dashboard load
-- `CHANGES-LOG.md`
-- `CLAUDE.md`
-- `SYSTEM-BUILD-RECORD.md`
-- `_check_env.py`
-- `_daily_tg_notify.py`
+### `41263a4` 2026-05-16 11:32 - session-20260516
+- `SESSION-2026-05-16.md`
 
-### `a6b33e1` 2026-05-14 22:04 - feat: mobile responsive layout
-- `frontend/src/App.jsx`
-- `frontend/src/components/UIKit.jsx`
+### `935985f` 2026-05-16 11:23 - finnhub
+- `core/signal_tracker.py`
 
-### `2a29bb5` 2026-05-14 20:18 - fix: clear old session, force re-login for new auth system
-- `frontend/src/App.jsx`
+### `b2ec008` 2026-05-16 11:13 - fix: dream log handles empty dreams list as OK, not error
+- `core/system_health.py`
 
-### `65e642b` 2026-05-14 19:59 - fix: auth uses direct HTTP to Supabase REST - removes supabase-py WebSocket hang
-- `backend/auth.py`
+### `932a3bd` 2026-05-16 11:10 - fix: dream log uses /api/dreams/latest, correct endpoint
+- `core/system_health.py`
 
 
