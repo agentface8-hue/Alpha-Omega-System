@@ -1821,6 +1821,36 @@ async def get_dream_log(limit: int = 10):
     dreams = load_dream_log(limit=limit)
     return {"dreams": dreams, "count": len(dreams)}
 
+@app.post("/api/dreams/ingest")
+async def ingest_dream(request: Request):
+    """Receive a dream from the local OpenClaw dream agent and store it."""
+    try:
+        dream = await request.json()
+        if not dream or not isinstance(dream, dict):
+            raise HTTPException(status_code=400, detail="Invalid dream payload")
+        import json as _json, datetime as _dt
+        from pathlib import Path as _Path
+        if "ts" not in dream:
+            dream["ts"] = _dt.datetime.utcnow().isoformat()
+        log_path = _Path("signals") / "dream_log.json"
+        log_path.parent.mkdir(exist_ok=True)
+        existing = []
+        if log_path.exists():
+            try:
+                existing = _json.loads(log_path.read_text())
+            except Exception:
+                pass
+        existing.insert(0, dream)
+        existing = existing[:100]
+        log_path.write_text(_json.dumps(existing, indent=2, default=str))
+        print(f"[DREAM-INGEST] edge={dream.get('edge_level','?')} ticker={dream.get('top_ticker','-')}")
+        return {"status": "saved", "edge": dream.get("edge_level"), "ticker": dream.get("top_ticker")}
+    except HTTPException:
+        raise
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
+
+
 
 # ── Order Executor endpoints ─────────────────────────────────────────────────
 
