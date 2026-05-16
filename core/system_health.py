@@ -1,5 +1,5 @@
 """
-system_health.py - Alpha-Omega full system health monitor v2.2
+system_health.py - Alpha-Omega full system health monitor v2.3
 """
 import os
 import json
@@ -162,41 +162,42 @@ def check_learning_loop() -> Dict:
 
 
 def check_dream_log() -> Dict:
-    """Check dreaming agent via /api/dreams/latest endpoint."""
+    """Read dream_log.json directly — no HTTP call to self (avoids circular timeout)."""
     try:
-        import urllib.request
-        backend = os.environ.get("RENDER_EXTERNAL_URL", "https://alpha-omega-system.onrender.com")
+        log_path = Path(__file__).parent.parent / "signals" / "dream_log.json"
 
-        with urllib.request.urlopen(f"{backend}/api/dreams/latest", timeout=8) as r:
-            data = json.loads(r.read())
+        if not log_path.exists():
+            return _ok("Dream Log", "Dreaming agent active - no dreams yet")
 
-        # Response format: {"dreams": [...]} or single dream object
-        dreams = data.get("dreams", [])
-
-        # Handle both list and single object
-        if not dreams and isinstance(data, dict) and data.get("created_at"):
-            dreams = [data]
+        dreams = json.loads(log_path.read_text())
 
         if not dreams:
-            # No dreams yet - dreaming agent hasn't run. Not an error, just new.
-            return _ok("Dream Log", "Dreaming agent active - no dreams logged yet")
+            return _ok("Dream Log", "Dreaming agent active - no dreams yet")
 
-        # Get most recent dream
+        # Newest first
         latest = dreams[0] if isinstance(dreams, list) else dreams
-        ts = latest.get("created_at") or latest.get("ts", "")
+        ts = latest.get("ts") or latest.get("created_at", "")
+
         if ts:
-            dt    = datetime.datetime.fromisoformat(ts.replace("Z", "").replace("+00:00", ""))
-            age_h = (datetime.datetime.utcnow() - dt).total_seconds() / 3600
-            import pytz
-            is_market_day = datetime.datetime.now(pytz.timezone("US/Eastern")).weekday() < 5
-            if age_h > 12 and is_market_day:
-                return _warn("Dream Log", f"Last dream {age_h:.0f}h ago - expected every 4h")
-            return _ok("Dream Log", f"Last dream {age_h:.0f}h ago")
+            try:
+                dt    = datetime.datetime.fromisoformat(ts.replace("Z", "").replace("+00:00", ""))
+                age_h = (datetime.datetime.utcnow() - dt).total_seconds() / 3600
+                edge  = latest.get("edge_level", "?")
+                ticker = latest.get("top_ticker") or "market scan"
+                label = f"Last dream {age_h:.0f}h ago | edge={edge} | {ticker}"
+                # Warn only on weekdays if dream is very old
+                import pytz
+                is_market_day = datetime.datetime.now(pytz.timezone("US/Eastern")).weekday() < 5
+                if age_h > 12 and is_market_day:
+                    return _warn("Dream Log", label + " (overdue)")
+                return _ok("Dream Log", label)
+            except Exception:
+                pass
 
         return _ok("Dream Log", f"{len(dreams)} dreams logged")
 
     except Exception as e:
-        return _warn("Dream Log", f"Could not check: {str(e)[:60]}")
+        return _warn("Dream Log", f"Could not read: {str(e)[:60]}")
 
 
 ALL_CHECKS = [
