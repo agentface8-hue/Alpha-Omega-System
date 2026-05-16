@@ -119,7 +119,7 @@ def check_google_sheets() -> Dict:
 
         creds_data = json.loads(token_json) if token_json else json.loads(token_file.read_text())
         creds = Credentials(
-            token=creds_data.get("token"),
+            token=None,  # always force refresh
             refresh_token=creds_data.get("refresh_token"),
             token_uri=creds_data.get("token_uri", "https://oauth2.googleapis.com/token"),
             client_id=creds_data.get("client_id"),
