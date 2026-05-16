@@ -1,5 +1,5 @@
 """
-system_health.py - Alpha-Omega full system health monitor v2.3
+system_health.py - Alpha-Omega full system health monitor v2.4
 """
 import os
 import json
@@ -58,21 +58,22 @@ def check_anthropic_api() -> Dict:
         return _fail("Anthropic API", f"{type(e).__name__}: {str(e)[:80]}")
 
 
-def check_alpha_vantage() -> Dict:
+def check_finnhub() -> Dict:
+    """Verify Finnhub API key and live price feed (replaced Alpha Vantage)."""
     try:
-        key = os.environ.get("ALPHA_VANTAGE_API_KEY", "")
+        key = os.environ.get("FINNHUB_API_KEY", "")
         if not key:
-            return _warn("Alpha Vantage", "API key missing - yfinance fallback active")
+            return _fail("Finnhub", "FINNHUB_API_KEY missing - no live prices")
         import urllib.request
-        url = f"https://www.alphavantage.co/query?function=GLOBAL_QUOTE&symbol=SPY&apikey={key}"
-        with urllib.request.urlopen(url, timeout=10) as r:
-            data = json.loads(r.read().decode())
-        price = data.get("Global Quote", {}).get("05. price", "")
-        if not price:
-            return _warn("Alpha Vantage", "API responded but no price - possible rate limit")
-        return _ok("Alpha Vantage", f"SPY @ ${float(price):.2f}")
+        url = f"https://finnhub.io/api/v1/quote?symbol=SPY&token={key}"
+        with urllib.request.urlopen(url, timeout=8) as r:
+            data = json.loads(r.read())
+        price = float(data.get("c", 0) or 0)
+        if price <= 0:
+            return _warn("Finnhub", "API responded but no price - market may be closed")
+        return _ok("Finnhub", f"SPY @ ${price:.2f} - live prices active")
     except Exception as e:
-        return _fail("Alpha Vantage", f"{type(e).__name__}: {str(e)[:80]}")
+        return _fail("Finnhub", f"{type(e).__name__}: {str(e)[:80]}")
 
 
 def check_airtable() -> Dict:
@@ -174,7 +175,6 @@ def check_dream_log() -> Dict:
         if not dreams:
             return _ok("Dream Log", "Dreaming agent active - no dreams yet")
 
-        # Newest first
         latest = dreams[0] if isinstance(dreams, list) else dreams
         ts = latest.get("ts") or latest.get("created_at", "")
 
@@ -185,7 +185,6 @@ def check_dream_log() -> Dict:
                 edge  = latest.get("edge_level", "?")
                 ticker = latest.get("top_ticker") or "market scan"
                 label = f"Last dream {age_h:.0f}h ago | edge={edge} | {ticker}"
-                # Warn only on weekdays if dream is very old
                 import pytz
                 is_market_day = datetime.datetime.now(pytz.timezone("US/Eastern")).weekday() < 5
                 if age_h > 12 and is_market_day:
@@ -203,7 +202,7 @@ def check_dream_log() -> Dict:
 ALL_CHECKS = [
     ("Supabase",        check_supabase),
     ("Anthropic API",   check_anthropic_api),
-    ("Alpha Vantage",   check_alpha_vantage),
+    ("Finnhub",         check_finnhub),
     ("Airtable",        check_airtable),
     ("Telegram",        check_telegram),
     ("Portfolio State", check_portfolio_state),
