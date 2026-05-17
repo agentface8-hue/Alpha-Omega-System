@@ -1,6 +1,6 @@
 # CLAUDE.md — Alpha-Omega System
 # ⚠️ READ THIS FIRST — BEFORE TOUCHING ANYTHING ⚠️
-# Last Updated: 2026-05-16
+# Last Updated: 2026-05-17
 
 ---
 
@@ -385,7 +385,12 @@ This is the only way knowledge survives across sessions.
 | DTP guardrail fires | TP ordering inversion after scaling | Already handled in portfolio_manager.py |
 
 ## 16. RECENT SESSION CHANGES
-*Auto-updated: 2026-05-16 19:00 UTC*
+*Auto-updated: 2026-05-17 19:00 UTC*
+
+### `60037b5` 2026-05-16 22:00 - auto: session memory 2026-05-16 19:00
+- `CLAUDE.md`
+- `MASTER-KNOWLEDGE.md`
+- `calibration/session_log.json`
 
 ### `ea5bf5c` 2026-05-16 13:24 - docs-operational-files
 - `DECISIONS-LOG.md`
@@ -416,9 +421,6 @@ This is the only way knowledge survives across sessions.
 - `core/signal_tracker.py`
 
 ### `b2ec008` 2026-05-16 11:13 - fix: dream log handles empty dreams list as OK, not error
-- `core/system_health.py`
-
-### `932a3bd` 2026-05-16 11:10 - fix: dream log uses /api/dreams/latest, correct endpoint
 - `core/system_health.py`
 
 
