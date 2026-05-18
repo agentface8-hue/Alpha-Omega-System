@@ -19,7 +19,7 @@ _DEFAULT_STATE = {
     "cash": 25000.0,
     "total_value": 25000.0,
     "starting_capital": 25000.0,
-    "max_positions": 5,
+    "max_positions": 8,
     "max_position_size": 10000.0,
     "min_position_size": 5000.0,
     "max_risk_per_trade": 500.0,
