@@ -1,5 +1,5 @@
 # ALPHA-OMEGA SYSTEM — MASTER KNOWLEDGE BASE
-# Last Updated: 2026-05-17
+# Last Updated: 2026-05-18
 # Location: C:\Users\asus\Alpha-Omega-System\MASTER-KNOWLEDGE.md
 
 ## ⚠️ INSTRUCTIONS FOR CLAUDE — READ THIS FIRST EVERY SESSION
@@ -512,42 +512,16 @@ Downloads folder has dead ZIP copies from April 29 — ignore them.
 Always deploy from: git push origin main (triggers both Render + Vercel)
 
 ## 16. RECENT SESSION CHANGES
-*Auto-updated: 2026-05-17 19:00 UTC*
+*Auto-updated: 2026-05-18 19:00 UTC*
+
+### `902cce8` 2026-05-17 22:00 - auto: session memory 2026-05-17 19:00
+- `CLAUDE.md`
+- `MASTER-KNOWLEDGE.md`
+- `calibration/session_log.json`
 
 ### `60037b5` 2026-05-16 22:00 - auto: session memory 2026-05-16 19:00
 - `CLAUDE.md`
 - `MASTER-KNOWLEDGE.md`
 - `calibration/session_log.json`
-
-### `ea5bf5c` 2026-05-16 13:24 - docs-operational-files
-- `DECISIONS-LOG.md`
-- `ERROR-HISTORY.md`
-- `ESCALATION-TRIGGERS.md`
-- `ROLLBACK-PROCEDURES.md`
-- `SESSION-CONTINUITY.md`
-
-### `3b60258` 2026-05-16 13:22 - test
-- `DECISIONS-LOG.md`
-
-### `669653b` 2026-05-16 13:15 - fix: price_feed uses Finnhub not Alpha Vantage
-- `core/price_feed.py`
-
-### `19b3876` 2026-05-16 13:14 - fix: trade_log uses Airtable not Google Sheets
-- `core/trade_log.py`
-
-### `3ad157a` 2026-05-16 11:38 - fix: Telegram-style log â€” date pill centered, time on right
-- `frontend/src/components/SystemMonitor.jsx`
-
-### `facccb5` 2026-05-16 11:35 - feat: WhatsApp-style date separators and timestamps in activity log
-- `frontend/src/components/SystemMonitor.jsx`
-
-### `41263a4` 2026-05-16 11:32 - session-20260516
-- `SESSION-2026-05-16.md`
-
-### `935985f` 2026-05-16 11:23 - finnhub
-- `core/signal_tracker.py`
-
-### `b2ec008` 2026-05-16 11:13 - fix: dream log handles empty dreams list as OK, not error
-- `core/system_health.py`
 
 
