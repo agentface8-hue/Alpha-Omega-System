@@ -14,10 +14,10 @@ from core import portfolio_store as store
 SCAN_CACHE_PATH = Path(__file__).parent.parent / "calibration" / "last_portfolio_scan.json"
 SCAN_CACHE_TTL  = 3600 * 4  # 4 hours
 
-MAX_POSITIONS   = 10
+MAX_POSITIONS   = 8
 STARTING_CASH   = 25_000.0
-MAX_POS_SIZE    = 5_000.0
-MIN_POS_SIZE    = 3_000.0
+MAX_POS_SIZE    = 3_340.0   # 12.5% of ~$26,740 — council rule
+MIN_POS_SIZE    = 2_500.0
 MAX_RISK        = 500.0
 SPLIT_TP1_PCT   = 0.50
 SPLIT_TP2_PCT   = 0.30
@@ -77,6 +77,31 @@ def open_position(ticker: str, entry_price: float, sl: float,
     open_pos = store.load_positions("open")
     if len(open_pos) >= MAX_POSITIONS:
         return {"error": f"Max {MAX_POSITIONS} positions reached"}
+
+    # ── Duplicate company blocker (council rule) ───────────────────────────
+    _SIBLING_MAP = {
+        'GOOGL':'ALPHABET','GOOG':'ALPHABET',
+        'BRK.A':'BERKSHIRE','BRK.B':'BERKSHIRE',
+        'META':'META','FB':'META',
+    }
+    _fam = _SIBLING_MAP.get(ticker.upper(), ticker.upper())
+    for _p in open_pos:
+        _p_fam = _SIBLING_MAP.get(_p['ticker'], _p['ticker'])
+        if _p_fam == _fam and _p['ticker'] != ticker.upper():
+            return {"error": f"Duplicate company blocked: {ticker} same company as {_p['ticker']} ({_fam})"}
+
+    # ── Sector concentration check: max 25% of portfolio (council rule) ────
+    try:
+        from core.universe_builder import get_ticker_sector as _gts
+        _sector    = _gts(ticker.upper())
+        _total_val = state.get("total_value", STARTING_CASH) or STARTING_CASH
+        _sector_val = sum(p.get("position_size", 0) for p in open_pos
+                          if _gts(p["ticker"]) == _sector)
+        _sector_pct = (_sector_val / _total_val * 100) if _total_val > 0 else 0
+        if _sector_pct >= 25.0:
+            return {"error": f"Sector limit: {_sector} already at {_sector_pct:.0f}% (max 25%)"}
+    except Exception:
+        pass  # If sector lookup fails, allow the trade
 
     sizing = _size_position(entry_price, sl)
     if sizing["position_size"] > state["cash"]:
@@ -549,12 +574,16 @@ def autopilot_fill(watchlist_name: str = "full_scan", symbols_override: list = N
         s = get_ticker_sector(p["ticker"])
         already_held_sectors[s] = already_held_sectors.get(s, 0) + 1
 
+    # 25% max per sector = 2 positions at 12.5% each
+    _portfolio_val = state.get("total_value", STARTING_CASH) or STARTING_CASH
+    _max_sector_slots = max(1, int(_portfolio_val * 0.25 / (MAX_POS_SIZE or 3340)))
+
     final_candidates = []
     for c in candidates:
         sector = get_ticker_sector(c["ticker"])
         held   = already_held_sectors.get(sector, 0)
         in_q   = sector_counts.get(sector, 0)
-        if held + in_q < 2:
+        if held + in_q < _max_sector_slots:
             sector_counts[sector] = in_q + 1
             final_candidates.append(c)
         if len(final_candidates) >= slots:
