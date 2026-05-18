@@ -8,7 +8,7 @@ import yfinance as yf
 from core import printing_store as store
 from core.kelly_sizer import kelly_size
 
-MAX_POSITIONS = 5
+MAX_POSITIONS = 8
 STARTING_CASH = 25_000.0
 SPLIT_TP1 = 0.50
 SPLIT_TP2 = 0.30
