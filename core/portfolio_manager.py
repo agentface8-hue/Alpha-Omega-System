@@ -1,8 +1,10 @@
 """
-portfolio_manager.py — Paper trading portfolio engine v1.4
+portfolio_manager.py — Paper trading portfolio engine v1.5
+v1.5: Sector Momentum Gate — blocks new positions in bottom-ranked sectors
+      Exit alert when open position's sector drops to bottom 3
 v1.4: Dynamic TP Phase 2 — conviction score scales TP distances at entry
 v1.3: Shared scan cache — autopilot saves all results; bench reads from same scan
-v1.2: Momentum fade → AUTO-CLOSE (5 checks/2%), Alpha-Mega symbols_override
+v1.2: Momentum fade -> AUTO-CLOSE (5 checks/2%), Alpha-Mega symbols_override
 v1.1: ATR at entry, trailing TP3
 """
 import uuid, datetime, math, json, time
@@ -16,7 +18,7 @@ SCAN_CACHE_TTL  = 3600 * 4  # 4 hours
 
 MAX_POSITIONS   = 8
 STARTING_CASH   = 25_000.0
-MAX_POS_SIZE    = 3_340.0   # 12.5% of ~$26,740 — council rule
+MAX_POS_SIZE    = 3_340.0   # 12.5% of ~$26,740 -- council rule
 MIN_POS_SIZE    = 2_500.0
 MAX_RISK        = 500.0
 SPLIT_TP1_PCT   = 0.50
@@ -27,15 +29,14 @@ MAX_TP3_EXTENSIONS = 3
 FADE_CHECKS_NEEDED = 5    # consecutive lower price checks before auto-close
 FADE_GIVEBACK_PCT  = 2.0  # % given back from MFE peak before auto-close
 
+# Sector Momentum Gate thresholds
+SECTOR_BLOCK_RANK      = 9    # sectors ranked 9,10,11 -> BLOCKED entirely
+SECTOR_WARN_RANK       = 7    # sectors ranked 7,8 -> need higher conviction
+SECTOR_WARN_CONVICTION = 78   # minimum conviction required for weak sectors
 
-# ── Dynamic TP Phase 2 — scale TP distances by conviction ──────────────────
+
+# -- Dynamic TP Phase 2 -------------------------------------------------------
 def _dtp_scale(conviction: int) -> tuple:
-    """
-    Returns (scale_factor, label).
-    SL is NEVER touched. Only TP distances from entry are scaled.
-    Higher conviction = wider TPs (let winners run).
-    Lower conviction = tighter TPs (lock in gains faster).
-    """
     if   conviction >= 85: return 1.50, f"DTP +50% (conviction {conviction}%)"
     elif conviction >= 80: return 1.35, f"DTP +35% (conviction {conviction}%)"
     elif conviction >= 75: return 1.20, f"DTP +20% (conviction {conviction}%)"
@@ -45,7 +46,6 @@ def _dtp_scale(conviction: int) -> tuple:
 
 
 def _live_price(ticker: str, asset_type: str = "stock") -> Optional[float]:
-    """Real-time price via Alpha Vantage (yfinance fallback)."""
     from core.price_feed import get_price
     return get_price(ticker, asset_type)
 
@@ -78,7 +78,7 @@ def open_position(ticker: str, entry_price: float, sl: float,
     if len(open_pos) >= MAX_POSITIONS:
         return {"error": f"Max {MAX_POSITIONS} positions reached"}
 
-    # ── Duplicate company blocker (council rule) ───────────────────────────
+    # -- Duplicate company blocker --------------------------------------------
     _SIBLING_MAP = {
         'GOOGL':'ALPHABET','GOOG':'ALPHABET',
         'BRK.A':'BERKSHIRE','BRK.B':'BERKSHIRE',
@@ -90,16 +90,52 @@ def open_position(ticker: str, entry_price: float, sl: float,
         if _p_fam == _fam and _p['ticker'] != ticker.upper():
             return {"error": f"Duplicate company blocked: {ticker} same company as {_p['ticker']} ({_fam})"}
 
-    # ── Sector concentration check: max 25% of portfolio (council rule) ────
+    # -- Sector checks (concentration + momentum gate) ------------------------
+    _sector = "Unknown"
     try:
         from core.universe_builder import get_ticker_sector as _gts
-        _sector    = _gts(ticker.upper())
-        _total_val = state.get("total_value", STARTING_CASH) or STARTING_CASH
+        _sector = _gts(ticker.upper())
+
+        # 1. Concentration: max 25% of portfolio per sector
+        _total_val  = state.get("total_value", STARTING_CASH) or STARTING_CASH
         _sector_val = sum(p.get("position_size", 0) for p in open_pos
                           if _gts(p["ticker"]) == _sector)
         _sector_pct = (_sector_val / _total_val * 100) if _total_val > 0 else 0
         if _sector_pct >= 25.0:
             return {"error": f"Sector limit: {_sector} already at {_sector_pct:.0f}% (max 25%)"}
+
+        # 2. Sector Momentum Gate: live ranking from Sector Momentum Universe
+        try:
+            from core.sector_ranker import rank_sectors as _rank_secs
+            _rankings   = _rank_secs()
+            _total_secs = len(_rankings) or 11
+            _rank_entry = next((r for r in _rankings if r.get("sector") == _sector), None)
+            _rank_num   = _rank_entry.get("rank", 0) if _rank_entry else 0
+
+            if _rank_num >= SECTOR_BLOCK_RANK:
+                # Bottom sectors (rank 9,10,11): BLOCKED -- this is exactly why SECTOR MOMENTUM was built
+                return {
+                    "error": (
+                        f"Sector blocked: {_sector} ranked "
+                        f"#{_rank_num}/{_total_secs} in Sector Momentum Universe "
+                        f"(bottom 3 -- system says avoid)"
+                    )
+                }
+            elif _rank_num >= SECTOR_WARN_RANK and conviction < SECTOR_WARN_CONVICTION:
+                # Weak sectors (rank 7-8): need stronger signal
+                return {
+                    "error": (
+                        f"Sector weak: {_sector} ranked #{_rank_num}/{_total_secs} -- "
+                        f"need conviction >= {SECTOR_WARN_CONVICTION}% "
+                        f"(have {conviction}%)"
+                    )
+                }
+            elif _rank_num > 0:
+                score = _rank_entry.get("score", 0) if _rank_entry else 0
+                print(f"  [SECTOR-GATE] {ticker}: {_sector} #{_rank_num}/{_total_secs} score={score:.2f} -- OK")
+        except Exception as _se:
+            print(f"  [SECTOR-GATE] rank check skipped: {_se}")
+
     except Exception:
         pass  # If sector lookup fails, allow the trade
 
@@ -117,20 +153,18 @@ def open_position(ticker: str, entry_price: float, sl: float,
         else:
             return {"error": f"Insufficient cash (need ${min_size:.2f}, have ${state['cash']:.0f})"}
 
-    # ── Dynamic TP Phase 2 — scale TP distances by conviction ─────────────────
+    # -- Dynamic TP Phase 2 ---------------------------------------------------
     dtp_scale_val, dtp_note = _dtp_scale(conviction)
     if dtp_scale_val != 1.0:
         _sl_dist = max(entry_price - sl, 0.01)
         tp1 = round(entry_price + (tp1 - entry_price) * dtp_scale_val, 4)
         tp2 = round(entry_price + (tp2 - entry_price) * dtp_scale_val, 4)
         tp3 = round(entry_price + (tp3 - entry_price) * dtp_scale_val, 4)
-        # Guardrail: ensure strict TP ordering after scaling
         if tp2 <= tp1: tp2 = round(tp1 + _sl_dist * 0.5, 4)
         if tp3 <= tp2: tp3 = round(tp2 + _sl_dist * 0.5, 4)
-        print(f"  [DTP] {ticker}: scale={dtp_scale_val}× → TP1=${tp1:.2f} TP2=${tp2:.2f} TP3=${tp3:.2f} ({dtp_note})")
+        print(f"  [DTP] {ticker}: scale={dtp_scale_val}x TP1=${tp1:.2f} TP2=${tp2:.2f} TP3=${tp3:.2f} ({dtp_note})")
 
     now          = datetime.datetime.utcnow().isoformat()
-    # Real 14-day ATR via yfinance
     atr_at_entry = 0.0
     try:
         import pandas as pd
@@ -142,7 +176,7 @@ def open_position(ticker: str, entry_price: float, sl: float,
     except Exception:
         pass
     if atr_at_entry <= 0:
-        atr_at_entry = round((entry_price - sl) * 2, 4)  # fallback if fetch fails
+        atr_at_entry = round((entry_price - sl) * 2, 4)
 
     pos = {
         "id": str(uuid.uuid4()), "ticker": ticker.upper(), "status": "open",
@@ -167,6 +201,7 @@ def open_position(ticker: str, entry_price: float, sl: float,
         "dtp_scale": dtp_scale_val, "dtp_note": dtp_note,
         "pillar_scores": pillar_scores or {},
         "tas": tas or "",
+        "sector": _sector,
         "entry_market_context": entry_market_context or {},
         "trades": [{"id": str(uuid.uuid4()), "type": "entry",
                     "price": round(entry_price, 4), "shares": sizing["shares"],
@@ -196,21 +231,16 @@ def check_portfolio() -> Dict:
         tp1    = pos["tp1"];         tp2 = pos["tp2"]; tp3 = pos["tp3"]
         shares = pos["shares_remaining"]
 
-        # ── TP ordering guardrail — fix inversions from stale/dynamic TP data ─
+        # -- TP ordering guardrail --------------------------------------------
         _atr_g = pos.get("atr_at_entry", 0) or abs(tp1 - entry) or abs(entry - sl)
-        _fixed = False
         if tp2 > 0 and tp1 > 0 and tp2 <= tp1:
-            pos["tp2"] = round(tp1 + _atr_g * 0.5, 4)
-            tp2 = pos["tp2"]; _fixed = True
-            print(f"  [TP-ORDER] {ticker}: TP2 corrected → ${tp2:.2f}")
+            pos["tp2"] = round(tp1 + _atr_g * 0.5, 4); tp2 = pos["tp2"]
+            print(f"  [TP-ORDER] {ticker}: TP2 corrected to ${tp2:.2f}")
         if tp3 > 0 and tp3 <= tp2:
-            pos["tp3"] = round(tp2 + _atr_g * 0.5, 4)
-            tp3 = pos["tp3"]; _fixed = True
-            print(f"  [TP-ORDER] {ticker}: TP3 corrected → ${tp3:.2f}")
+            pos["tp3"] = round(tp2 + _atr_g * 0.5, 4); tp3 = pos["tp3"]
+            print(f"  [TP-ORDER] {ticker}: TP3 corrected to ${tp3:.2f}")
         elif tp3 > 0 and tp3 <= tp1:
-            pos["tp3"] = round(tp1 + _atr_g * 1.0, 4)
-            tp3 = pos["tp3"]; _fixed = True
-            print(f"  [TP-ORDER] {ticker}: TP3 corrected → ${tp3:.2f}")
+            pos["tp3"] = round(tp1 + _atr_g * 1.0, 4); tp3 = pos["tp3"]
 
         pos["current_price"]      = price
         gain_from_entry           = price - entry
@@ -220,7 +250,7 @@ def check_portfolio() -> Dict:
         pos["unrealized_pnl_pct"] = round((price - entry) / entry * 100, 2)
         now = datetime.datetime.utcnow().isoformat(); action = None
 
-        # ── ATR auto-refresh (once per position, replaces formula estimate) ───
+        # -- ATR auto-refresh -------------------------------------------------
         if not pos.get("atr_refreshed"):
             try:
                 import pandas as pd
@@ -230,157 +260,136 @@ def check_portfolio() -> Dict:
                     _tr = pd.concat([_h - _l, (_h - _cp).abs(), (_l - _cp).abs()], axis=1).max(axis=1)
                     _real_atr = round(float(_tr.rolling(14).mean().iloc[-1]), 4)
                     if _real_atr > 0:
-                        old_atr = pos.get("atr_at_entry", 0)
-                        pos["atr_at_entry"]  = _real_atr
-                        pos["atr_refreshed"] = True
-                        print(f"  [ATR-REFRESH] {ticker}: ${old_atr:.2f} → ${_real_atr:.2f}")
-            except Exception as _ae:
-                print(f"  [ATR-REFRESH] {ticker} failed: {_ae}")
+                        pos["atr_at_entry"] = _real_atr; pos["atr_refreshed"] = True
+            except Exception: pass
 
-        # ── Trailing Stop-Loss (TSL) — ratchet SL up as price rises ───────────
-        # Runs on every check. SL only moves UP, never down.
+        # -- Sector Momentum exit alert ---------------------------------------
+        # If an open position's sector drops to bottom 3, send Telegram alert
+        if not pos.get("sector_exit_alerted"):
+            try:
+                from core.sector_ranker import rank_sectors as _rs
+                _pos_sector = pos.get("sector", "")
+                if _pos_sector and _pos_sector != "Unknown":
+                    _rnks     = _rs()
+                    _r        = next((r for r in _rnks if r.get("sector") == _pos_sector), None)
+                    _rank_num = _r.get("rank", 0) if _r else 0
+                    if _rank_num >= SECTOR_BLOCK_RANK:
+                        pos["sector_exit_alerted"] = True
+                        pnl_str = f"{pos['unrealized_pnl_pct']:+.1f}%"
+                        print(f"  [SECTOR-EXIT] {ticker}: {_pos_sector} now #{_rank_num} -- consider closing ({pnl_str})")
+                        try:
+                            from core.telegram_alerts import _send
+                            _send(
+                                f"SECTOR EXIT ALERT -- {ticker}\n"
+                                f"{_pos_sector} dropped to #{_rank_num}/11 in Sector Momentum Universe\n"
+                                f"Position PnL: {pnl_str}\n"
+                                f"Sector momentum says AVOID -- consider closing"
+                            )
+                        except Exception: pass
+            except Exception: pass
+
+        # -- Trailing Stop-Loss -----------------------------------------------
         _atr = pos.get("atr_at_entry", 0)
         if _atr > 0 and price > entry and shares > 0:
             _multiple = (price - entry) / _atr
-            _new_sl   = None
-            _sl_note  = ""
-            if _multiple >= 2.0:
+            _new_sl = None; _sl_note = ""
+            if   _multiple >= 2.0:
                 _cand = round(entry + _atr * 1.0, 4)
-                if _cand > pos["sl"]: _new_sl = _cand; _sl_note = "TSL 2×ATR → entry+1×ATR"
+                if _cand > pos["sl"]: _new_sl = _cand; _sl_note = "TSL 2xATR -> entry+1xATR"
             elif _multiple >= 1.5:
                 _cand = round(entry + _atr * 0.5, 4)
-                if _cand > pos["sl"]: _new_sl = _cand; _sl_note = "TSL 1.5×ATR → entry+0.5×ATR"
+                if _cand > pos["sl"]: _new_sl = _cand; _sl_note = "TSL 1.5xATR -> entry+0.5xATR"
             elif _multiple >= 1.0:
                 _cand = round(entry, 4)
-                if _cand > pos["sl"]: _new_sl = _cand; _sl_note = "TSL 1×ATR → break-even"
+                if _cand > pos["sl"]: _new_sl = _cand; _sl_note = "TSL 1xATR -> break-even"
             if _new_sl:
-                _old_sl = pos["sl"]
-                pos["sl"] = _new_sl
+                _old_sl = pos["sl"]; pos["sl"] = _new_sl
                 if "sl_history" not in pos: pos["sl_history"] = []
                 pos["sl_history"].append({"sl": _new_sl, "note": _sl_note, "ts": now, "label": "TSL"})
-                action = f"TSL: SL raised ${_old_sl:.2f} → ${_new_sl:.2f} ({_sl_note})"
-                print(f"  [TSL] {ticker}: ${_old_sl:.2f} → ${_new_sl:.2f}")
+                action = f"TSL: SL raised ${_old_sl:.2f} -> ${_new_sl:.2f} ({_sl_note})"
+                print(f"  [TSL] {ticker}: ${_old_sl:.2f} -> ${_new_sl:.2f}")
 
-        # ── Momentum fade → AUTO-CLOSE ──────────────────────────────────────
-        # After TP1 hit and in profit: if price declines FADE_CHECKS_NEEDED
-        # consecutive times AND gives back FADE_GIVEBACK_PCT% from peak,
-        # the system auto-closes to lock in profits. No human needed.
+        # -- Momentum fade -> AUTO-CLOSE --------------------------------------
         if pos.get("tp1_hit") and pos["unrealized_pnl_pct"] > 0 and not pos.get("momentum_fade_close"):
             prev_p = pos.get("prev_check_price", price)
-            if price < prev_p:
-                pos["momentum_down_count"] = pos.get("momentum_down_count",0) + 1
-            else:
-                pos["momentum_down_count"] = 0
+            pos["momentum_down_count"] = pos.get("momentum_down_count",0) + 1 if price < prev_p else 0
             pos["prev_check_price"] = price
-
             mfe_pct     = pos["mfe"] / entry * 100 if entry > 0 else 0
             curr_pnl    = pos["unrealized_pnl_pct"]
             giving_back = mfe_pct - curr_pnl
-
             if pos.get("momentum_down_count",0) >= FADE_CHECKS_NEEDED and giving_back >= FADE_GIVEBACK_PCT and not pos.get("fade_alert_sent"):
-                pos["fade_alert_sent"]    = True
-                pos["momentum_fade_close"] = True  # triggers auto-close below
-                print(f"  [FADE-CLOSE] {ticker}: auto-closing — gave back {giving_back:.1f}% from MFE +{mfe_pct:.1f}%")
+                pos["fade_alert_sent"] = True; pos["momentum_fade_close"] = True
+                print(f"  [FADE-CLOSE] {ticker}: gave back {giving_back:.1f}% from MFE +{mfe_pct:.1f}%")
 
-        # ── SL hit ──────────────────────────────────────────────────────────
+        # -- SL hit -----------------------------------------------------------
         if price <= sl and shares > 0:
             pnl = round(shares * (sl - entry), 2)
-            pos["trades"].append({"id":str(uuid.uuid4()),"type":"sl_exit",
-                                   "price":sl,"shares":shares,"pnl":pnl,"tp_level":"SL","executed_at":now})
+            pos["trades"].append({"id":str(uuid.uuid4()),"type":"sl_exit","price":sl,"shares":shares,"pnl":pnl,"tp_level":"SL","executed_at":now})
             pos["realized_pnl"] = round(pos.get("realized_pnl",0)+pnl, 2)
             state["cash"]       = round(state["cash"]+shares*sl, 2)
             pos["shares_remaining"] = 0; pos["status"] = "closed"; pos["closed_at"] = now
             pos["close_reason"] = f"Stop-loss hit @ ${sl:.2f} (entry ${entry:.2f}, loss ${abs(pnl):.0f})"
             pos["unrealized_pnl"] = 0; action = f"SL hit @ ${sl}"; closed_count += 1
 
-        # ── Momentum fade AUTO-CLOSE ─────────────────────────────────────────
+        # -- Momentum fade AUTO-CLOSE -----------------------------------------
         elif pos.get("momentum_fade_close") and shares > 0:
-            mfe_c    = pos["mfe"] / entry * 100 if entry > 0 else 0
-            curr_pnl = pos["unrealized_pnl_pct"]
-            gb       = round(mfe_c - curr_pnl, 2)
-            pnl      = round(shares * (price - entry), 2)
-            pos["trades"].append({"id":str(uuid.uuid4()),"type":"momentum_fade_close",
-                                   "price":price,"shares":shares,"pnl":pnl,
-                                   "tp_level":"FADE","executed_at":now})
-            pos["realized_pnl"]     = round(pos.get("realized_pnl",0)+pnl, 2)
-            state["cash"]           = round(state["cash"]+shares*price, 2)
+            mfe_c = pos["mfe"] / entry * 100 if entry > 0 else 0
+            curr_pnl = pos["unrealized_pnl_pct"]; gb = round(mfe_c - curr_pnl, 2)
+            pnl = round(shares * (price - entry), 2)
+            pos["trades"].append({"id":str(uuid.uuid4()),"type":"momentum_fade_close","price":price,"shares":shares,"pnl":pnl,"tp_level":"FADE","executed_at":now})
+            pos["realized_pnl"] = round(pos.get("realized_pnl",0)+pnl, 2)
+            state["cash"]       = round(state["cash"]+shares*price, 2)
             pos["shares_remaining"] = 0; pos["status"] = "closed"; pos["closed_at"] = now
-            pos["close_reason"]     = (
-                f"Auto-close: gave back {gb:.1f}% from peak +{mfe_c:.1f}% "
-                f"— locked in +{curr_pnl:.1f}%"
-            )
-            pos["unrealized_pnl"] = 0
-            action = f"Momentum fade auto-close @ ${price:.2f} (+{curr_pnl:.1f}%)"
-            closed_count += 1
+            pos["close_reason"] = f"Auto-close: gave back {gb:.1f}% from peak +{mfe_c:.1f}% -- locked in +{curr_pnl:.1f}%"
+            pos["unrealized_pnl"] = 0; action = f"Momentum fade auto-close @ ${price:.2f} (+{curr_pnl:.1f}%)"; closed_count += 1
             try:
                 from core.telegram_alerts import alert_momentum_fade_close
-                alert_momentum_fade_close(
-                    {"ticker":ticker,"entry_price":entry,"current_price":price,
-                     "close_price":price,"pnl_pct":curr_pnl,"mfe_pct":mfe_c},
-                    curr_pnl, mfe_c
-                )
+                alert_momentum_fade_close({"ticker":ticker,"entry_price":entry,"current_price":price,"close_price":price,"pnl_pct":curr_pnl,"mfe_pct":mfe_c}, curr_pnl, mfe_c)
             except: pass
 
-        # ── TP3 hit — TRAILING LOGIC ─────────────────────────────────────────
+        # -- TP3 hit -- TRAILING LOGIC ----------------------------------------
         elif price >= tp3 and not pos.get("tp3_hit") and pos.get("tp2_hit"):
             extensions = pos.get("tp3_extensions", 0)
             if extensions < MAX_TP3_EXTENSIONS and price > tp3 * 1.005:
-                atr_est = pos.get("atr_at_entry", 0)
-                if atr_est <= 0: atr_est = abs(tp1 - sl)
+                atr_est = pos.get("atr_at_entry", 0) or abs(tp1 - sl)
                 new_tp3 = round(price + atr_est * 0.5, 4); old_tp3 = pos["tp3"]
                 pos["tp3"] = new_tp3; pos["tp3_extensions"] = extensions+1; pos["trailing_active"] = True
                 try:
                     from core.telegram_alerts import alert_tp_extended
-                    alert_tp_extended({"ticker":ticker,"entry_price":entry,"current_price":price,"trailing_active":True},
-                                      new_tp3, extensions+1)
+                    alert_tp_extended({"ticker":ticker,"entry_price":entry,"current_price":price,"trailing_active":True}, new_tp3, extensions+1)
                 except: pass
-                action = f"TP3 extended ${old_tp3:.2f} → ${new_tp3:.2f} (ext #{extensions+1})"
+                action = f"TP3 extended ${old_tp3:.2f} -> ${new_tp3:.2f} (ext #{extensions+1})"
             else:
                 tp3_sh = pos["shares_remaining"]; pnl = round(tp3_sh*(tp3-entry),2)
-                pos["trades"].append({"id":str(uuid.uuid4()),"type":"partial_tp3",
-                                       "price":tp3,"shares":tp3_sh,"pnl":pnl,"tp_level":"TP3","executed_at":now})
+                pos["trades"].append({"id":str(uuid.uuid4()),"type":"partial_tp3","price":tp3,"shares":tp3_sh,"pnl":pnl,"tp_level":"TP3","executed_at":now})
                 pos["realized_pnl"] = round(pos.get("realized_pnl",0)+pnl, 2)
                 state["cash"]       = round(state["cash"]+tp3_sh*tp3, 2)
-                pos["tp3_hit"] = True; pos["shares_remaining"] = 0
-                pos["status"]  = "closed"; pos["closed_at"] = now
+                pos["tp3_hit"] = True; pos["shares_remaining"] = 0; pos["status"] = "closed"; pos["closed_at"] = now
                 ext_count = pos.get("tp3_extensions",0)
-                pos["close_reason"] = (
-                    f"Trailing TP3 final close @ ${tp3:.2f} after {ext_count} extension{'s' if ext_count!=1 else ''} (+${pnl:.0f})"
-                    if pos.get("trailing_active")
-                    else f"TP3 hit @ ${tp3:.2f} — full target reached (+${pnl:.0f})"
-                )
-                pos["unrealized_pnl"] = 0
-                action = f"TP3 {'trailing final' if pos.get('trailing_active') else 'hit'} @ ${tp3}"
-                closed_count += 1
+                pos["close_reason"] = (f"Trailing TP3 final close @ ${tp3:.2f} after {ext_count} extensions (+${pnl:.0f})" if pos.get("trailing_active") else f"TP3 hit @ ${tp3:.2f} (+${pnl:.0f})")
+                pos["unrealized_pnl"] = 0; action = f"TP3 hit @ ${tp3}"; closed_count += 1
 
-        # ── TP2 hit ──────────────────────────────────────────────────────────
+        # -- TP2 hit ----------------------------------------------------------
         elif price >= tp2 and not pos.get("tp2_hit") and pos.get("tp1_hit"):
             tp2_sh = min(pos.get("tp2_shares",1), pos["shares_remaining"])
             pnl    = round(tp2_sh*(tp2-entry),2)
-            pos["trades"].append({"id":str(uuid.uuid4()),"type":"partial_tp2",
-                                   "price":tp2,"shares":tp2_sh,"pnl":pnl,"tp_level":"TP2","executed_at":now})
-            pos["realized_pnl"]     = round(pos.get("realized_pnl",0)+pnl, 2)
-            state["cash"]           = round(state["cash"]+tp2_sh*tp2, 2)
-            pos["tp2_hit"]          = True; pos["shares_remaining"] -= tp2_sh
-            pos["status"]           = "partial"; pos["sl"] = round(tp1,4)
-            action = f"TP2 hit @ ${tp2}, SL → TP1"
+            pos["trades"].append({"id":str(uuid.uuid4()),"type":"partial_tp2","price":tp2,"shares":tp2_sh,"pnl":pnl,"tp_level":"TP2","executed_at":now})
+            pos["realized_pnl"] = round(pos.get("realized_pnl",0)+pnl, 2); state["cash"] = round(state["cash"]+tp2_sh*tp2, 2)
+            pos["tp2_hit"] = True; pos["shares_remaining"] -= tp2_sh; pos["status"] = "partial"; pos["sl"] = round(tp1,4)
+            action = f"TP2 hit @ ${tp2}, SL -> TP1"
 
-        # ── TP1 hit ──────────────────────────────────────────────────────────
+        # -- TP1 hit ----------------------------------------------------------
         elif price >= tp1 and not pos.get("tp1_hit"):
             tp1_sh = min(pos.get("tp1_shares",1), pos["shares_remaining"])
             pnl    = round(tp1_sh*(tp1-entry),2)
-            pos["trades"].append({"id":str(uuid.uuid4()),"type":"partial_tp1",
-                                   "price":tp1,"shares":tp1_sh,"pnl":pnl,"tp_level":"TP1","executed_at":now})
-            pos["realized_pnl"]     = round(pos.get("realized_pnl",0)+pnl, 2)
-            state["cash"]           = round(state["cash"]+tp1_sh*tp1, 2)
-            pos["tp1_hit"]          = True; pos["shares_remaining"] -= tp1_sh
-            pos["status"]           = "partial"; pos["sl"] = round(entry,4)
-            action = f"TP1 hit @ ${tp1}, SL → BE"
+            pos["trades"].append({"id":str(uuid.uuid4()),"type":"partial_tp1","price":tp1,"shares":tp1_sh,"pnl":pnl,"tp_level":"TP1","executed_at":now})
+            pos["realized_pnl"] = round(pos.get("realized_pnl",0)+pnl, 2); state["cash"] = round(state["cash"]+tp1_sh*tp1, 2)
+            pos["tp1_hit"] = True; pos["shares_remaining"] -= tp1_sh; pos["status"] = "partial"; pos["sl"] = round(entry,4)
+            action = f"TP1 hit @ ${tp1}, SL -> BE"
 
         pos["updated_at"] = now
         store.save_position(pos)
-        updates.append({"ticker":ticker,"price":price,"action":action,
-                        "pnl":pos["unrealized_pnl"],"status":pos["status"]})
+        updates.append({"ticker":ticker,"price":price,"action":action,"pnl":pos["unrealized_pnl"],"status":pos["status"]})
 
         if pos["status"] == "closed":
             try:
@@ -402,15 +411,10 @@ def close_position(position_id: str, reason: str = "MANUAL") -> Dict:
     price  = _live_price(pos["ticker"], pos.get("asset_type","stock")) or pos["current_price"]
     shares = pos["shares_remaining"]; entry = pos["entry_price"]
     pnl    = round(shares*(price-entry),2); now = datetime.datetime.utcnow().isoformat()
-    pos["trades"].append({"id":str(uuid.uuid4()),"type":"manual_close",
-                           "price":price,"shares":shares,"pnl":pnl,"tp_level":reason,"executed_at":now})
-    pos["realized_pnl"]     = round(pos.get("realized_pnl",0)+pnl, 2)
-    state["cash"]           = round(state["cash"]+shares*price, 2)
+    pos["trades"].append({"id":str(uuid.uuid4()),"type":"manual_close","price":price,"shares":shares,"pnl":pnl,"tp_level":reason,"executed_at":now})
+    pos["realized_pnl"] = round(pos.get("realized_pnl",0)+pnl, 2); state["cash"] = round(state["cash"]+shares*price, 2)
     pos["shares_remaining"] = 0; pos["status"] = "closed"; pos["closed_at"] = now
-    pos["close_reason"]     = (
-        f"Manual close @ ${price:.2f} — {'profit' if pnl>=0 else 'loss'} {'+' if pnl>=0 else ''}{pnl:.0f}"
-        + (f" ({reason})" if reason!="MANUAL" else "")
-    )
+    pos["close_reason"] = f"Manual close @ ${price:.2f} -- {'profit' if pnl>=0 else 'loss'} {'+' if pnl>=0 else ''}{pnl:.0f}" + (f" ({reason})" if reason!="MANUAL" else "")
     pos["unrealized_pnl"] = 0
     store.save_position(pos)
     open_after = [p for p in open_pos if p["id"]!=position_id]
@@ -433,11 +437,9 @@ def get_portfolio() -> Dict:
     total_pnl = round(total_realized+total_unrealized, 2)
     win_rate  = round(len(winning)/len(closed_pos)*100,1) if closed_pos else 0
     return {
-        "state": state, "open_positions": open_pos,
-        "closed_positions": closed_pos[-20:],
+        "state": state, "open_positions": open_pos, "closed_positions": closed_pos[-20:],
         "stats": {
-            "open_count": len(open_pos),
-            "slots_available": MAX_POSITIONS - len(open_pos),
+            "open_count": len(open_pos), "slots_available": MAX_POSITIONS - len(open_pos),
             "total_closed": len(closed_pos), "win_rate": win_rate,
             "total_realized_pnl": total_realized, "total_unrealized_pnl": total_unrealized,
             "total_pnl": total_pnl,
@@ -448,25 +450,13 @@ def get_portfolio() -> Dict:
 
 
 def autopilot_fill(watchlist_name: str = "full_scan", symbols_override: list = None) -> Dict:
-    """
-    Fill open slots using >$10B sector-ranked universe.
-    Priority: symbols_override → sector ranker → watchlist fallback.
-    Selection: top sectors by momentum, conviction >= 60%, sorted by conviction desc,
-               sector cap of 2 positions, min R:R 1.8.
-    """
+    """Fill open slots using sector-ranked universe. open_position() enforces the sector gate."""
     from core.conviction_engine import run_scan
     from core.market_data import fetch_market_regime
-    # â”€â”€ Block autopilot outside regular market hours â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
     from core.signal_tracker import _is_us_market_open
     mkt = _is_us_market_open()
     if not mkt["market_open"]:
-        return {
-            "message":  f"Autopilot blocked â€” market not in regular session ({mkt['session']})",
-            "session":  mkt["session"],
-            "opened":   [],
-            "slots_used": 0,
-            "blocked":  True,
-        }
+        return {"message": f"Autopilot blocked -- market not in regular session ({mkt['session']})", "session": mkt["session"], "opened": [], "slots_used": 0, "blocked": True}
 
     state    = store.load_state()
     open_pos = store.load_positions("open")
@@ -474,19 +464,16 @@ def autopilot_fill(watchlist_name: str = "full_scan", symbols_override: list = N
     if slots == 0: return {"message": "Portfolio full", "opened": [], "slots_used": 0}
     existing_tickers = {p["ticker"] for p in open_pos}
 
-    # ── Build scan universe ───────────────────────────────────────────────────
     if symbols_override:
         all_syms = symbols_override
         universe_source = f"alpha_mega ({len(all_syms)} stocks)"
     else:
         try:
-            from core.momentum_screener import screen_universe, get_momentum_scan_universe
+            from core.momentum_screener import screen_universe
             screened = screen_universe(top_n=30)
             all_syms = [r["ticker"] for r in screened]
-            top3 = ", ".join(
-                f"{r['ticker']}({r['sector'][:5]})" for r in screened[:3]
-            )
-            universe_source = f"momentum_screen >$10B — top3: {top3}"
+            top3 = ", ".join(f"{r['ticker']}({r['sector'][:5]})" for r in screened[:3])
+            universe_source = f"momentum_screen >$10B -- top3: {top3}"
         except Exception as e:
             print(f"[AUTOPILOT] Momentum screener failed ({e}), falling back to sector ranker")
             try:
@@ -506,63 +493,35 @@ def autopilot_fill(watchlist_name: str = "full_scan", symbols_override: list = N
     if not symbols:
         return {"message": "No new symbols to scan", "opened": [], "universe": universe_source}
 
-    print(f"[AUTOPILOT] Universe: {universe_source} → scanning {len(symbols)} tickers")
+    print(f"[AUTOPILOT] Universe: {universe_source} -> scanning {len(symbols)} tickers")
 
-    # ── Regime-based conviction threshold ────────────────────────────────────
     try:
         regime = fetch_market_regime().get("regime", "Trending Bull")
     except Exception:
         regime = "Trending Bull"
-    # Regime-specific thresholds â€” Trending Bull raised to 72 (was 60)
-    # Data shows 41% win rate at 60 in Trending Bull â€” too many bad entries
-    REGIME_THRESHOLDS = {
-        "Trending Bull":  72,
-        "Choppy / Range": 65,
-        "High-Vol Event": 70,
-        "Trending Bear":  75,
-    }
-    conv_threshold = REGIME_THRESHOLDS.get(regime, 70)
-    print(f"[AUTOPILOT] Regime: {regime} → conviction threshold: {conv_threshold}%")
 
-    # ── Run conviction scan ───────────────────────────────────────────────────
+    REGIME_THRESHOLDS = {"Trending Bull": 72, "Choppy / Range": 65, "High-Vol Event": 70, "Trending Bear": 75}
+    conv_threshold = REGIME_THRESHOLDS.get(regime, 70)
+    print(f"[AUTOPILOT] Regime: {regime} -> conviction threshold: {conv_threshold}%")
+
     scan_result = run_scan(symbols)
     raw = scan_result.get("results", [])
 
-    # ── Save full scan results to shared cache (bench reads from here) ────────
     try:
         SCAN_CACHE_PATH.parent.mkdir(parents=True, exist_ok=True)
-        SCAN_CACHE_PATH.write_text(json.dumps({
-            "ts":            time.time(),
-            "built_at":      datetime.datetime.utcnow().isoformat(),
-            "universe":      universe_source,
-            "regime":        regime,
-            "conv_threshold": conv_threshold,
-            "results":       raw,
-        }))
+        SCAN_CACHE_PATH.write_text(json.dumps({"ts": time.time(), "built_at": datetime.datetime.utcnow().isoformat(), "universe": universe_source, "regime": regime, "conv_threshold": conv_threshold, "results": raw}))
     except Exception as _ce:
         print(f"[AUTOPILOT] Cache save failed: {_ce}")
 
-    # ── Filter + sort by conviction desc ─────────────────────────────────────
     candidates = sorted(
-        [r for r in raw
-         if not r.get("hard_fail")
-         and r.get("conviction_pct", 0) >= conv_threshold
-         and r.get("rr", 0) >= 1.8
-         and r["ticker"] not in existing_tickers],
-        key=lambda x: x["conviction_pct"],
-        reverse=True
+        [r for r in raw if not r.get("hard_fail") and r.get("conviction_pct", 0) >= conv_threshold and r.get("rr", 0) >= 1.8 and r["ticker"] not in existing_tickers],
+        key=lambda x: x["conviction_pct"], reverse=True
     )
 
     if not candidates:
-        top_scores = [(r["ticker"], r.get("conviction_pct", 0))
-                      for r in raw if not r.get("hard_fail")][:8]
-        return {
-            "message": f"No qualifying signals (need conviction >= {conv_threshold}%, R:R >= 1.8)",
-            "opened": [], "universe": universe_source,
-            "top_scores": top_scores, "regime": regime,
-        }
+        top_scores = [(r["ticker"], r.get("conviction_pct", 0)) for r in raw if not r.get("hard_fail")][:8]
+        return {"message": f"No qualifying signals (need conviction >= {conv_threshold}%, R:R >= 1.8)", "opened": [], "universe": universe_source, "top_scores": top_scores, "regime": regime}
 
-    # ── Sector cap: max 2 per sector ─────────────────────────────────────────
     try:
         from core.universe_builder import get_ticker_sector
     except Exception:
@@ -574,8 +533,7 @@ def autopilot_fill(watchlist_name: str = "full_scan", symbols_override: list = N
         s = get_ticker_sector(p["ticker"])
         already_held_sectors[s] = already_held_sectors.get(s, 0) + 1
 
-    # 25% max per sector = 2 positions at 12.5% each
-    _portfolio_val = state.get("total_value", STARTING_CASH) or STARTING_CASH
+    _portfolio_val    = state.get("total_value", STARTING_CASH) or STARTING_CASH
     _max_sector_slots = max(1, int(_portfolio_val * 0.25 / (MAX_POS_SIZE or 3340)))
 
     final_candidates = []
@@ -589,47 +547,28 @@ def autopilot_fill(watchlist_name: str = "full_scan", symbols_override: list = N
         if len(final_candidates) >= slots:
             break
 
-    # ── Open positions ────────────────────────────────────────────────────────
     opened = []
     for c in final_candidates:
         result = open_position(
-            ticker=c["ticker"],
-            entry_price=c.get("entry_high", c["last_close"]),
+            ticker=c["ticker"], entry_price=c.get("entry_high", c["last_close"]),
             sl=c["sl"], tp1=c["tp1"], tp2=c["tp2"], tp3=c["tp3"],
             conviction=c["conviction_pct"], asset_type="stock",
         )
         if "error" not in result:
-            opened.append({
-                "ticker":     c["ticker"],
-                "conviction": c["conviction_pct"],
-                "sector":     get_ticker_sector(c["ticker"]),
-                "entry":      result["entry_price"],
-                "shares":     result["shares"],
-                "rr":         c.get("rr", 0),
-            })
-    # ── Bench: qualifying candidates that weren't opened ─────────────────────
-    opened_tickers = {o["ticker"] for o in opened}
+            opened.append({"ticker": c["ticker"], "conviction": c["conviction_pct"], "sector": get_ticker_sector(c["ticker"]), "entry": result["entry_price"], "shares": result["shares"], "rr": c.get("rr", 0)})
+        else:
+            print(f"  [AUTOPILOT] {c['ticker']} blocked: {result['error']}")
+
+    opened_tickers   = {o["ticker"] for o in opened}
     all_open_tickers = existing_tickers | opened_tickers
     bench = sorted(
-        [r for r in raw
-         if not r.get("hard_fail")
-         and r.get("conviction_pct", 0) >= conv_threshold
-         and r.get("rr", 0) >= 1.8
-         and r["ticker"] not in all_open_tickers],
-        key=lambda x: x["conviction_pct"],
-        reverse=True
+        [r for r in raw if not r.get("hard_fail") and r.get("conviction_pct", 0) >= conv_threshold and r.get("rr", 0) >= 1.8 and r["ticker"] not in all_open_tickers],
+        key=lambda x: x["conviction_pct"], reverse=True
     )[:10]
 
     return {
         "opened": opened, "slots_used": len(opened),
         "universe": universe_source, "regime": regime,
         "conviction_threshold": conv_threshold,
-        "bench_candidates": [
-            {"ticker": b["ticker"], "conviction_pct": b.get("conviction_pct", 0),
-             "rr": b.get("rr", 0), "sector": get_ticker_sector(b["ticker"]),
-             "entry_price": b.get("entry_high", b.get("last_close", 0)),
-             "sl": b.get("sl", 0), "tp1": b.get("tp1", 0),
-             "tp2": b.get("tp2", 0), "tp3": b.get("tp3", 0)}
-            for b in bench
-        ],
+        "bench_candidates": [{"ticker": b["ticker"], "conviction_pct": b.get("conviction_pct", 0), "rr": b.get("rr", 0), "sector": get_ticker_sector(b["ticker"]), "entry_price": b.get("entry_high", b.get("last_close", 0)), "sl": b.get("sl", 0), "tp1": b.get("tp1", 0), "tp2": b.get("tp2", 0), "tp3": b.get("tp3", 0)} for b in bench],
     }
