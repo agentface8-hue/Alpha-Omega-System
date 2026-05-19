@@ -1,7 +1,20 @@
 """
-conviction_engine.py — SwingTrader AI v4.4 Conviction Scoring Engine
-UPGRADED: Reversal-hunting + expanded confluence + weighted MTF.
+conviction_engine.py — SwingTrader AI v4.5 Conviction Scoring Engine
+v4.5: Pillar weights updated from 74-trade accuracy analysis (2026-05-19)
+v4.4: Reversal-hunting + expanded confluence + weighted MTF.
 No LLM calls — deterministic scoring from market data.
+
+PILLAR WEIGHT HISTORY (v4.5):
+  Source: 74 closed trades, pillar_scores correlated with win/loss outcomes
+  P1 Trend & Cloud:           25% -> 30%  (diff +3.2, moderate predictor)
+  P2 Price Structure/Levels:  25% -> 15%  (diff -4.7, counterintuitive - high score = more losses)
+  P3 Institutional Flow:      20% -> 30%  (diff +7.8, STRONGEST predictor)
+  P4 R:R Geometry:            20% -> 15%  (diff -6.3, STRONGEST counterintuitive)
+  P5 Catalyst & Timing:       10% -> 10%  (diff  0.0, neutral signal, unchanged)
+
+  Key insight: P2 and P4 have NEGATIVE correlation with wins.
+  P2: Perfect S/R confluence attracts market makers who stop out retail at known levels.
+  P4: Higher R:R setups have targets too far away - SL hit before TP1 reached.
 """
 from typing import Dict, Any, List
 
@@ -103,7 +116,7 @@ def score_ticker(data: Dict[str, Any], regime: Dict[str, Any], skip_calibration:
                              True, hard_fail_reason, ta_notes)
 
     # ══════════════════════════════════════════════════
-    # P1 — Trend & Cloud (25%) — WEIGHTED MTF
+    # P1 — Trend & Cloud (30% weight v4.5) — WEIGHTED MTF
     # ══════════════════════════════════════════════════
     # v4.4: Weight 65m=1.5, 4H=1.5, Daily=1, Weekly=1 (total 5)
     weighted_bull = 0
@@ -150,7 +163,9 @@ def score_ticker(data: Dict[str, Any], regime: Dict[str, Any], skip_calibration:
         ta_notes.append(f"Declining channel (slope {lr_slope:.3f}%/bar) + weak TAS → cap 58%")
 
     # ══════════════════════════════════════════════════
-    # P2 — Price Structure + Level Precision (25%)
+    # P2 — Price Structure + Level Precision (15% weight v4.5)
+    # NOTE: Reduced from 25% — 74-trade analysis shows negative correlation (-4.7 diff)
+    # High P2 scores correlate with losses: over-engineered S/R invites stop hunts
     # ══════════════════════════════════════════════════
     p2 = 50
 
@@ -204,7 +219,8 @@ def score_ticker(data: Dict[str, Any], regime: Dict[str, Any], skip_calibration:
     p2 = max(0, min(100, p2))
 
     # ══════════════════════════════════════════════════
-    # P3 — Institutional Flow (20%) — REFINED CLIMAX
+    # P3 — Institutional Flow (30% weight v4.5) — REFINED CLIMAX
+    # NOTE: Raised from 20% — STRONGEST predictor in 74-trade analysis (+7.8 diff)
     # ══════════════════════════════════════════════════
     # v4.4: Distinguish big-red distribution vs small-body/green reversal accumulation
     if vol_dir == "ACCUMULATION" and tas_num >= 3:
@@ -235,7 +251,9 @@ def score_ticker(data: Dict[str, Any], regime: Dict[str, Any], skip_calibration:
         p3 = min(p3, 35)
 
     # ══════════════════════════════════════════════════
-    # P4 — Risk/Reward Geometry (20%)
+    # P4 — Risk/Reward Geometry (15% weight v4.5)
+    # NOTE: Reduced from 20% — negative correlation in 74-trade analysis (-6.3 diff)
+    # High R:R scores mean targets too far — SL hit before TP1 reached
     # ══════════════════════════════════════════════════
     if rr < 1.5:
         hard_fail = True
@@ -250,7 +268,7 @@ def score_ticker(data: Dict[str, Any], regime: Dict[str, Any], skip_calibration:
         p4 = 90 if rr >= 3.0 else 80 if rr >= 2.5 else 70 if rr >= 2.0 else 50
 
     # ══════════════════════════════════════════════════
-    # P5 — Catalyst & Timing (10%)
+    # P5 — Catalyst & Timing (10% weight — unchanged)
     # ══════════════════════════════════════════════════
     p5 = 80
     if "HARD FAIL" in earnings:
@@ -263,10 +281,12 @@ def score_ticker(data: Dict[str, Any], regime: Dict[str, Any], skip_calibration:
         ta_notes.append(f"Earnings {earnings} → half size")
 
     # ══════════════════════════════════════════════════
-    # CONVICTION SYNTHESIS
+    # CONVICTION SYNTHESIS — v4.5 PILLAR WEIGHTS
+    # Based on 74-trade accuracy analysis (2026-05-19)
+    # P1 Trend+3.2, P2 Structure-4.7, P3 Flow+7.8, P4 RR-6.3, P5 neutral
     # ══════════════════════════════════════════════════
     pillar_scores = {"p1": p1, "p2": p2, "p3": p3, "p4": p4, "p5": p5}
-    raw_cv = round(p1 * 0.25 + p2 * 0.25 + p3 * 0.20 + p4 * 0.20 + p5 * 0.10)
+    raw_cv = round(p1 * 0.30 + p2 * 0.15 + p3 * 0.30 + p4 * 0.15 + p5 * 0.10)
     conviction = raw_cv
     for cap in caps:
         conviction = min(conviction, cap)
@@ -346,7 +366,7 @@ def run_scan(symbols: List[str]) -> Dict[str, Any]:
     print(f"[SCAN] Regime: {regime['regime']} | VIX: {regime['vix']}")
     print(f"[SCAN] Fetching data for {len(symbols)} tickers...")
     raw_data = fetch_multiple_tickers(symbols)
-    print(f"[SCAN] Scoring with v4.4 5-pillar framework...")
+    print(f"[SCAN] Scoring with v4.5 5-pillar framework (accuracy-weighted)...")
     results = []
     for data in raw_data:
         scored = score_ticker(data, regime)
