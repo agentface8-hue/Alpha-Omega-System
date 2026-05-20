@@ -45,8 +45,10 @@ async def portfolio_autopilot(body: dict = {}):
 @app.post("/api/portfolio/reset")
 async def reset_portfolio():
     from core.portfolio_store import clear_all_positions
+    from core.portfolio_manager import get_portfolio
     clear_all_positions()
-    return {"reset": True, "message": "Portfolio reset to $25,000"}
+    portfolio = get_portfolio()
+    return {"reset": True, "message": "Portfolio reset to $25,000", **portfolio}
 
 @app.get("/api/portfolio/status")
 async def portfolio_storage_status():

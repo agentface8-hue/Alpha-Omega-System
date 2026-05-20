@@ -172,11 +172,10 @@ def clear_all_positions():
     if sb:
         try:
             sb.table("portfolio_positions").delete().neq("id", "").execute()
-            sb.table("portfolio_state").upsert({
-                "id": "main", "data": dict(_DEFAULT_STATE),
-            }).execute()
         except Exception as e:
-            logger.error(f"Clear error: {e}")
+            logger.error(f"Clear positions error: {e}")
+    # Use save_state() to reset state — goes through JSON + Supabase properly
+    save_state(dict(_DEFAULT_STATE))
 
 def supabase_ready() -> bool:
     return _get_sb() is not None

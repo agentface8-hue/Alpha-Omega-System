@@ -428,23 +428,28 @@ def close_position(position_id: str, reason: str = "MANUAL") -> Dict:
 
 
 def get_portfolio() -> Dict:
-    state      = store.load_state()
+    state      = store.load_state() or {}
     open_pos   = store.load_positions("open")
     closed_pos = store.load_positions("closed")
-    winning    = [p for p in closed_pos if p.get("realized_pnl",0)>0]
-    total_realized   = round(sum(p.get("realized_pnl",0) for p in closed_pos), 2)
-    total_unrealized = round(sum(p.get("unrealized_pnl",0) for p in open_pos), 2)
-    total_pnl = round(total_realized+total_unrealized, 2)
-    win_rate  = round(len(winning)/len(closed_pos)*100,1) if closed_pos else 0
+    winning    = [p for p in closed_pos if p.get("realized_pnl", 0) > 0]
+    total_realized   = round(sum(p.get("realized_pnl", 0) for p in closed_pos), 2)
+    total_unrealized = round(sum(p.get("unrealized_pnl", 0) for p in open_pos), 2)
+    total_pnl = round(total_realized + total_unrealized, 2)
+    win_rate  = round(len(winning) / len(closed_pos) * 100, 1) if closed_pos else 0
+    starting_capital = state.get("starting_capital") or 25000.0
     return {
         "state": state, "open_positions": open_pos, "closed_positions": closed_pos[-20:],
         "stats": {
-            "open_count": len(open_pos), "slots_available": MAX_POSITIONS - len(open_pos),
-            "total_closed": len(closed_pos), "win_rate": win_rate,
-            "total_realized_pnl": total_realized, "total_unrealized_pnl": total_unrealized,
-            "total_pnl": total_pnl,
-            "total_pnl_pct": round(total_pnl/state["starting_capital"]*100,2),
-            "cash": state["cash"], "total_value": state["total_value"],
+            "open_count":          len(open_pos),
+            "slots_available":     MAX_POSITIONS - len(open_pos),
+            "total_closed":        len(closed_pos),
+            "win_rate":            win_rate,
+            "total_realized_pnl":  total_realized,
+            "total_unrealized_pnl": total_unrealized,
+            "total_pnl":           total_pnl,
+            "total_pnl_pct":       round(total_pnl / starting_capital * 100, 2),
+            "cash":                state.get("cash", 25000.0),
+            "total_value":         state.get("total_value", 25000.0),
         }
     }
 

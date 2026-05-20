@@ -839,8 +839,14 @@ export default function PortfolioTab({ compact = false, isOwner = false }) {
 
   const reset = async () => {
     if (!window.confirm('Reset portfolio to $25,000? All positions will be cleared.')) return;
-    await fetch(`${API()}/api/portfolio/reset`, { method:'POST' });
-    await load();
+    try {
+      const r = await fetch(`${API()}/api/portfolio/reset`, { method:'POST' });
+      const result = await r.json();
+      // Reset endpoint now returns fresh portfolio — use it directly, no second roundtrip
+      if (result.state) setData(result);
+      else await load();
+      setError(null); setSessionWarn(null);
+    } catch (e) { setError(e.message); }
   };
 
   useEffect(() => { load(); fetchCandidates([]); fetchActionLog(); }, [load, fetchCandidates, fetchActionLog]);
@@ -871,7 +877,7 @@ export default function PortfolioTab({ compact = false, isOwner = false }) {
           <div>
             <div style={{ fontSize:16, fontWeight:'bold', color:'#e0e0e0', letterSpacing:1.5, fontFamily:'monospace' }}>ACTIVE PORTFOLIO</div>
             <div style={{ fontSize:10, color:KC.textFaint, fontFamily:'sans-serif', marginTop:3 }}>
-              Paper trading · $25K · Max {maxPositions} positions · $5,000/trade · $500 risk
+              Paper trading · $25K · Max {maxPositions} positions · ${Math.round(data?.state?.max_position_size ?? 3340).toLocaleString()}/trade · $500 risk
             </div>
           </div>
         </div>

@@ -178,7 +178,7 @@ const App = () => {
         </div>
         {/* Full content */}
         <div style={{ flex:1, overflow:'auto' }}>
-          <PanelContent id={focusedPanel} autoRun={true} />
+          <PanelContent id={focusedPanel} autoRun={true} isOwner={isOwner} />
         </div>
       </div>
     );
