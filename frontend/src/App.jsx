@@ -64,7 +64,7 @@ const App = () => {
   };
 
   const [authed,        setAuthed]        = useState(() => hasValidSession());
-  const [userRole,      setUserRole]      = useState(() => localStorage.getItem('ao_role') || 'visitor');
+  const [userRole,      setUserRole]      = useState(() => localStorage.getItem('ao_role') || 'owner');
   const [displayName,   setDisplayName]   = useState(() => localStorage.getItem('ao_display_name') || '');
   const [viewMode,      setViewMode]      = useState('dashboard');
   const [focusedPanel,  setFocusedPanel]  = useState(null);
