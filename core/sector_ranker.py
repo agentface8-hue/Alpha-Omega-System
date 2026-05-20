@@ -3,6 +3,13 @@ sector_ranker.py -- Rank GICS sectors by ETF momentum vs SPY.
 Uses 3 ETFs per sector (SPDR + iShares + Vanguard) -- averaged for a more
 reliable signal than any single fund. One batch yfinance download.
 Cache: 4 hours.
+
+SCORE FORMULA v2 (updated 2026-05-19 — council decision):
+  score = 0.25 * rel5d + 0.75 * rel20d
+  Rationale: 20-day trend captures structural megatrends (AI/Tech) better
+  than 5-day noise. Council unanimous 4/5 on 25/75 split.
+  Previous formula was 0.60 * rel5d + 0.40 * rel20d — over-penalized
+  sectors with one bad week despite strong structural momentum.
 """
 import json, time, datetime
 from pathlib import Path
@@ -97,7 +104,10 @@ def rank_sectors(force=False):
         avg_20d = sum(r[2] for r in etf_returns) / len(etf_returns)
         rel5    = round(avg_5d  - spy_5d,  2)
         rel20   = round(avg_20d - spy_20d, 2)
-        score   = round(rel5 * 0.6 + rel20 * 0.4, 3)
+
+        # v2 formula: 25% short-term + 75% medium-term
+        # Captures structural trends (AI megatrend) without ignoring recent momentum
+        score = round(rel5 * 0.25 + rel20 * 0.75, 3)
 
         rankings.append({
             "sector":      sector,
@@ -126,6 +136,7 @@ def rank_sectors(force=False):
         "built_at":  datetime.datetime.utcnow().isoformat(),
         "spy_5d":    round(spy_5d, 2),
         "spy_20d":   round(spy_20d, 2),
+        "score_formula": "0.25 * rel5d + 0.75 * rel20d",
         "rankings":  rankings,
     }
     CACHE_PATH.parent.mkdir(parents=True, exist_ok=True)
@@ -167,10 +178,10 @@ def is_sector_allowed(sector_name: str, min_score: float = 0.0) -> bool:
         rankings = rank_sectors()
         match = next((r for r in rankings if r["sector"].lower() == sector_name.lower()), None)
         if not match:
-            return True  # Unknown sector — don't block
+            return True  # Unknown sector -- don't block
         return match["score"] > min_score
     except Exception:
-        return True  # Fail open — don't block on error
+        return True  # Fail open -- don't block on error
 
 
 def get_ticker_sector_rank(ticker: str) -> dict:
