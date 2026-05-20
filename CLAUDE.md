@@ -1,6 +1,6 @@
 # CLAUDE.md — Alpha-Omega System
 # ⚠️ READ THIS FIRST — BEFORE TOUCHING ANYTHING ⚠️
-# Last Updated: 2026-05-19
+# Last Updated: 2026-05-20
 
 ---
 
@@ -385,16 +385,45 @@ This is the only way knowledge survives across sessions.
 | DTP guardrail fires | TP ordering inversion after scaling | Already handled in portfolio_manager.py |
 
 ## 16. RECENT SESSION CHANGES
-*Auto-updated: 2026-05-19 19:00 UTC*
+*Auto-updated: 2026-05-20 19:00 UTC*
 
-### `b32db7b` 2026-05-18 22:00 - auto: session memory 2026-05-18 19:00
-- `CLAUDE.md`
-- `MASTER-KNOWLEDGE.md`
-- `calibration/session_log.json`
+### `6eea6a1` 2026-05-20 19:00 - fix: check_portfolio lock + rank_sectors once per cycle + yfinance timeout -- prevents backend hang
+- `core/portfolio_manager.py`
 
-### `902cce8` 2026-05-17 22:00 - auto: session memory 2026-05-17 19:00
-- `CLAUDE.md`
-- `MASTER-KNOWLEDGE.md`
-- `calibration/session_log.json`
+### `6646bc3` 2026-05-20 18:57 - ops: force Render restart -- backend hung (stuck process)
+
+### `241d1cb` 2026-05-20 17:02 - tune: lower conviction thresholds based on trade data
+- `core/portfolio_manager.py`
+
+### `d496b3e` 2026-05-20 14:52 - fix: portfolio reset breaks page -- defensive state access, isOwner in FOCUS, dynamic subtitle, reset returns portfolio
+- `backend/portfolio_routes.py`
+- `core/portfolio_manager.py`
+- `core/portfolio_store.py`
+- `frontend/src/App.jsx`
+- `frontend/src/components/PortfolioTab.jsx`
+
+### `89dc8f3` 2026-05-20 13:21 - fix: remove autopilot market-hours hard-block (paper trading -- allow premarket/afterhours)
+- `core/portfolio_manager.py`
+- `frontend/src/components/PortfolioTab.jsx`
+
+### `553e700` 2026-05-20 11:43 - "fix-owner-role"
+- `frontend/src/App.jsx`
+
+### `4e269db` 2026-05-20 11:23 - feat: portfolio chart and period pnl
+- `frontend/src/components/ChartPanel.jsx`
+- `frontend/src/components/PortfolioTab.jsx`
+
+### `8de2b9a` 2026-05-20 10:57 - fix: check_anthropic_api uses raw urllib - no anthropic package dependency
+- `core/system_health.py`
+
+### `d4aef99` 2026-05-20 10:49 - feat: sector score v2 â€” 25/75 weighting (5d/20d) captures AI structural trend
+- `core/sector_ranker.py`
+
+### `27b7f0d` 2026-05-20 09:14 - feat: sector gate and SECTOR_MAP fix
+- `backend/main.py`
+- `core/portfolio_manager.py`
+- `core/sector_ranker.py`
+- `core/signal_tracker.py`
+- `frontend/src/components/SignalTracker.jsx`
 
 
