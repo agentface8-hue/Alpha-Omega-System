@@ -363,6 +363,19 @@ def create_turbo_signal(symbol: str, asset_type: str = "stock", scan_data: Dict 
         if not _mstatus["market_open"]:
             return {"error": f"Signal blocked — market is not in regular session ({_mstatus['session']})", "session": _mstatus["session"]}
 
+    # ── SECTOR GATE: warn + optionally block if sector is red ────────────────
+    sector_gate_info = {"sector": "Unknown", "allowed": True, "score": 0.0, "rank": 99}
+    if asset_type == "stock":
+        try:
+            from core.sector_ranker import get_ticker_sector_rank
+            sector_gate_info = get_ticker_sector_rank(sym)
+            if not sector_gate_info["allowed"]:
+                print(f"  [SECTOR GATE] WARNING: {sym} is in {sector_gate_info['sector']} "
+                      f"(score={sector_gate_info['score']:.2f}, rank=#{sector_gate_info['rank']}) — RED SECTOR")
+        except Exception as _sge:
+            print(f"  [SECTOR GATE] check failed for {sym}: {_sge}")
+
+
     price_data = _fetch_live_price(sym, asset_type)
     if not price_data["valid"]:
         return {"error": f"Could not fetch price for {lookup}: {price_data.get('reason','')}"}
@@ -490,6 +503,9 @@ def create_turbo_signal(symbol: str, asset_type: str = "stock", scan_data: Dict 
         "council_bear_risks":   council_result.get("bear_risks")   if council_result else [],
         "council_bull_conf":    council_result.get("bull_confidence") if council_result else None,
         "council_bear_conf":    council_result.get("bear_confidence") if council_result else None,
+        # Sector gate metadata
+        "sector_gate":         sector_gate_info,
+        "sector_gate_warning": not sector_gate_info.get("allowed", True),
     }
     _append_action(signal, "OPENED",
         f"Turbo · {regime_str} · ATR ${round(atr_val,2)} · "

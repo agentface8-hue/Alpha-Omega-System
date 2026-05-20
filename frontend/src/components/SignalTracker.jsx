@@ -90,12 +90,15 @@ const fmt = ts => {
   catch { return ts.slice(11,16) || '-'; }
 };
 
-// ── Sector map (mirrors backend SECTOR_MAP) ───────────────────────────────────
+// ── Sector map (mirrors backend SECTOR_MAP — corrected) ──────────────────────
 const SECTOR_MAP = {
-  AAPL:'Tech', MSFT:'Tech', NVDA:'Tech', AMD:'Tech', GOOGL:'Tech', META:'Tech', AMZN:'Tech',
-  TSLA:'Consumer', NFLX:'Consumer', DIS:'Consumer', NKE:'Consumer', SBUX:'Consumer',
-  JPM:'Finance', GS:'Finance', BAC:'Finance', V:'Finance', MA:'Finance', BRK:'Finance',
-  JNJ:'Health', PFE:'Health', UNH:'Health', ABBV:'Health', LLY:'Health', MRK:'Health',
+  AAPL:'Technology', MSFT:'Technology', NVDA:'Technology', AMD:'Technology',
+  GOOGL:'Communication Services', GOOG:'Communication Services',
+  META:'Communication Services', NFLX:'Communication Services',
+  AMZN:'Consumer Discretionary', TSLA:'Consumer Discretionary',
+  DIS:'Communication Services', NKE:'Consumer Discretionary', SBUX:'Consumer Discretionary',
+  JPM:'Financials', GS:'Financials', BAC:'Financials', V:'Financials', MA:'Financials',
+  JNJ:'Health Care', PFE:'Health Care', UNH:'Health Care', ABBV:'Health Care', LLY:'Health Care', MRK:'Health Care',
   XOM:'Energy', CVX:'Energy', COP:'Energy', SLB:'Energy',
   BA:'Industrials', CAT:'Industrials', HON:'Industrials', GE:'Industrials',
   CRWD:'Tech', NET:'Tech', MRVL:'Tech', PANW:'Tech', ZS:'Tech', OKTA:'Tech',
@@ -768,6 +771,9 @@ const SignalTracker = ({ compact = false, isOwner = false }) => {
               <span style={{ fontSize:11, color:"#8899aa", fontFamily:"sans-serif" }}>Passed: <b style={{color:"#00ff88"}}>{autopilotResult.passed_filter}</b></span>
               <span style={{ fontSize:11, color:"#8899aa", fontFamily:"sans-serif" }}>Launched: <b style={{color:"#c084fc"}}>{autopilotResult.launched?.length||0}</b></span>
               <span style={{ fontSize:11, color:"#8899aa", fontFamily:"sans-serif" }}>Regime: <b style={{color:"#fbbf24"}}>{autopilotResult.market_regime}</b></span>
+              {(autopilotResult.sector_gate_blocked?.length||0) > 0 && (
+                <span style={{ fontSize:11, color:"#ff4466", fontFamily:"sans-serif" }}>⚠ Gate blocked: <b>{autopilotResult.sector_gate_blocked.map(g=>`${g.ticker}(${g.sector?.split(' ')[0]})`).join(', ')}</b></span>
+              )}
             </div>
             {autopilotResult.launched?.length>0 && (
               <div style={{ display:"flex", gap:6, flexWrap:"wrap" }}>
@@ -852,6 +858,15 @@ const SignalTracker = ({ compact = false, isOwner = false }) => {
                           border: `1px solid ${s.advisor_verdict==='VETO'?'#ff446644':'#fbbf2444'}`,
                         }}>
                           {s.advisor_verdict==='VETO' ? '\u26d4 VETOED' : '\u26a0\ufe0f FLAGGED'}
+                        </span>
+                      )}
+                      {s.sector_gate_warning && (
+                        <span style={{
+                          fontSize:8, background:'rgba(255,68,102,0.13)', color:'#ff4466',
+                          padding:'1px 5px', borderRadius:3, fontFamily:'sans-serif',
+                          border:'1px solid #ff446644',
+                        }} title={`Sector: ${s.sector_gate?.sector} | Score: ${s.sector_gate?.score?.toFixed(2)} | Rank #${s.sector_gate?.rank}`}>
+                          ⚠ RED SECTOR
                         </span>
                       )}
                       {!isOpen && s.outcome_grade && (() => {

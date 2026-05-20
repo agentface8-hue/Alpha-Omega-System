@@ -161,6 +161,38 @@ def get_scan_universe(total_slots=40, top_sectors=4):
     return result[:total_slots]
 
 
+def is_sector_allowed(sector_name: str, min_score: float = 0.0) -> bool:
+    """Return True if sector momentum score is above min_score (default 0 = positive only)."""
+    try:
+        rankings = rank_sectors()
+        match = next((r for r in rankings if r["sector"].lower() == sector_name.lower()), None)
+        if not match:
+            return True  # Unknown sector — don't block
+        return match["score"] > min_score
+    except Exception:
+        return True  # Fail open — don't block on error
+
+
+def get_ticker_sector_rank(ticker: str) -> dict:
+    """Return sector name + rank + score + allowed for a ticker."""
+    try:
+        from core.universe_builder import get_ticker_sector
+        sector = get_ticker_sector(ticker)
+        rankings = rank_sectors()
+        match = next((r for r in rankings if r["sector"].lower() == sector.lower()), None)
+        if not match:
+            return {"sector": sector, "rank": 99, "score": 0.0, "allowed": True}
+        return {
+            "sector":  match["sector"],
+            "rank":    match["rank"],
+            "score":   match["score"],
+            "heat":    match["heat"],
+            "allowed": match["score"] > 0.0,
+        }
+    except Exception:
+        return {"sector": "Unknown", "rank": 99, "score": 0.0, "allowed": True}
+
+
 def _fallback():
     return [
         {"sector": s, "etfs": list(etfs), "etf": etfs[0],

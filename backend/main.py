@@ -707,6 +707,27 @@ async def run_autopilot(top_n: int = 10, watchlist: str = "full_scan"):
         # ── Step 3: Filter and rank ───────────────────────────────────────────
         valid = [r for r in results if not r.get("hard_fail") and r.get("conviction_pct", 0) > 0]
         ranked = sorted(valid, key=lambda x: x.get("conviction_pct", 0), reverse=True)
+
+        # ── Step 3b: SECTOR GATE — block red-sector stocks ────────────────────
+        try:
+            from core.sector_ranker import get_ticker_sector_rank
+            gate_blocked = []
+            gate_passed  = []
+            for r in ranked:
+                sr = get_ticker_sector_rank(r["ticker"])
+                if not sr["allowed"]:
+                    gate_blocked.append({"ticker": r["ticker"], "sector": sr["sector"],
+                                         "score": sr["score"], "rank": sr["rank"]})
+                else:
+                    r["sector_rank"] = sr
+                    gate_passed.append(r)
+            ranked = gate_passed
+            if gate_blocked:
+                print(f"[AUTOPILOT] Sector gate blocked: {[g['ticker'] for g in gate_blocked]}")
+        except Exception as _sge:
+            gate_blocked = []
+            print(f"[AUTOPILOT] Sector gate skipped: {_sge}")
+
         top = ranked[:top_n]
 
         # ── Step 4: Avoid duplicates ──────────────────────────────────────────
@@ -742,6 +763,7 @@ async def run_autopilot(top_n: int = 10, watchlist: str = "full_scan"):
         return {
             "status": "ok", "universe_source": universe_source,
             "scanned": len(symbols), "passed_filter": len(valid),
+            "sector_gate_blocked": gate_blocked,
             "launched": launched, "skipped": skipped,
             "top_ranked": [{"ticker": r["ticker"], "conviction": r.get("conviction_pct", 0),
                             "heat": r.get("heat", ""), "tas": r.get("tas", "")} for r in top],
@@ -1134,10 +1156,13 @@ async def get_earnings(symbol: str):
 # PORTFOLIO RISK LAYER
 # ═══════════════════════════════════════════════════════════════════
 SECTOR_MAP = {
-    "AAPL":"Tech","MSFT":"Tech","NVDA":"Tech","AMD":"Tech","GOOGL":"Tech","META":"Tech","AMZN":"Tech",
-    "TSLA":"Consumer","NFLX":"Consumer","DIS":"Consumer","NKE":"Consumer","SBUX":"Consumer",
-    "JPM":"Finance","GS":"Finance","BAC":"Finance","V":"Finance","MA":"Finance","BRK-B":"Finance",
-    "JNJ":"Health","PFE":"Health","UNH":"Health","ABBV":"Health","LLY":"Health","MRK":"Health",
+    "AAPL":"Technology","MSFT":"Technology","NVDA":"Technology","AMD":"Technology",
+    "GOOGL":"Communication Services","GOOG":"Communication Services",
+    "META":"Communication Services","NFLX":"Communication Services",
+    "AMZN":"Consumer Discretionary","TSLA":"Consumer Discretionary",
+    "DIS":"Communication Services","NKE":"Consumer Discretionary","SBUX":"Consumer Discretionary",
+    "JPM":"Financials","GS":"Financials","BAC":"Financials","V":"Financials","MA":"Financials","BRK-B":"Financials",
+    "JNJ":"Health Care","PFE":"Health Care","UNH":"Health Care","ABBV":"Health Care","LLY":"Health Care","MRK":"Health Care",
     "XOM":"Energy","CVX":"Energy","COP":"Energy","SLB":"Energy",
     "BA":"Industrials","CAT":"Industrials","HON":"Industrials","GE":"Industrials",
     "BTC":"Crypto","ETH":"Crypto","SOL":"Crypto","XRP":"Crypto","ADA":"Crypto",

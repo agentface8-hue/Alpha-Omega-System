@@ -522,6 +522,39 @@ def autopilot_fill(watchlist_name: str = "full_scan", symbols_override: list = N
         top_scores = [(r["ticker"], r.get("conviction_pct", 0)) for r in raw if not r.get("hard_fail")][:8]
         return {"message": f"No qualifying signals (need conviction >= {conv_threshold}%, R:R >= 1.8)", "opened": [], "universe": universe_source, "top_scores": top_scores, "regime": regime}
 
+    # ── SECTOR GATE: block red-sector stocks ─────────────────────────────────
+    try:
+        from core.sector_ranker import get_ticker_sector_rank
+        sector_gate_blocked = []
+        gated_candidates = []
+        for c in candidates:
+            sr = get_ticker_sector_rank(c["ticker"])
+            if not sr["allowed"]:
+                sector_gate_blocked.append({
+                    "ticker": c["ticker"],
+                    "sector": sr["sector"],
+                    "score":  sr["score"],
+                    "reason": f"Sector gate: {sr['sector']} score={sr['score']:.2f} (rank #{sr['rank']})"
+                })
+                print(f"  [SECTOR GATE] Blocking {c['ticker']} — {sr['sector']} score={sr['score']:.2f}")
+            else:
+                c["sector_rank"] = sr
+                gated_candidates.append(c)
+        candidates = gated_candidates
+        if sector_gate_blocked:
+            print(f"  [SECTOR GATE] Blocked {len(sector_gate_blocked)} tickers from red sectors")
+    except Exception as _sge:
+        sector_gate_blocked = []
+        print(f"  [SECTOR GATE] Failed ({_sge}) — proceeding without gate")
+
+    if not candidates:
+        return {
+            "message": f"All candidates blocked by sector gate (need score > 0)",
+            "opened": [], "universe": universe_source,
+            "sector_gate_blocked": sector_gate_blocked, "regime": regime,
+        }
+
+    # ── Sector cap: max 2 per sector ─────────────────────────────────────────
     try:
         from core.universe_builder import get_ticker_sector
     except Exception:
