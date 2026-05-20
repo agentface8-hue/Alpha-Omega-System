@@ -1,10 +1,13 @@
 """
-system_health.py - Alpha-Omega full system health monitor v2.4
+system_health.py - Alpha-Omega full system health monitor v2.5
+v2.5: check_anthropic_api uses raw urllib (no 'anthropic' package dependency)
+v2.4: Finnhub replaces Alpha Vantage, dream log reads local file directly
 """
 import os
 import json
 import datetime
 import logging
+import urllib.request
 from typing import Dict, List, Any
 from pathlib import Path
 
@@ -30,7 +33,6 @@ def check_supabase() -> Dict:
         key = os.environ.get("SUPABASE_ANON_KEY", "")
         if not url or not key:
             return _fail("Supabase", "SUPABASE_URL or SUPABASE_ANON_KEY missing")
-        import urllib.request
         req = urllib.request.Request(
             f"{url}/rest/v1/portfolio_positions?limit=1",
             headers={"apikey": key, "Authorization": f"Bearer {key}", "Accept": "application/json"}
@@ -43,17 +45,32 @@ def check_supabase() -> Dict:
 
 
 def check_anthropic_api() -> Dict:
+    """
+    Test Anthropic API using raw urllib — no 'anthropic' package required.
+    Avoids ModuleNotFoundError if package not in requirements.txt.
+    """
     try:
         key = os.environ.get("ANTHROPIC_API_KEY", "")
         if not key:
             return _fail("Anthropic API", "ANTHROPIC_API_KEY missing")
-        import anthropic
-        client = anthropic.Anthropic(api_key=key)
-        msg = client.messages.create(
-            model="claude-haiku-4-5-20251001", max_tokens=10,
-            messages=[{"role": "user", "content": "Reply: OK"}],
+        body = json.dumps({
+            "model": "claude-haiku-4-5-20251001",
+            "max_tokens": 10,
+            "messages": [{"role": "user", "content": "Reply: OK"}]
+        }).encode()
+        req = urllib.request.Request(
+            "https://api.anthropic.com/v1/messages",
+            data=body,
+            headers={
+                "Content-Type":    "application/json",
+                "x-api-key":       key,
+                "anthropic-version": "2023-06-01"
+            }
         )
-        return _ok("Anthropic API", f"claude-haiku responded: {msg.content[0].text[:20]}")
+        with urllib.request.urlopen(req, timeout=15) as r:
+            data = json.loads(r.read())
+        text = data["content"][0]["text"][:20]
+        return _ok("Anthropic API", f"claude-haiku responded: {text}")
     except Exception as e:
         return _fail("Anthropic API", f"{type(e).__name__}: {str(e)[:80]}")
 
@@ -64,7 +81,6 @@ def check_finnhub() -> Dict:
         key = os.environ.get("FINNHUB_API_KEY", "")
         if not key:
             return _fail("Finnhub", "FINNHUB_API_KEY missing - no live prices")
-        import urllib.request
         url = f"https://finnhub.io/api/v1/quote?symbol=SPY&token={key}"
         with urllib.request.urlopen(url, timeout=8) as r:
             data = json.loads(r.read())
@@ -92,7 +108,6 @@ def check_telegram() -> Dict:
         token = os.environ.get("TELEGRAM_TOKEN", "")
         if not token:
             return _fail("Telegram", "TELEGRAM_TOKEN missing")
-        import urllib.request
         url = f"https://api.telegram.org/bot{token}/getMe"
         with urllib.request.urlopen(url, timeout=8) as r:
             resp = json.loads(r.read())
@@ -166,18 +181,13 @@ def check_dream_log() -> Dict:
     """Read dream_log.json directly — no HTTP call to self (avoids circular timeout)."""
     try:
         log_path = Path(__file__).parent.parent / "signals" / "dream_log.json"
-
         if not log_path.exists():
             return _ok("Dream Log", "Dreaming agent active - no dreams yet")
-
         dreams = json.loads(log_path.read_text())
-
         if not dreams:
             return _ok("Dream Log", "Dreaming agent active - no dreams yet")
-
         latest = dreams[0] if isinstance(dreams, list) else dreams
         ts = latest.get("ts") or latest.get("created_at", "")
-
         if ts:
             try:
                 dt    = datetime.datetime.fromisoformat(ts.replace("Z", "").replace("+00:00", ""))
@@ -192,9 +202,7 @@ def check_dream_log() -> Dict:
                 return _ok("Dream Log", label)
             except Exception:
                 pass
-
         return _ok("Dream Log", f"{len(dreams)} dreams logged")
-
     except Exception as e:
         return _warn("Dream Log", f"Could not read: {str(e)[:60]}")
 
