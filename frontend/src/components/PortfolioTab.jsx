@@ -1,6 +1,7 @@
 import React, { useState, useEffect, useCallback } from 'react';
 import { RefreshCw, Zap, RotateCcw, Target, BarChart2, Clock, ChevronDown, ChevronRight, TrendingUp, TrendingDown, AlertTriangle, Shield } from 'lucide-react';
 import { C as KC, StatCard as KStatCard } from './UIKit';
+import ChartPanel from './ChartPanel';
 
 const API = () => import.meta.env.VITE_API_URL || 'http://127.0.0.1:8000';
 const fmt  = (n, d=2) => (n == null ? '—' : Number(n).toFixed(d));
@@ -421,6 +422,21 @@ const PositionCard = ({ pos, onClose, onRefresh, bench = [], onOpenBench }) => {
       {expanded && (
         <div style={{ borderTop:'1px solid #1a2535', padding:'14px', background:'#080c14' }}>
           <PriceLevelGraph entry={entry} sl={sl} curr={curr} tp1={tp1} tp2={tp2} tp3={tp3} pnl={pnl} />
+
+          {/* ── Stock Chart with Entry/SL/TP markers ── */}
+          <ChartPanel
+            symbol={pos.ticker}
+            tradeParams={{
+              entry:      entry,
+              entry_low:  entry * 0.999,
+              entry_high: entry * 1.001,
+              sl:         sl,
+              tp1:        tp1,
+              tp2:        tp2,
+              tp3:        tp3,
+            }}
+          />
+
           <div style={{ background:'#0d1520', border:'1px solid #1a2535', borderRadius:8, padding:'12px 14px', marginBottom:14 }}>
             <div style={{ fontSize:8, color:'#c084fc', letterSpacing:1, marginBottom:10, fontFamily:'monospace', fontWeight:'bold' }}>ENTRY REASON</div>
             {pos.pillar_scores && Object.keys(pos.pillar_scores).length > 0 && (
@@ -626,6 +642,56 @@ const ClosedRow = ({ pos }) => {
     </>
   );
 };
+
+// ── Period P&L Bar ────────────────────────────────────────────────────────────
+const PeriodPnLBar = ({ closedPositions, startingCash }) => {
+  const periods = [
+    { label: '1D',  days: 1 },
+    { label: '1W',  days: 7 },
+    { label: '1M',  days: 30 },
+    { label: '3M',  days: 90 },
+    { label: '6M',  days: 180 },
+    { label: '1Y',  days: 365 },
+  ];
+
+  const getPeriod = (days) => {
+    const cutoff = new Date(Date.now() - days * 86400000).toISOString();
+    const trades = (closedPositions || []).filter(p => (p.closed_at || '') >= cutoff);
+    const pnl    = trades.reduce((sum, p) => sum + (p.realized_pnl || 0), 0);
+    const wins   = trades.filter(p => (p.realized_pnl || 0) > 0).length;
+    return { pnl, count: trades.length, wins };
+  };
+
+  return (
+    <div style={{ background:'#0a1018', border:'1px solid #1a2535', borderRadius:10,
+      padding:'12px 16px', marginBottom:20, display:'flex', gap:0, flexWrap:'wrap' }}>
+      <div style={{ fontSize:8, color:'#8899aa', letterSpacing:1.5, fontFamily:'monospace',
+        fontWeight:'bold', width:'100%', marginBottom:10 }}>PROFIT BY PERIOD</div>
+      {periods.map(({ label, days }) => {
+        const { pnl, count, wins } = getPeriod(days);
+        const pct = startingCash > 0 ? (pnl / startingCash * 100) : 0;
+        const wr  = count > 0 ? Math.round(wins / count * 100) : null;
+        const c   = pnl > 0 ? '#00ff88' : pnl < 0 ? '#ff4466' : '#8899aa';
+        return (
+          <div key={label} style={{ flex:1, minWidth:80, textAlign:'center',
+            borderRight:'1px solid #1a2535', padding:'4px 8px', lastChild:{ borderRight:'none' } }}>
+            <div style={{ fontSize:9, color:'#8899aa', fontFamily:'monospace', marginBottom:4 }}>{label}</div>
+            <div style={{ fontSize:14, fontWeight:'bold', color:c, fontFamily:'monospace' }}>
+              {pnl >= 0 ? '+' : ''}{pnl.toFixed(0)}
+            </div>
+            <div style={{ fontSize:9, color:c, fontFamily:'monospace' }}>
+              {pct >= 0 ? '+' : ''}{pct.toFixed(1)}%
+            </div>
+            <div style={{ fontSize:8, color:'#2a4a5a', marginTop:3, fontFamily:'sans-serif' }}>
+              {count} trade{count !== 1 ? 's' : ''}{wr !== null ? ` · ${wr}% WR` : ''}
+            </div>
+          </div>
+        );
+      })}
+    </div>
+  );
+};
+
 
 export default function PortfolioTab({ compact = false, isOwner = false }) {
   const [data, setData]             = useState(null);
@@ -838,6 +904,10 @@ export default function PortfolioTab({ compact = false, isOwner = false }) {
         <KStatCard label='OPEN'          value={s.open_count||0}      sub='positions' color='#fbbf24' compact={compact} />
         <KStatCard label='WIN RATE'      value={`${s.win_rate||0}%`}  sub={`${s.total_closed||0} closed`} color={s.win_rate>=60?KC.green:s.win_rate>=40?KC.yellow:KC.red} compact={compact} />
       </div>
+
+      {/* ── Period P&L breakdown ── */}
+      {!compact && <PeriodPnLBar closedPositions={closedPositions} startingCash={data?.state?.starting_capital || 25000} />}
+
       <div style={{ background:'#0a1018', border:'1px solid #1a2535', borderRadius:10, padding:16, marginBottom:20 }}>
         <div style={{ display:'flex', justifyContent:'space-between', alignItems:'center', marginBottom:8 }}>
           <div>

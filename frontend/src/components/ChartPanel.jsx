@@ -239,14 +239,44 @@ const ChartPanel = ({ symbol, tradeParams }) => {
           );
         })}
 
-        {/* Trade params: entry zone + SL */}
+        {/* Trade params: entry zone, SL + TP1/TP2/TP3 */}
         {tp && (
           <g>
+            {/* Entry zone */}
             <rect x={PAD.l} y={priceFn(tp.entry_high)} width={w-PAD.l-PAD.r}
               height={Math.max(2, Math.abs(priceFn(tp.entry_low) - priceFn(tp.entry_high)))}
               fill="rgba(0,255,136,0.07)" stroke="rgba(0,255,136,0.25)" strokeWidth="0.5" />
+            {/* Entry exact line */}
+            {tp.entry && (
+              <g>
+                <line x1={PAD.l} y1={priceFn(tp.entry)} x2={w-PAD.r} y2={priceFn(tp.entry)} stroke="#94a3b8" strokeWidth="1" strokeDasharray="3 3" opacity="0.7"/>
+                <text x={w-PAD.r+3} y={priceFn(tp.entry)+4} fontSize="7" fill="#94a3b8" fontFamily="monospace">Entry</text>
+              </g>
+            )}
+            {/* SL */}
             <line x1={PAD.l} y1={priceFn(tp.sl)} x2={w-PAD.r} y2={priceFn(tp.sl)} stroke="#ff4466" strokeWidth="1.5" strokeDasharray="6 3" />
             <text x={PAD.l+4} y={priceFn(tp.sl)-4} fontSize="8" fill="#ff4466" fontFamily="sans-serif">SL ${tp.sl}</text>
+            {/* TP1 */}
+            {tp.tp1 > 0 && (
+              <g>
+                <line x1={PAD.l} y1={priceFn(tp.tp1)} x2={w-PAD.r} y2={priceFn(tp.tp1)} stroke="#00ff88" strokeWidth="1.2" strokeDasharray="5 3" opacity="0.85"/>
+                <text x={PAD.l+4} y={priceFn(tp.tp1)-4} fontSize="8" fill="#00ff88" fontFamily="sans-serif">TP1 ${tp.tp1}</text>
+              </g>
+            )}
+            {/* TP2 */}
+            {tp.tp2 > 0 && (
+              <g>
+                <line x1={PAD.l} y1={priceFn(tp.tp2)} x2={w-PAD.r} y2={priceFn(tp.tp2)} stroke="#00d4ff" strokeWidth="1" strokeDasharray="5 3" opacity="0.7"/>
+                <text x={PAD.l+4} y={priceFn(tp.tp2)-4} fontSize="8" fill="#00d4ff" fontFamily="sans-serif">TP2 ${tp.tp2}</text>
+              </g>
+            )}
+            {/* TP3 */}
+            {tp.tp3 > 0 && (
+              <g>
+                <line x1={PAD.l} y1={priceFn(tp.tp3)} x2={w-PAD.r} y2={priceFn(tp.tp3)} stroke="#c084fc" strokeWidth="1" strokeDasharray="5 3" opacity="0.6"/>
+                <text x={PAD.l+4} y={priceFn(tp.tp3)-4} fontSize="8" fill="#c084fc" fontFamily="sans-serif">TP3 ${tp.tp3}</text>
+              </g>
+            )}
           </g>
         )}
 
