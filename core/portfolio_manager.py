@@ -10,11 +10,15 @@ v1.1: ATR at entry, trailing TP3
 import uuid, datetime, math, json, time
 from pathlib import Path
 from typing import Dict, Any, List, Optional
+import threading
 import yfinance as yf
 from core import portfolio_store as store
 
 SCAN_CACHE_PATH = Path(__file__).parent.parent / "calibration" / "last_portfolio_scan.json"
 SCAN_CACHE_TTL  = 3600 * 4  # 4 hours
+
+# Prevent concurrent check_portfolio() runs from stacking up and exhausting threads
+_CHECK_LOCK = threading.Lock()
 
 MAX_POSITIONS   = 8
 STARTING_CASH   = 25_000.0
@@ -216,10 +220,29 @@ def open_position(ticker: str, entry_price: float, sl: float,
 
 
 def check_portfolio() -> Dict:
+    # If already running, return current state immediately — prevents thread-pool exhaustion
+    if not _CHECK_LOCK.acquire(blocking=False):
+        return {**get_portfolio(), "skipped": True, "reason": "check already in progress"}
+    try:
+        return _check_portfolio_inner()
+    finally:
+        _CHECK_LOCK.release()
+
+
+def _check_portfolio_inner() -> Dict:
     open_pos     = store.load_positions("open")
     state        = store.load_state()
     updates      = []
     closed_count = 0
+
+    # Fetch sector rankings ONCE per cycle (not once per position)
+    _sector_ranks = {}
+    try:
+        from core.sector_ranker import rank_sectors as _rs
+        for r in (_rs() or []):
+            _sector_ranks[r.get("sector", "")] = r.get("rank", 0)
+    except Exception:
+        pass
 
     for pos in open_pos:
         ticker = pos["ticker"]; a_type = pos.get("asset_type","stock")
@@ -250,11 +273,11 @@ def check_portfolio() -> Dict:
         pos["unrealized_pnl_pct"] = round((price - entry) / entry * 100, 2)
         now = datetime.datetime.utcnow().isoformat(); action = None
 
-        # -- ATR auto-refresh -------------------------------------------------
+        # -- ATR auto-refresh (with timeout guard) ----------------------------
         if not pos.get("atr_refreshed"):
             try:
                 import pandas as pd
-                _hist = yf.Ticker(ticker).history(period="30d", interval="1d")
+                _hist = yf.Ticker(ticker).history(period="30d", interval="1d", timeout=5)
                 if not _hist.empty and len(_hist) >= 14:
                     _h, _l, _cp = _hist["High"], _hist["Low"], _hist["Close"].shift(1)
                     _tr = pd.concat([_h - _l, (_h - _cp).abs(), (_l - _cp).abs()], axis=1).max(axis=1)
@@ -263,16 +286,12 @@ def check_portfolio() -> Dict:
                         pos["atr_at_entry"] = _real_atr; pos["atr_refreshed"] = True
             except Exception: pass
 
-        # -- Sector Momentum exit alert ---------------------------------------
-        # If an open position's sector drops to bottom 3, send Telegram alert
+        # -- Sector Momentum exit alert (uses pre-fetched ranks) --------------
         if not pos.get("sector_exit_alerted"):
             try:
-                from core.sector_ranker import rank_sectors as _rs
                 _pos_sector = pos.get("sector", "")
-                if _pos_sector and _pos_sector != "Unknown":
-                    _rnks     = _rs()
-                    _r        = next((r for r in _rnks if r.get("sector") == _pos_sector), None)
-                    _rank_num = _r.get("rank", 0) if _r else 0
+                if _pos_sector and _pos_sector != "Unknown" and _sector_ranks:
+                    _rank_num = _sector_ranks.get(_pos_sector, 0)
                     if _rank_num >= SECTOR_BLOCK_RANK:
                         pos["sector_exit_alerted"] = True
                         pnl_str = f"{pos['unrealized_pnl_pct']:+.1f}%"
