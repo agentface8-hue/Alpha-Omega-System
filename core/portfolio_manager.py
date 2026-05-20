@@ -455,8 +455,9 @@ def autopilot_fill(watchlist_name: str = "full_scan", symbols_override: list = N
     from core.market_data import fetch_market_regime
     from core.signal_tracker import _is_us_market_open
     mkt = _is_us_market_open()
-    if not mkt["market_open"]:
-        return {"message": f"Autopilot blocked -- market not in regular session ({mkt['session']})", "session": mkt["session"], "opened": [], "slots_used": 0, "blocked": True}
+    # Paper trading — allow autopilot in any session; prices use 15-min delayed data anyway.
+    # Just surface a soft warning in the response instead of hard-blocking.
+    session_note = None if mkt["market_open"] else f"Note: market is in {mkt['session']} — using delayed prices"
 
     state    = store.load_state()
     open_pos = store.load_positions("open")
@@ -599,9 +600,12 @@ def autopilot_fill(watchlist_name: str = "full_scan", symbols_override: list = N
         key=lambda x: x["conviction_pct"], reverse=True
     )[:10]
 
-    return {
+    result = {
         "opened": opened, "slots_used": len(opened),
         "universe": universe_source, "regime": regime,
         "conviction_threshold": conv_threshold,
         "bench_candidates": [{"ticker": b["ticker"], "conviction_pct": b.get("conviction_pct", 0), "rr": b.get("rr", 0), "sector": get_ticker_sector(b["ticker"]), "entry_price": b.get("entry_high", b.get("last_close", 0)), "sl": b.get("sl", 0), "tp1": b.get("tp1", 0), "tp2": b.get("tp2", 0), "tp3": b.get("tp3", 0)} for b in bench],
     }
+    if session_note:
+        result["session_note"] = session_note
+    return result

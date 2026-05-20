@@ -701,6 +701,7 @@ export default function PortfolioTab({ compact = false, isOwner = false }) {
   const [autoRefresh, setAutoRefresh] = useState(true);
   const [countdown, setCountdown]   = useState(30);
   const [error, setError]           = useState(null);
+  const [sessionWarn, setSessionWarn] = useState(null);
   const [scanCandidates, setScanCandidates] = useState([]);
   const [allActions,     setAllActions]     = useState([]);
 
@@ -821,8 +822,10 @@ export default function PortfolioTab({ compact = false, isOwner = false }) {
       const r = await fetch(`${API()}/api/portfolio/autopilot`, { method:'POST', headers:{'Content-Type':'application/json'}, body:'{}' });
       const result = await r.json();
       await load();
+      // session_note = soft warning (premarket/afterhours), not an error
+      if (result.session_note) setSessionWarn(result.session_note);
       if (result.opened?.length > 0) setError(null);
-      else setError(result.message || 'No qualifying signals found (need conviction >= 55%)');
+      else if (!result.session_note) setError(result.message || 'No qualifying signals found (need conviction >= 55%)');
     } catch (e) { setError(e.message); }
     setLoading(false);
   };
@@ -891,6 +894,12 @@ export default function PortfolioTab({ compact = false, isOwner = false }) {
       {error && (
         <div style={{ background:'rgba(255,68,102,0.08)', border:'1px solid #ff446633', borderRadius:8, padding:'10px 16px', marginBottom:16, color:'#ff8899', fontSize:12, display:'flex', justifyContent:'space-between', alignItems:'center' }}>
           {error} <span style={{ cursor:'pointer', color:KC.red, fontSize:16 }} onClick={() => setError(null)}>✕</span>
+        </div>
+      )}
+
+      {sessionWarn && (
+        <div style={{ background:'rgba(251,191,36,0.08)', border:'1px solid rgba(251,191,36,0.3)', borderRadius:8, padding:'10px 16px', marginBottom:16, color:'#fbbf24', fontSize:12, display:'flex', justifyContent:'space-between', alignItems:'center' }}>
+          ⚠ {sessionWarn} <span style={{ cursor:'pointer', color:'#fbbf24', fontSize:16 }} onClick={() => setSessionWarn(null)}>✕</span>
         </div>
       )}
 
