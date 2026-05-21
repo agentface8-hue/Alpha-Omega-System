@@ -94,5 +94,21 @@
       "feat: sector score v2 \u00e2\u20ac\u201d 25/75 weighting (5d/20d) captures AI structural trend",
       "feat: sector gate and SECTOR_MAP fix"
     ]
+  },
+  {
+    "ts": "2026-05-21T19:00:02.111412",
+    "commits": 17,
+    "messages": [
+      "feat: Telegram alerts for portfolio open/TP/SL/close + Deep Scan tab + state patch endpoint + TP1 cache typo fix",
+      "fix: R:R 1.8->1.5 (data-driven), yfinance fallback timeout=6s in price_feed",
+      "auto: session memory 2026-05-20 19:00",
+      "fix: check_portfolio lock + rank_sectors once per cycle + yfinance timeout -- prevents backend hang",
+      "ops: force Render restart -- backend hung (stuck process)",
+      "tune: lower conviction thresholds based on trade data",
+      "fix: portfolio reset breaks page -- defensive state access, isOwner in FOCUS, dynamic subtitle, reset returns portfolio",
+      "fix: remove autopilot market-hours hard-block (paper trading -- allow premarket/afterhours)",
+      "\"fix-owner-role\"",
+      "feat: portfolio chart and period pnl"
+    ]
   }
 ]

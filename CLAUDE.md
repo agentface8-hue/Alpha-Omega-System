@@ -1,6 +1,6 @@
 # CLAUDE.md — Alpha-Omega System
 # ⚠️ READ THIS FIRST — BEFORE TOUCHING ANYTHING ⚠️
-# Last Updated: 2026-05-20
+# Last Updated: 2026-05-21
 
 ---
 
@@ -385,7 +385,23 @@ This is the only way knowledge survives across sessions.
 | DTP guardrail fires | TP ordering inversion after scaling | Already handled in portfolio_manager.py |
 
 ## 16. RECENT SESSION CHANGES
-*Auto-updated: 2026-05-20 19:00 UTC*
+*Auto-updated: 2026-05-21 19:00 UTC*
+
+### `84e16b2` 2026-05-21 16:19 - feat: Telegram alerts for portfolio open/TP/SL/close + Deep Scan tab + state patch endpoint + TP1 cache typo fix
+- `backend/main.py`
+- `core/long_base_scanner.py`
+- `core/portfolio_manager.py`
+- `frontend/src/App.jsx`
+- `frontend/src/components/DeepScan.jsx`
+
+### `139c9fa` 2026-05-21 15:37 - fix: R:R 1.8->1.5 (data-driven), yfinance fallback timeout=6s in price_feed
+- `core/portfolio_manager.py`
+- `core/price_feed.py`
+
+### `4a7fd52` 2026-05-20 22:00 - auto: session memory 2026-05-20 19:00
+- `CLAUDE.md`
+- `MASTER-KNOWLEDGE.md`
+- `calibration/session_log.json`
 
 ### `6eea6a1` 2026-05-20 19:00 - fix: check_portfolio lock + rank_sectors once per cycle + yfinance timeout -- prevents backend hang
 - `core/portfolio_manager.py`
@@ -412,18 +428,5 @@ This is the only way knowledge survives across sessions.
 ### `4e269db` 2026-05-20 11:23 - feat: portfolio chart and period pnl
 - `frontend/src/components/ChartPanel.jsx`
 - `frontend/src/components/PortfolioTab.jsx`
-
-### `8de2b9a` 2026-05-20 10:57 - fix: check_anthropic_api uses raw urllib - no anthropic package dependency
-- `core/system_health.py`
-
-### `d4aef99` 2026-05-20 10:49 - feat: sector score v2 â€” 25/75 weighting (5d/20d) captures AI structural trend
-- `core/sector_ranker.py`
-
-### `27b7f0d` 2026-05-20 09:14 - feat: sector gate and SECTOR_MAP fix
-- `backend/main.py`
-- `core/portfolio_manager.py`
-- `core/sector_ranker.py`
-- `core/signal_tracker.py`
-- `frontend/src/components/SignalTracker.jsx`
 
 
