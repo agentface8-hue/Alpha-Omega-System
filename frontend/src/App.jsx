@@ -13,6 +13,7 @@ import AlphaMegaDashboard from './components/AlphaMegaDashboard';
 import Analytics          from './components/Analytics';
 import PortfolioTab       from './components/PortfolioTab';
 import PrintingProfits    from './components/PrintingProfits';
+import DeepScan from './components/DeepScan';
 import DreamLog           from './components/DreamLog';
 import SystemMonitor      from './components/SystemMonitor';
 import LoginScreen        from './components/LoginScreen';
@@ -43,6 +44,7 @@ const PanelContent = ({ id, autoRun, compact = false, isOwner = false }) => {
   if (id === 'tracker')   return <SignalTracker compact={compact} isOwner={isOwner} />;
   if (id === 'scan')      return <ScanDashboard autoScan={autoRun} compact={compact} isOwner={isOwner} />;
   if (id === 'dreams')    return <DreamLog />;
+  if (id === 'deepscan')  return <DeepScan />;
   return null;
 };
 
@@ -154,7 +156,8 @@ const App = () => {
     { id:'analyze',   label:'COUNCIL ANALYZE',  color:'#00d4ff' },
     { id:'printing',  label:'PRINTING PROFITS', color:'#fbbf24' },
     { id:'backtest',  label:'BACKTESTER',        color:'#a855f7' },
-  { id:'monitor',   label:'LIVE MONITOR',       color:'#00ff88' },
+    { id:'monitor',   label:'LIVE MONITOR',     color:'#00ff88' },
+    { id:'deepscan',  label:'DEEP SCAN',        color:'#1D9E75' },
   ];
 
   // ── Focus mode: single panel full screen ────────────────────────────────────
@@ -284,6 +287,7 @@ const App = () => {
     if (activeTab === 'printing')  return <PrintingProfits />;
     if (activeTab === 'backtest')  return <BacktestDashboard />;
     if (activeTab === 'monitor')   return <SystemMonitor />;
+    if (activeTab === 'deepscan')  return <DeepScan />;
     // Council Analyze
     return (
       <main className="main-container">

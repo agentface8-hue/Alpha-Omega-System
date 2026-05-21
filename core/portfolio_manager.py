@@ -216,6 +216,12 @@ def open_position(ticker: str, entry_price: float, sl: float,
     state["cash"] = round(state["cash"] - sizing["position_size"], 2)
     store.save_position(pos)
     store.save_state(state)
+    # Telegram alert — position opened
+    try:
+        from core.telegram_alerts import alert_signal_created
+        alert_signal_created({**pos, "regime": entry_market_context.get("regime","") if entry_market_context else "",
+                               "target_method": "atr"})
+    except Exception: pass
     return pos
 
 
@@ -387,6 +393,10 @@ def _check_portfolio_inner() -> Dict:
                 ext_count = pos.get("tp3_extensions",0)
                 pos["close_reason"] = (f"Trailing TP3 final close @ ${tp3:.2f} after {ext_count} extensions (+${pnl:.0f})" if pos.get("trailing_active") else f"TP3 hit @ ${tp3:.2f} (+${pnl:.0f})")
                 pos["unrealized_pnl"] = 0; action = f"TP3 hit @ ${tp3}"; closed_count += 1
+                try:
+                    from core.telegram_alerts import alert_tp_hit
+                    alert_tp_hit(pos, "tp3", tp3)
+                except Exception: pass
 
         # -- TP2 hit ----------------------------------------------------------
         elif price >= tp2 and not pos.get("tp2_hit") and pos.get("tp1_hit"):
@@ -396,6 +406,10 @@ def _check_portfolio_inner() -> Dict:
             pos["realized_pnl"] = round(pos.get("realized_pnl",0)+pnl, 2); state["cash"] = round(state["cash"]+tp2_sh*tp2, 2)
             pos["tp2_hit"] = True; pos["shares_remaining"] -= tp2_sh; pos["status"] = "partial"; pos["sl"] = round(tp1,4)
             action = f"TP2 hit @ ${tp2}, SL -> TP1"
+            try:
+                from core.telegram_alerts import alert_tp_hit
+                alert_tp_hit(pos, "tp2", tp2)
+            except Exception: pass
 
         # -- TP1 hit ----------------------------------------------------------
         elif price >= tp1 and not pos.get("tp1_hit"):
@@ -405,6 +419,10 @@ def _check_portfolio_inner() -> Dict:
             pos["realized_pnl"] = round(pos.get("realized_pnl",0)+pnl, 2); state["cash"] = round(state["cash"]+tp1_sh*tp1, 2)
             pos["tp1_hit"] = True; pos["shares_remaining"] -= tp1_sh; pos["status"] = "partial"; pos["sl"] = round(entry,4)
             action = f"TP1 hit @ ${tp1}, SL -> BE"
+            try:
+                from core.telegram_alerts import alert_tp_hit
+                alert_tp_hit(pos, "tp1", tp1)
+            except Exception: pass
 
         pos["updated_at"] = now
         store.save_position(pos)
@@ -436,6 +454,11 @@ def close_position(position_id: str, reason: str = "MANUAL") -> Dict:
     pos["close_reason"] = f"Manual close @ ${price:.2f} -- {'profit' if pnl>=0 else 'loss'} {'+' if pnl>=0 else ''}{pnl:.0f}" + (f" ({reason})" if reason!="MANUAL" else "")
     pos["unrealized_pnl"] = 0
     store.save_position(pos)
+    # Telegram alert — position closed
+    try:
+        from core.telegram_alerts import alert_signal_closed
+        alert_signal_closed(pos, reason, price)
+    except Exception: pass
     open_after = [p for p in open_pos if p["id"]!=position_id]
     positions_value = sum(p["shares_remaining"]*p.get("current_price",p["entry_price"]) for p in open_after)
     state["total_value"] = round(state["cash"]+positions_value, 2)

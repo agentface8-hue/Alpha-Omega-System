@@ -2063,6 +2063,28 @@ async def auth_register(payload: AuthRegisterRequest):
     except ValueError as e:
         raise HTTPException(status_code=400, detail=str(e))
 
+@app.get("/api/scan/sleeping-giants")
+async def sleeping_giants_scan(refresh: bool = False):
+    """Weekly long-base breakout scanner. Cached 7 days. Pass ?refresh=true to force re-scan."""
+    from core.long_base_scanner import run_scan, _CACHE
+    import time
+    if refresh:
+        _CACHE["ts"] = 0
+    return run_scan()
+
+@app.post("/api/portfolio/patch-config")
+async def patch_portfolio_config():
+    """Fix Supabase state config without clearing positions."""
+    from core.portfolio_store import load_state, save_state
+    state = load_state() or {}
+    state["max_positions"]    = 8
+    state["max_position_size"] = 3340.0
+    state["min_position_size"] = 2500.0
+    state["max_risk_per_trade"] = 500.0
+    save_state(state)
+    return {"patched": True, "state": state}
+
+
 @app.get("/api/auth/users")
 async def auth_users():
     """List all users — owner dashboard."""
