@@ -539,7 +539,7 @@ def autopilot_fill(watchlist_name: str = "full_scan", symbols_override: list = N
         print(f"[AUTOPILOT] Cache save failed: {_ce}")
 
     candidates = sorted(
-        [r for r in raw if not r.get("hard_fail") and r.get("conviction_pct", 0) >= conv_threshold and r.get("rr", 0) >= 1.8 and r["ticker"] not in existing_tickers],
+        [r for r in raw if not r.get("hard_fail") and r.get("conviction_pct", 0) >= conv_threshold and r.get("rr", 0) >= 1.5 and r["ticker"] not in existing_tickers],
         key=lambda x: x["conviction_pct"], reverse=True
     )
 

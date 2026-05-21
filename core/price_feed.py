@@ -104,12 +104,12 @@ def _yf_price(sym: str, asset_type: str) -> Optional[float]:
         import yfinance as yf
         import gc
         tk   = yf.Ticker(sym)
-        data = tk.history(period="1d", interval="1m")
+        data = tk.history(period="1d", interval="1m", timeout=6)
         if not data.empty:
             price = round(float(data["Close"].iloc[-1]), 4)
             del data; gc.collect()
             return price
-        data = tk.history(period="2d")
+        data = tk.history(period="2d", timeout=6)
         if not data.empty:
             price = round(float(data["Close"].iloc[-1]), 4)
             del data; gc.collect()
