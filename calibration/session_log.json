@@ -110,5 +110,16 @@
       "\"fix-owner-role\"",
       "feat: portfolio chart and period pnl"
     ]
+  },
+  {
+    "ts": "2026-05-22T19:00:02.102911",
+    "commits": 5,
+    "messages": [
+      "auto: session memory 2026-05-21 19:00",
+      "feat: Telegram alerts for portfolio open/TP/SL/close + Deep Scan tab + state patch endpoint + TP1 cache typo fix",
+      "fix: R:R 1.8->1.5 (data-driven), yfinance fallback timeout=6s in price_feed",
+      "auto: session memory 2026-05-20 19:00",
+      "fix: check_portfolio lock + rank_sectors once per cycle + yfinance timeout -- prevents backend hang"
+    ]
   }
 ]

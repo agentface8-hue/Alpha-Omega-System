@@ -1,5 +1,5 @@
 # ALPHA-OMEGA SYSTEM — MASTER KNOWLEDGE BASE
-# Last Updated: 2026-05-21
+# Last Updated: 2026-05-22
 # Location: C:\Users\asus\Alpha-Omega-System\MASTER-KNOWLEDGE.md
 
 ## ⚠️ INSTRUCTIONS FOR CLAUDE — READ THIS FIRST EVERY SESSION
@@ -512,7 +512,12 @@ Downloads folder has dead ZIP copies from April 29 — ignore them.
 Always deploy from: git push origin main (triggers both Render + Vercel)
 
 ## 16. RECENT SESSION CHANGES
-*Auto-updated: 2026-05-21 19:00 UTC*
+*Auto-updated: 2026-05-22 19:00 UTC*
+
+### `f665f27` 2026-05-21 22:00 - auto: session memory 2026-05-21 19:00
+- `CLAUDE.md`
+- `MASTER-KNOWLEDGE.md`
+- `calibration/session_log.json`
 
 ### `84e16b2` 2026-05-21 16:19 - feat: Telegram alerts for portfolio open/TP/SL/close + Deep Scan tab + state patch endpoint + TP1 cache typo fix
 - `backend/main.py`
@@ -532,28 +537,5 @@ Always deploy from: git push origin main (triggers both Render + Vercel)
 
 ### `6eea6a1` 2026-05-20 19:00 - fix: check_portfolio lock + rank_sectors once per cycle + yfinance timeout -- prevents backend hang
 - `core/portfolio_manager.py`
-
-### `6646bc3` 2026-05-20 18:57 - ops: force Render restart -- backend hung (stuck process)
-
-### `241d1cb` 2026-05-20 17:02 - tune: lower conviction thresholds based on trade data
-- `core/portfolio_manager.py`
-
-### `d496b3e` 2026-05-20 14:52 - fix: portfolio reset breaks page -- defensive state access, isOwner in FOCUS, dynamic subtitle, reset returns portfolio
-- `backend/portfolio_routes.py`
-- `core/portfolio_manager.py`
-- `core/portfolio_store.py`
-- `frontend/src/App.jsx`
-- `frontend/src/components/PortfolioTab.jsx`
-
-### `89dc8f3` 2026-05-20 13:21 - fix: remove autopilot market-hours hard-block (paper trading -- allow premarket/afterhours)
-- `core/portfolio_manager.py`
-- `frontend/src/components/PortfolioTab.jsx`
-
-### `553e700` 2026-05-20 11:43 - "fix-owner-role"
-- `frontend/src/App.jsx`
-
-### `4e269db` 2026-05-20 11:23 - feat: portfolio chart and period pnl
-- `frontend/src/components/ChartPanel.jsx`
-- `frontend/src/components/PortfolioTab.jsx`
 
 
