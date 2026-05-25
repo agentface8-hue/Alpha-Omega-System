@@ -704,6 +704,8 @@ export default function PortfolioTab({ compact = false, isOwner = false }) {
   const [sessionWarn, setSessionWarn] = useState(null);
   const [scanCandidates, setScanCandidates] = useState([]);
   const [allActions,     setAllActions]     = useState([]);
+  const [tradeHistory,   setTradeHistory]   = useState(null);   // { trades, stats }
+  const [historyTab,     setHistoryTab]     = useState('log');  // 'log' | 'history'
 
   const load = useCallback(async (silent = false) => {
     if (!silent) setLoading(true);
@@ -727,6 +729,14 @@ export default function PortfolioTab({ compact = false, isOwner = false }) {
       );
       actions.sort((a, b) => (b.ts || '').localeCompare(a.ts || ''));
       setAllActions(actions.slice(0, 50));
+    } catch { /* silent */ }
+  }, []);
+
+  const fetchTradeHistory = useCallback(async () => {
+    try {
+      const r = await fetch(`${API()}/api/trade-history`);
+      if (!r.ok) return;
+      setTradeHistory(await r.json());
     } catch { /* silent */ }
   }, []);
 
@@ -993,38 +1003,118 @@ export default function PortfolioTab({ compact = false, isOwner = false }) {
       )}
 
       <div style={{ background:'#0a1018', border:'1px solid #1a2535', borderRadius:10, padding:16, marginTop:20 }}>
-        <div style={{ display:'flex', alignItems:'center', justifyContent:'space-between', marginBottom:4 }}>
-          <div style={{ fontSize:13, fontWeight:'bold', color:'#8899aa', letterSpacing:1 }}>SYSTEM ACTION LOG</div>
-          <button onClick={fetchActionLog}
-            style={{ background:'transparent', border:'1px solid #1a2535', borderRadius:4, padding:'3px 8px', color:'#8899aa', fontSize:10, cursor:'pointer', display:'flex', alignItems:'center', gap:4 }}>
-            <RefreshCw size={10} /> Refresh
-          </button>
-        </div>
-        <div style={{ fontSize:10, color:'#2a4a5a', marginBottom:12, fontFamily:'sans-serif' }}>Last 50 actions across all signals</div>
-        {allActions.length === 0 ? (
-          <div style={{ textAlign:'center', padding:'20px', color:'#2a4a5a', fontSize:12, fontFamily:'monospace' }}>No actions recorded yet.</div>
-        ) : (
-          <div style={{ display:'flex', flexDirection:'column', gap:3 }}>
-            {allActions.map((a, i) => {
-              const act = a.action || '';
-              const col = act.includes('TP') || act === 'TSL_MOVE' || act === 'TRAILING_SL' || act === 'TSL_ACTIVATED'
-                ? '#00ff88'
-                : act.includes('SL_HIT') || act === 'CLOSED' || act === 'STOPPED' || act === 'MOMENTUM_FADE' || act === 'TIMEOUT' || a.category === 'bad'
-                ? '#ff4466'
-                : act === 'OPENED' || act === 'STATE_CHANGE'
-                ? '#00d4ff'
-                : '#8899aa';
-              return (
-                <div key={i} style={{ display:'grid', gridTemplateColumns:'130px 65px 140px 1fr', gap:8, alignItems:'center', fontSize:10, fontFamily:'monospace', borderBottom:'1px solid #060d14', paddingBottom:4, paddingTop:2 }}>
-                  <span style={{ color:'#2a4a5a' }}>{(a.ts || '').slice(0,19).replace('T',' ')}</span>
-                  <span style={{ color:'#e0e0e0', fontWeight:'bold' }}>{a.ticker}</span>
-                  <span style={{ color:col, fontWeight:'bold' }}>{act}</span>
-                  <span style={{ color:'#8899aa', overflow:'hidden', textOverflow:'ellipsis', whiteSpace:'nowrap' }}>{a.detail || ''}</span>
-                </div>
-              );
-            })}
+        {/* Tab header */}
+        <div style={{ display:'flex', alignItems:'center', justifyContent:'space-between', marginBottom:10 }}>
+          <div style={{ display:'flex', gap:4 }}>
+            {[['log','SYSTEM ACTION LOG'],['history','TRADE HISTORY (85)']].map(([key,label]) => (
+              <button key={key} onClick={() => { setHistoryTab(key); if(key==='history' && !tradeHistory) fetchTradeHistory(); }}
+                style={{ background: historyTab===key ? '#1a2535' : 'transparent',
+                         border:`1px solid ${historyTab===key ? '#2a4a6a' : '#1a2535'}`,
+                         borderRadius:4, padding:'4px 10px', color: historyTab===key ? '#00d4ff' : '#4a6a8a',
+                         fontSize:10, fontWeight:'bold', letterSpacing:0.8, cursor:'pointer' }}>
+                {label}
+              </button>
+            ))}
           </div>
-        )}
+          {historyTab === 'log' && (
+            <button onClick={fetchActionLog}
+              style={{ background:'transparent', border:'1px solid #1a2535', borderRadius:4, padding:'3px 8px', color:'#8899aa', fontSize:10, cursor:'pointer', display:'flex', alignItems:'center', gap:4 }}>
+              <RefreshCw size={10} /> Refresh
+            </button>
+          )}
+          {historyTab === 'history' && (
+            <button onClick={fetchTradeHistory}
+              style={{ background:'transparent', border:'1px solid #1a2535', borderRadius:4, padding:'3px 8px', color:'#8899aa', fontSize:10, cursor:'pointer', display:'flex', alignItems:'center', gap:4 }}>
+              <RefreshCw size={10} /> Refresh
+            </button>
+          )}
+        </div>
+
+        {/* ACTION LOG tab */}
+        {historyTab === 'log' && (<>
+          <div style={{ fontSize:10, color:'#2a4a5a', marginBottom:12, fontFamily:'sans-serif' }}>Last 50 actions across all signals</div>
+          {allActions.length === 0 ? (
+            <div style={{ textAlign:'center', padding:'20px', color:'#2a4a5a', fontSize:12, fontFamily:'monospace' }}>No actions recorded yet.</div>
+          ) : (
+            <div style={{ display:'flex', flexDirection:'column', gap:3 }}>
+              {allActions.map((a, i) => {
+                const act = a.action || '';
+                const col = act.includes('TP') || act === 'TSL_MOVE' || act === 'TRAILING_SL' || act === 'TSL_ACTIVATED'
+                  ? '#00ff88'
+                  : act.includes('SL_HIT') || act === 'CLOSED' || act === 'STOPPED' || act === 'MOMENTUM_FADE' || act === 'TIMEOUT' || a.category === 'bad'
+                  ? '#ff4466'
+                  : act === 'OPENED' || act === 'STATE_CHANGE'
+                  ? '#00d4ff'
+                  : '#8899aa';
+                return (
+                  <div key={i} style={{ display:'grid', gridTemplateColumns:'130px 65px 140px 1fr', gap:8, alignItems:'center', fontSize:10, fontFamily:'monospace', borderBottom:'1px solid #060d14', paddingBottom:4, paddingTop:2 }}>
+                    <span style={{ color:'#2a4a5a' }}>{(a.ts || '').slice(0,19).replace('T',' ')}</span>
+                    <span style={{ color:'#e0e0e0', fontWeight:'bold' }}>{a.ticker}</span>
+                    <span style={{ color:col, fontWeight:'bold' }}>{act}</span>
+                    <span style={{ color:'#8899aa', overflow:'hidden', textOverflow:'ellipsis', whiteSpace:'nowrap' }}>{a.detail || ''}</span>
+                  </div>
+                );
+              })}
+            </div>
+          )}
+        </>)}
+
+        {/* TRADE HISTORY tab */}
+        {historyTab === 'history' && (<>
+          {!tradeHistory ? (
+            <div style={{ textAlign:'center', padding:'20px', color:'#2a4a5a', fontSize:12 }}>Loading history...</div>
+          ) : (<>
+            {/* Summary stats bar */}
+            <div style={{ display:'flex', gap:12, flexWrap:'wrap', marginBottom:14 }}>
+              {[
+                ['TOTAL',          tradeHistory.stats?.total ?? '—'],
+                ['WIN RATE',       `${tradeHistory.stats?.win_rate ?? 0}%`],
+                ['AVG P&L',        `${tradeHistory.stats?.avg_pnl > 0 ? '+' : ''}${tradeHistory.stats?.avg_pnl ?? 0}%`],
+                ['PROFIT FACTOR',  tradeHistory.stats?.profit_factor ?? '—'],
+                ['AVG MFE',        `+${tradeHistory.stats?.avg_mfe ?? 0}%`],
+                ['AVG MAE',        `${tradeHistory.stats?.avg_mae ?? 0}%`],
+              ].map(([lbl, val]) => (
+                <div key={lbl} style={{ background:'#060d14', border:'1px solid #1a2535', borderRadius:6, padding:'6px 12px', minWidth:70 }}>
+                  <div style={{ fontSize:9, color:'#4a6a8a', letterSpacing:1 }}>{lbl}</div>
+                  <div style={{ fontSize:13, fontWeight:'bold', color: lbl==='WIN RATE' ? (parseFloat(val)>=50?'#00ff88':'#ff4466') : lbl==='AVG P&L' ? (parseFloat(val)>=0?'#00ff88':'#ff4466') : '#e0e0e0' }}>{val}</div>
+                </div>
+              ))}
+            </div>
+            {/* Table */}
+            <div style={{ overflowX:'auto' }}>
+              <table style={{ width:'100%', borderCollapse:'collapse', fontSize:10, fontFamily:'monospace' }}>
+                <thead>
+                  <tr style={{ borderBottom:'1px solid #1a2535', color:'#4a6a8a', fontSize:9, letterSpacing:0.8 }}>
+                    {['DATE','TICKER','REGIME','CONV','TAS','VOL','EXIT','P&L%','MFE','MAE'].map(h => (
+                      <th key={h} style={{ padding:'4px 6px', textAlign:'left', whiteSpace:'nowrap' }}>{h}</th>
+                    ))}
+                  </tr>
+                </thead>
+                <tbody>
+                  {(tradeHistory.trades || []).map((t, i) => {
+                    const pnl = parseFloat(t.pnl_pct ?? 0);
+                    const pnlColor = pnl > 0 ? '#00ff88' : pnl < 0 ? '#ff4466' : '#94a3b8';
+                    const exitColor = t.exit_reason?.includes('TP') ? '#00ff88' : t.exit_reason?.includes('SL') ? '#ff4466' : '#8899aa';
+                    return (
+                      <tr key={i} style={{ borderBottom:'1px solid #060d14' }}>
+                        <td style={{ padding:'4px 6px', color:'#4a6a8a' }}>{(t.date_closed || '').slice(0,10)}</td>
+                        <td style={{ padding:'4px 6px', color:'#e0e0e0', fontWeight:'bold' }}>{t.ticker}</td>
+                        <td style={{ padding:'4px 6px', color:'#8899aa', fontSize:9 }}>{t.regime || '—'}</td>
+                        <td style={{ padding:'4px 6px', color: parseFloat(t.conviction||0)>=72 ? '#00d4ff' : '#8899aa' }}>{t.conviction ? `${Math.round(t.conviction)}%` : '—'}</td>
+                        <td style={{ padding:'4px 6px', color: t.tas_num>=3 ? '#00d4ff' : '#4a6a8a' }}>{t.tas_num != null ? `${t.tas_num}/4` : '—'}</td>
+                        <td style={{ padding:'4px 6px', color: parseFloat(t.vol_ratio||0)>=1.0 ? '#00ff88' : '#ff4466' }}>{t.vol_ratio ? `${parseFloat(t.vol_ratio).toFixed(2)}x` : '—'}</td>
+                        <td style={{ padding:'4px 6px', color: exitColor }}>{t.exit_reason || '—'}</td>
+                        <td style={{ padding:'4px 6px', color: pnlColor, fontWeight:'bold' }}>{pnl > 0 ? '+' : ''}{pnl.toFixed(2)}%</td>
+                        <td style={{ padding:'4px 6px', color:'#00ff88' }}>{t.mfe_pct != null ? `+${parseFloat(t.mfe_pct).toFixed(2)}%` : '—'}</td>
+                        <td style={{ padding:'4px 6px', color:'#ff4466' }}>{t.mae_pct != null ? `${parseFloat(t.mae_pct).toFixed(2)}%` : '—'}</td>
+                      </tr>
+                    );
+                  })}
+                </tbody>
+              </table>
+            </div>
+          </>)}
+        </>)}
       </div>
     </div>
   );

@@ -49,12 +49,19 @@ _last_analyzed_count = 0       # track how many signals we've seen
 # ── Data loading ──────────────────────────────────────────────────────────────
 
 def _load_closed() -> List[Dict]:
+    """Load live closed signals merged with full signal history (74+ trades)."""
     try:
         from core.signal_store import load_closed
-        return load_closed()
+        live = load_closed()
     except Exception as e:
         logger.error(f"[LEARN] load_closed failed: {e}")
-        return []
+        live = []
+    try:
+        from core.signal_history import load_merged
+        return load_merged(live)
+    except Exception as e:
+        logger.warning(f"[LEARN] history merge failed, using live only: {e}")
+        return live
 
 
 def _load_calibration() -> Dict:

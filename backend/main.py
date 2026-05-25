@@ -2106,3 +2106,51 @@ async def auth_users():
     """List all users — owner dashboard."""
     from backend.auth import list_users
     return {"users": list_users()}
+
+
+# ── Trade History ─────────────────────────────────────────────────────────────
+
+@app.get("/api/trade-history")
+async def get_trade_history(limit: int = 200):
+    """
+    Return all historical trades from signal_history table.
+    Used by Portfolio page history tab and learning loop seeding.
+    """
+    import os, urllib.request as _ur
+    sb_url = os.environ.get("SUPABASE_URL", "")
+    sb_key = os.environ.get("SUPABASE_ANON_KEY", "")
+    if not sb_url or not sb_key:
+        raise HTTPException(status_code=503, detail="Supabase not configured")
+    try:
+        req = _ur.Request(
+            f"{sb_url}/rest/v1/signal_history?select=*&limit={limit}&order=date_closed.desc",
+            headers={"apikey": sb_key, "Authorization": f"Bearer {sb_key}"}
+        )
+        with _ur.urlopen(req, timeout=10) as r:
+            trades = __import__("json").loads(r.read())
+
+        # Compute summary stats
+        valid  = [t for t in trades if t.get("pnl_pct") is not None]
+        wins   = [t for t in valid  if float(t.get("pnl_pct", 0)) > 0]
+        losses = [t for t in valid  if float(t.get("pnl_pct", 0)) <= 0]
+        total  = len(valid)
+        gp = sum(float(t["pnl_pct"]) for t in wins)   if wins   else 0
+        gl = abs(sum(float(t["pnl_pct"]) for t in losses)) if losses else 0.01
+
+        return {
+            "trades": trades,
+            "total":  len(trades),
+            "stats": {
+                "total":         total,
+                "wins":          len(wins),
+                "losses":        len(losses),
+                "win_rate":      round(len(wins) / total * 100, 1) if total else 0,
+                "avg_pnl":       round(sum(float(t["pnl_pct"]) for t in valid) / total, 2) if total else 0,
+                "profit_factor": round(gp / gl, 2),
+                "avg_mfe":       round(sum(float(t.get("mfe_pct") or 0) for t in valid) / total, 2) if total else 0,
+                "avg_mae":       round(sum(float(t.get("mae_pct") or 0) for t in valid) / total, 2) if total else 0,
+            }
+        }
+    except Exception as e:
+        traceback.print_exc()
+        raise HTTPException(status_code=500, detail=str(e))
