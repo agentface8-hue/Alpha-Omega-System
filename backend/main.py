@@ -2112,10 +2112,7 @@ async def auth_users():
 
 @app.get("/api/trade-history")
 async def get_trade_history(limit: int = 200):
-    """
-    Return all historical trades from signal_history table.
-    Used by Portfolio page history tab and learning loop seeding.
-    """
+    """Return all historical trades from trade_log for Portfolio history tab."""
     import os, urllib.request as _ur
     sb_url = os.environ.get("SUPABASE_URL", "")
     sb_key = os.environ.get("SUPABASE_ANON_KEY", "")
@@ -2123,13 +2120,26 @@ async def get_trade_history(limit: int = 200):
         raise HTTPException(status_code=503, detail="Supabase not configured")
     try:
         req = _ur.Request(
-            f"{sb_url}/rest/v1/signal_history?select=*&limit={limit}&order=date_closed.desc",
+            f"{sb_url}/rest/v1/trade_log?select=*&limit={limit}&order=date_closed.desc",
             headers={"apikey": sb_key, "Authorization": f"Bearer {sb_key}"}
         )
         with _ur.urlopen(req, timeout=10) as r:
             trades = __import__("json").loads(r.read())
 
-        # Compute summary stats
+        # Merge enriched TAS/vol from signal_history module
+        try:
+            from core.signal_history import _load_enriched_index
+            enriched_idx = _load_enriched_index()
+            for t in trades:
+                key = (str(t.get("ticker","")).upper(),
+                       str(t.get("date_closed",""))[:10])
+                e = enriched_idx.get(key, {})
+                t["tas_num"]      = e.get("tas_num")
+                t["vol_ratio"]    = e.get("vol_ratio")
+                t["vol_direction"]= e.get("vol_dir", e.get("vol_direction"))
+        except Exception:
+            pass  # enrichment optional
+
         valid  = [t for t in trades if t.get("pnl_pct") is not None]
         wins   = [t for t in valid  if float(t.get("pnl_pct", 0)) > 0]
         losses = [t for t in valid  if float(t.get("pnl_pct", 0)) <= 0]
