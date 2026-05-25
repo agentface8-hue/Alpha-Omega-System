@@ -169,6 +169,13 @@ async def startup_all():
 
     # 3. Telegram AI agent
     try:
+        from core.live_monitor import start as start_monitor
+        start_monitor(send_startup_message=False)
+        log.info("[STARTUP] Live monitor started (L1=5m, L2=15m, L3=30m)")
+    except Exception as e:
+        log.warning(f"[STARTUP] Live monitor failed: {e}")
+
+    try:
         from core.telegram_agent import start as start_agent
         start_agent(); log.info("[STARTUP] Telegram agent started")
     except Exception as e:
@@ -2106,6 +2113,47 @@ async def auth_users():
     """List all users — owner dashboard."""
     from backend.auth import list_users
     return {"users": list_users()}
+
+
+@app.get("/api/monitor/status")
+async def monitor_status():
+    """Current live monitor state — active failures, last check times."""
+    from pathlib import Path
+    import json as _json
+    state_file = Path(__file__).parent.parent / "data" / "monitor_state.json"
+    if not state_file.exists():
+        return {"status": "no_data", "failures": {}, "message": "Monitor not yet run"}
+    state = _json.loads(state_file.read_text())
+    failures = state.get("failures", {})
+    return {
+        "status": "RED" if failures else "GREEN",
+        "active_failures": len(failures),
+        "failures": failures,
+        "last_alerts": state.get("last_alert", {}),
+    }
+
+
+@app.post("/api/monitor/run")
+async def monitor_run_now():
+    """Trigger an immediate monitor check cycle and return results."""
+    from core.live_monitor import CHECKS_L1, CHECKS_L2, CHECKS_L3, run_check, process_results, load_state, save_state, send_alerts
+    import time as _time
+    state = load_state()
+    state_ref = {"state": state}
+    all_checks = CHECKS_L1 + CHECKS_L2 + CHECKS_L3
+    results = [run_check(name, fn, crit) for name, fn, crit in all_checks]
+    alerts  = process_results(results, state_ref["state"])
+    save_state(state_ref["state"])
+    if alerts:
+        send_alerts(alerts)
+    passed = sum(1 for r in results if r["status"] == "PASS")
+    failed = sum(1 for r in results if r["status"] == "FAIL")
+    return {
+        "passed": passed, "failed": failed,
+        "results": [{"name":r["name"],"status":r["status"],"ms":r.get("ms"),
+                     "error":r.get("error")} for r in results],
+        "alerts_sent": len(alerts),
+    }
 
 
 # ── Trade History ─────────────────────────────────────────────────────────────
