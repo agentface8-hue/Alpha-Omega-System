@@ -835,7 +835,7 @@ export default function PortfolioTab({ compact = false, isOwner = false }) {
       // session_note = soft warning (premarket/afterhours), not an error
       if (result.session_note) setSessionWarn(result.session_note);
       if (result.opened?.length > 0) setError(null);
-      else if (!result.session_note) setError(result.message || 'No qualifying signals found (need conviction >= 55%)');
+      else if (!result.session_note) setError(result.message || 'No qualifying signals found (need conviction >= 72%)');
     } catch (e) { setError(e.message); }
     setLoading(false);
   };

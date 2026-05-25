@@ -584,7 +584,7 @@ def autopilot_fill(watchlist_name: str = "full_scan", symbols_override: list = N
 
     if not candidates:
         top_scores = [(r["ticker"], r.get("conviction_pct", 0)) for r in raw if not r.get("hard_fail")][:8]
-        return {"message": f"No qualifying signals (need conviction >= {conv_threshold}%, R:R >= 1.8)", "opened": [], "universe": universe_source, "top_scores": top_scores, "regime": regime}
+        return {"message": f"No qualifying signals (conviction >= {conv_threshold}%, vol >= 1.0x, R:R >= 1.5)", "opened": [], "universe": universe_source, "top_scores": top_scores, "regime": regime}
 
     # ── SECTOR GATE: block red-sector stocks ─────────────────────────────────
     try:
