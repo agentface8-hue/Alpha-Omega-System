@@ -36,7 +36,7 @@ FADE_GIVEBACK_PCT  = 2.0  # % given back from MFE peak before auto-close
 # Sector Momentum Gate thresholds
 SECTOR_BLOCK_RANK      = 9    # sectors ranked 9,10,11 -> BLOCKED entirely
 SECTOR_WARN_RANK       = 7    # sectors ranked 7,8 -> need higher conviction
-SECTOR_WARN_CONVICTION = 72   # minimum conviction required for weak sectors
+SECTOR_WARN_CONVICTION = 78   # minimum conviction required for weak sectors
 
 
 # -- Dynamic TP Phase 2 -------------------------------------------------------
@@ -548,7 +548,7 @@ def autopilot_fill(watchlist_name: str = "full_scan", symbols_override: list = N
     except Exception:
         regime = "Trending Bull"
 
-    REGIME_THRESHOLDS = {"Trending Bull": 65, "Choppy / Range": 62, "High-Vol Event": 68, "Trending Bear": 75}
+    REGIME_THRESHOLDS = {"Trending Bull": 72, "Choppy / Range": 65, "High-Vol Event": 70, "Trending Bear": 75}
     conv_threshold = REGIME_THRESHOLDS.get(regime, 70)
     print(f"[AUTOPILOT] Regime: {regime} -> conviction threshold: {conv_threshold}%")
 
