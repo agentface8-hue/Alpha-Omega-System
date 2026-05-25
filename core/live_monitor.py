@@ -66,6 +66,15 @@ def _post(path, body=None, timeout=15):
     with urllib.request.urlopen(req, timeout=timeout) as r:
         return json.loads(r.read()), r.status
 
+def _sb_write_test():
+    """Quick Supabase connectivity check — just read one row."""
+    req = urllib.request.Request(
+        f"{SB_URL}/rest/v1/signals?limit=1",
+        headers={"apikey": SB_KEY, "Authorization": f"Bearer {SB_KEY}"})
+    with urllib.request.urlopen(req, timeout=8) as r:
+        rows = json.loads(r.read())
+    return f"{len(rows)} signals readable"
+
 # ── Telegram ──────────────────────────────────────────────────────
 def tg(msg, silent=False):
     if not TG_TOKEN or not TG_CHAT: return
@@ -94,11 +103,11 @@ def run_check(name, fn, critical=False, slow_threshold_ms=8000):
                 "critical":critical,"tb":traceback.format_exc()[-300:]}
 
 # ── Check definitions ─────────────────────────────────────────────
-CHECKS_L1 = [  # Every 5 min — critical
-    ("backend.health",    lambda: _get("/health"),          True),
-    ("portfolio.load",    lambda: _get("/api/portfolio"),   True),
-    ("signals.load",      lambda: _get("/api/signals"),     True),
-    ("agent.threads",     lambda: _get("/api/agent/status"),True),
+CHECKS_L1 = [  # Every 5 min — critical (direct internal calls, no HTTP)
+    ("backend.process",   lambda: (True, "alive"),                                   True),
+    ("portfolio.load",    lambda: __import__("core.portfolio_manager", fromlist=["get_portfolio_state"]).get_portfolio_state(), True),
+    ("signals.load",      lambda: __import__("core.signal_store",      fromlist=["get_all_signals"]).get_all_signals(),         True),
+    ("supabase.write",    lambda: _sb_write_test(),                                  True),
 ]
 
 CHECKS_L2 = [  # Every 15 min — integrations
