@@ -566,6 +566,22 @@ def autopilot_fill(watchlist_name: str = "full_scan", symbols_override: list = N
         key=lambda x: x["conviction_pct"], reverse=True
     )
 
+    # ── VOL GATE: data-driven from 74-trade analysis ──────────────────────────
+    # vol < 1.0x → WR 46%, avg +1.31%  |  vol ≥ 1.0x or ACCUMULATION → WR 67%+
+    vol_blocked = []
+    vol_passed  = []
+    for c in candidates:
+        vol   = c.get("vol_ratio", 0)
+        vdir  = c.get("vol_direction", "NEUTRAL")
+        if vol >= 1.0 or vdir == "ACCUMULATION":
+            vol_passed.append(c)
+        else:
+            vol_blocked.append({"ticker": c["ticker"], "vol": round(vol, 2),
+                                 "reason": f"vol {vol:.2f}x < 1.0x (74-trade gate)"})
+    if vol_blocked:
+        print(f"[AUTOPILOT] Vol gate blocked {len(vol_blocked)}: {[b['ticker'] for b in vol_blocked]}")
+    candidates = vol_passed
+
     if not candidates:
         top_scores = [(r["ticker"], r.get("conviction_pct", 0)) for r in raw if not r.get("hard_fail")][:8]
         return {"message": f"No qualifying signals (need conviction >= {conv_threshold}%, R:R >= 1.8)", "opened": [], "universe": universe_source, "top_scores": top_scores, "regime": regime}

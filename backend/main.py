@@ -728,6 +728,22 @@ async def run_autopilot(top_n: int = 10, watchlist: str = "full_scan"):
             gate_blocked = []
             print(f"[AUTOPILOT] Sector gate skipped: {_sge}")
 
+        # ── Step 3c: VOL GATE — data-driven from 74-trade analysis ───────────
+        # vol < 1.0x → 46% WR, +1.31% avg  |  vol ≥ 1.0x or ACCUM → 67%+ WR
+        vol_gate_blocked = []
+        vol_gate_passed  = []
+        for r in ranked:
+            vol  = r.get("vol_ratio", 0)
+            vdir = r.get("vol_direction", "NEUTRAL")
+            if vol >= 1.0 or vdir == "ACCUMULATION":
+                vol_gate_passed.append(r)
+            else:
+                vol_gate_blocked.append({"ticker": r["ticker"], "vol": round(vol, 2),
+                                          "reason": f"vol {vol:.2f}x < 1.0x"})
+        ranked = vol_gate_passed
+        if vol_gate_blocked:
+            print(f"[AUTOPILOT] Vol gate blocked: {[g['ticker'] for g in vol_gate_blocked]}")
+
         top = ranked[:top_n]
 
         # ── Step 4: Avoid duplicates ──────────────────────────────────────────

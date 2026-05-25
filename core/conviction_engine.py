@@ -239,9 +239,12 @@ def score_ticker(data: Dict[str, Any], regime: Dict[str, Any], skip_calibration:
         else:
             p3 = 45
             ta_notes.append("Distribution (big red + high vol) → P3 WEAK")
-    elif vol_ratio < 1.3:
+    elif vol_ratio < 1.0:
         p3 = 35
         ta_notes.append(f"Vol {vol_ratio}x too low → P3 WEAK")
+    elif vol_ratio < 1.3:
+        p3 = 52
+        ta_notes.append(f"Vol {vol_ratio}x moderate → P3 NEUTRAL")
     else:
         p3 = 60
 
