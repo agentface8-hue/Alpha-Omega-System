@@ -103,11 +103,11 @@ def run_check(name, fn, critical=False, slow_threshold_ms=8000):
                 "critical":critical,"tb":traceback.format_exc()[-300:]}
 
 # ── Check definitions ─────────────────────────────────────────────
-CHECKS_L1 = [  # Every 5 min — critical (direct internal calls, no HTTP)
-    ("backend.process",   lambda: "alive",                                             True),
-    ("portfolio.load",    lambda: __import__("core.portfolio_manager", fromlist=["get_portfolio_state"]).get_portfolio_state(), True),
-    ("signals.supabase",  lambda: __import__("core.signal_store",      fromlist=["load_active"]).load_active(), True),
-    ("supabase.writable", lambda: _sb_write_test(),                                    True),
+CHECKS_L1 = [  # Every 5 min — direct internal calls, no HTTP
+    ("backend.process",    lambda: "alive",                                                                                    True),
+    ("portfolio.data",     lambda: __import__("core.portfolio_manager", fromlist=["get_portfolio"]).get_portfolio(),           True),
+    ("signals.active",     lambda: __import__("core.signal_store",      fromlist=["load_active"]).load_active(),               True),
+    ("supabase.reachable", lambda: _sb_write_test(),                                                                           True),
 ]
 
 CHECKS_L2 = [  # Every 15 min — integrations
