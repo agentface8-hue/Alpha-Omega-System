@@ -1,6 +1,6 @@
 # CLAUDE.md — Alpha-Omega System
 # ⚠️ READ THIS FIRST — BEFORE TOUCHING ANYTHING ⚠️
-# Last Updated: 2026-05-24
+# Last Updated: 2026-05-25
 
 ---
 
@@ -385,16 +385,47 @@ This is the only way knowledge survives across sessions.
 | DTP guardrail fires | TP ordering inversion after scaling | Already handled in portfolio_manager.py |
 
 ## 16. RECENT SESSION CHANGES
-*Auto-updated: 2026-05-24 19:00 UTC*
+*Auto-updated: 2026-05-25 19:00 UTC*
 
-### `ed6b46a` 2026-05-23 22:00 - auto: session memory 2026-05-23 19:00
-- `CLAUDE.md`
-- `MASTER-KNOWLEDGE.md`
-- `calibration/session_log.json`
+### `a6c4808` 2026-05-25 17:42 - fix: L2/L3 monitor checks always use public URL - no localhost contention
+- `core/live_monitor.py`
 
-### `82de8b8` 2026-05-22 22:00 - auto: session memory 2026-05-22 19:00
-- `CLAUDE.md`
-- `MASTER-KNOWLEDGE.md`
-- `calibration/session_log.json`
+### `de13cf7` 2026-05-25 17:27 - fix: L1 checks use correct function names - get_portfolio + load_active. Monitor 12/12 clean
+- `core/live_monitor.py`
+
+### `3f5ea69` 2026-05-25 17:19 - fix: signals.load check uses load_active (correct import, fast)
+- `core/live_monitor.py`
+
+### `e8f02a4` 2026-05-25 17:12 - fix: L1 monitor checks use direct Python imports (no HTTP self-call). Only external services (Supabase/Telegram/Vercel) use HTTP
+- `core/live_monitor.py`
+
+### `555ee6f` 2026-05-25 17:04 - fix: live_monitor uses localhost on Render (not public URL), monitor/run runs in thread executor to avoid event loop block
+- `backend/main.py`
+- `core/live_monitor.py`
+
+### `e04a405` 2026-05-25 16:55 - feat: live_monitor.py - 3-level check loops (5m/15m/30m), immediate Telegram on failure/recovery, /api/monitor/status + /api/monitor/run endpoints
+- `backend/main.py`
+- `core/live_monitor.py`
+- `run_system_test.py`
+
+### `7c5a038` 2026-05-25 16:47 - fix: portfolio autopilot message - use backend dynamic threshold, not hardcoded 55%. Update R:R text to 1.5
+- `core/portfolio_manager.py`
+- `frontend/src/components/PortfolioTab.jsx`
+
+### `c041a1f` 2026-05-25 10:03 - fix: use trade_log (not signal_history) - no DDL needed, learning loop seeded with 84 trades from Supabase, Portfolio history tab reads trade_log directly
+- `backend/main.py`
+- `core/signal_history.py`
+
+### `7b4694d` 2026-05-25 09:37 - feat: trade history - signal_history table, seed script, /api/trade-history endpoint, Portfolio history tab, learning loop seeded with 85 historical trades
+- `backend/main.py`
+- `core/learning_loop.py`
+- `core/signal_history.py`
+- `docs/signal_history_migration.sql`
+- `frontend/src/components/PortfolioTab.jsx`
+
+### `4074dba` 2026-05-25 09:24 - feat: vol gate from 74-trade analysis - vol<1.0x blocked (WR46%) in autopilot+portfolio, vol 1.0-1.3x gets P3=52 (was 35), conviction threshold stays 72%
+- `backend/main.py`
+- `core/conviction_engine.py`
+- `core/portfolio_manager.py`
 
 
