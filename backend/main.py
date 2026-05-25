@@ -2136,16 +2136,21 @@ async def monitor_status():
 @app.post("/api/monitor/run")
 async def monitor_run_now():
     """Trigger an immediate monitor check cycle and return results."""
-    from core.live_monitor import CHECKS_L1, CHECKS_L2, CHECKS_L3, run_check, process_results, load_state, save_state, send_alerts
-    import time as _time
-    state = load_state()
-    state_ref = {"state": state}
-    all_checks = CHECKS_L1 + CHECKS_L2 + CHECKS_L3
-    results = [run_check(name, fn, crit) for name, fn, crit in all_checks]
-    alerts  = process_results(results, state_ref["state"])
-    save_state(state_ref["state"])
-    if alerts:
-        send_alerts(alerts)
+    import asyncio, concurrent.futures
+    def _run_sync():
+        from core.live_monitor import CHECKS_L1, CHECKS_L2, CHECKS_L3, run_check, process_results, load_state, save_state, send_alerts
+        state = load_state()
+        state_ref = {"state": state}
+        all_checks = CHECKS_L1 + CHECKS_L2 + CHECKS_L3
+        results = [run_check(name, fn, crit) for name, fn, crit in all_checks]
+        alerts  = process_results(results, state_ref["state"])
+        save_state(state_ref["state"])
+        if alerts:
+            send_alerts(alerts)
+        return results, alerts
+    loop = asyncio.get_event_loop()
+    with concurrent.futures.ThreadPoolExecutor() as pool:
+        results, alerts = await loop.run_in_executor(pool, _run_sync)
     passed = sum(1 for r in results if r["status"] == "PASS")
     failed = sum(1 for r in results if r["status"] == "FAIL")
     return {
