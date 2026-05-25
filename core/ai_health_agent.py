@@ -40,6 +40,8 @@ _agent_thread = None
 _last_check_result: Dict = {}
 _auto_fixes_applied: List[Dict] = []
 _last_severity = "GREEN"
+_last_alert_ts: float = 0.0          # in-memory: when last RED/YELLOW alert was sent
+ALERT_COOLDOWN_HOURS = 4             # don't re-send same-severity alert within this window
 
 
 # -- Fix cooldown helpers ------------------------------------------------------
@@ -407,10 +409,21 @@ def run_check_cycle(force: bool = False) -> Dict:
     sev      = diagnosis.get("severity", "GREEN")
     prev_sev = _last_severity
 
-    # Only alert on RED, or when severity WORSENS for the first time
     severity_worsened = (prev_sev == "GREEN" and sev in ("YELLOW","RED")) or (prev_sev == "YELLOW" and sev == "RED")
-    if force or sev == "RED" or (severity_worsened and applied_fixes):
+
+    # Alert cooldown — never spam the same RED/YELLOW more than once per ALERT_COOLDOWN_HOURS
+    global _last_alert_ts
+    alert_age_h = (time.time() - _last_alert_ts) / 3600
+    alert_due   = alert_age_h >= ALERT_COOLDOWN_HOURS
+
+    # Send alert only when:
+    #   - forced by caller
+    #   - severity just WORSENED (first occurrence)
+    #   - RED and enough time has passed since last alert (prevents 30-min spam)
+    should_alert = force or severity_worsened or (sev == "RED" and alert_due)
+    if should_alert and sev != "GREEN":
         _send_health_report(diagnosis, system_state, applied_fixes)
+        _last_alert_ts = time.time()
 
     _last_severity = sev
 
