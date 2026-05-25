@@ -27,10 +27,13 @@ import urllib.request, urllib.error
 sys.path.insert(0, str(Path(__file__).parent))
 from dotenv import load_dotenv; load_dotenv()
 
-# When running ON Render use localhost to avoid public HTTP round-trips
-_ON_RENDER = bool(os.environ.get("RENDER") or os.environ.get("RENDER_EXTERNAL_URL"))
-_PORT      = os.environ.get("PORT", "10000")
-BASE       = f"http://127.0.0.1:{_PORT}" if _ON_RENDER else "https://alpha-omega-system.onrender.com"
+# L1 uses direct Python imports (no HTTP).
+# L2/L3 always use the PUBLIC URL — avoids localhost self-call contention.
+_ON_RENDER  = bool(os.environ.get("RENDER") or os.environ.get("RENDER_EXTERNAL_URL"))
+_PORT       = os.environ.get("PORT", "10000")
+BASE_LOCAL  = f"http://127.0.0.1:{_PORT}"   # for background threads on Render
+BASE_PUBLIC = "https://alpha-omega-system.onrender.com"
+BASE        = BASE_PUBLIC                    # L2/L3 always use public URL
 TG_TOKEN  = os.environ.get("TELEGRAM_TOKEN", "")
 TG_CHAT   = os.environ.get("TELEGRAM_PERSONAL_CHAT_ID", "")
 SB_URL    = os.environ.get("SUPABASE_URL", "")
