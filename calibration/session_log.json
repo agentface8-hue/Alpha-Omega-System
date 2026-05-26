@@ -153,5 +153,21 @@
       "feat: trade history - signal_history table, seed script, /api/trade-history endpoint, Portfolio history tab, learning loop seeded with 85 historical trades",
       "feat: vol gate from 74-trade analysis - vol<1.0x blocked (WR46%) in autopilot+portfolio, vol 1.0-1.3x gets P3=52 (was 35), conviction threshold stays 72%"
     ]
+  },
+  {
+    "ts": "2026-05-26T19:00:02.123534",
+    "commits": 14,
+    "messages": [
+      "auto: session memory 2026-05-25 19:00",
+      "fix: L2/L3 monitor checks always use public URL - no localhost contention",
+      "fix: L1 checks use correct function names - get_portfolio + load_active. Monitor 12/12 clean",
+      "fix: signals.load check uses load_active (correct import, fast)",
+      "fix: L1 monitor checks use direct Python imports (no HTTP self-call). Only external services (Supabase/Telegram/Vercel) use HTTP",
+      "fix: live_monitor uses localhost on Render (not public URL), monitor/run runs in thread executor to avoid event loop block",
+      "feat: live_monitor.py - 3-level check loops (5m/15m/30m), immediate Telegram on failure/recovery, /api/monitor/status + /api/monitor/run endpoints",
+      "fix: portfolio autopilot message - use backend dynamic threshold, not hardcoded 55%. Update R:R text to 1.5",
+      "fix: use trade_log (not signal_history) - no DDL needed, learning loop seeded with 84 trades from Supabase, Portfolio history tab reads trade_log directly",
+      "feat: trade history - signal_history table, seed script, /api/trade-history endpoint, Portfolio history tab, learning loop seeded with 85 historical trades"
+    ]
   }
 ]

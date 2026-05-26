@@ -1,5 +1,5 @@
 # ALPHA-OMEGA SYSTEM — MASTER KNOWLEDGE BASE
-# Last Updated: 2026-05-25
+# Last Updated: 2026-05-26
 # Location: C:\Users\asus\Alpha-Omega-System\MASTER-KNOWLEDGE.md
 
 ## ⚠️ INSTRUCTIONS FOR CLAUDE — READ THIS FIRST EVERY SESSION
@@ -512,7 +512,12 @@ Downloads folder has dead ZIP copies from April 29 — ignore them.
 Always deploy from: git push origin main (triggers both Render + Vercel)
 
 ## 16. RECENT SESSION CHANGES
-*Auto-updated: 2026-05-25 19:00 UTC*
+*Auto-updated: 2026-05-26 19:00 UTC*
+
+### `528a17d` 2026-05-25 22:00 - auto: session memory 2026-05-25 19:00
+- `CLAUDE.md`
+- `MASTER-KNOWLEDGE.md`
+- `calibration/session_log.json`
 
 ### `a6c4808` 2026-05-25 17:42 - fix: L2/L3 monitor checks always use public URL - no localhost contention
 - `core/live_monitor.py`
@@ -549,10 +554,5 @@ Always deploy from: git push origin main (triggers both Render + Vercel)
 - `core/signal_history.py`
 - `docs/signal_history_migration.sql`
 - `frontend/src/components/PortfolioTab.jsx`
-
-### `4074dba` 2026-05-25 09:24 - feat: vol gate from 74-trade analysis - vol<1.0x blocked (WR46%) in autopilot+portfolio, vol 1.0-1.3x gets P3=52 (was 35), conviction threshold stays 72%
-- `backend/main.py`
-- `core/conviction_engine.py`
-- `core/portfolio_manager.py`
 
 
