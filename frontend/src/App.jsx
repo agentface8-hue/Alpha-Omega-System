@@ -18,7 +18,9 @@ import DreamLog           from './components/DreamLog';
 import SystemMonitor      from './components/SystemMonitor';
 import LoginScreen        from './components/LoginScreen';
 import AmaStatus          from './components/AmaStatus';
+import PipelineBar        from './components/PipelineBar';
 import { playThinkingSound, playSuccessSound, playErrorSound } from './utils/sounds';
+import { warmupBackend } from './utils/api';
 
 // ── Mobile detection ──────────────────────────────────────────────────────────
 const useMobile = () => {
@@ -40,11 +42,11 @@ const PANELS = [
 ];
 
 // ── Panel renderer ────────────────────────────────────────────────────────────
-const PanelContent = ({ id, autoRun, compact = false, isOwner = false }) => {
-  if (id === 'portfolio') return <PortfolioTab compact={compact} isOwner={isOwner} />;
-  if (id === 'tracker')   return <SignalTracker compact={compact} isOwner={isOwner} />;
-  if (id === 'scan')      return <ScanDashboard autoScan={autoRun} compact={compact} isOwner={isOwner} />;
-  if (id === 'dreams')    return <DreamLog />;
+const PanelContent = ({ id, autoRun, compact = false, isOwner = false, backendReady = true }) => {
+  if (id === 'portfolio') return <PortfolioTab compact={compact} isOwner={isOwner} backendReady={backendReady} />;
+  if (id === 'tracker')   return <SignalTracker compact={compact} isOwner={isOwner} backendReady={backendReady} />;
+  if (id === 'scan')      return <ScanDashboard autoScan={autoRun && backendReady} compact={compact} isOwner={isOwner} />;
+  if (id === 'dreams')    return <DreamLog backendReady={backendReady} />;
   if (id === 'deepscan')  return <DeepScan />;
   return null;
 };
@@ -73,7 +75,9 @@ const App = () => {
   const [focusedPanel,  setFocusedPanel]  = useState(null);
   const [activeTab,     setActiveTab]     = useState('analyze');
   const [mountedPanels, setMountedPanels] = useState([]);
-  const [backendStatus, setBackendStatus] = useState('ready');
+  const [backendStatus, setBackendStatus] = useState('connecting');
+  const [backendReady,  setBackendReady]  = useState(false);
+  const [pipelineTick,  setPipelineTick]  = useState(0);
   const [mobilePanel,   setMobilePanel]   = useState('portfolio'); // active panel on mobile
 
   const isOwner = userRole === 'owner';
@@ -84,14 +88,26 @@ const App = () => {
     setAuthed(true);
   };
 
-  // ── Mount panels immediately (Starter plan = no cold start) ──────────────
+  // ── Warm Render backend, then mount dashboard panels (staggered) ─────────
   React.useEffect(() => {
     if (!authed) return;
-    setMountedPanels(['portfolio']);
-    setTimeout(() => setMountedPanels(p => [...p, 'tracker']), 300);
-    setTimeout(() => setMountedPanels(p => [...p, 'scan']),    600);
-    setTimeout(() => setMountedPanels(p => [...p, 'dreams']),  900);
-  }, [authed]);
+    let cancelled = false;
+    setBackendStatus('connecting');
+    setBackendReady(false);
+    setMountedPanels([]);
+    (async () => {
+      const ok = await warmupBackend((st) => { if (!cancelled) setBackendStatus(st); });
+      if (cancelled) return;
+      setBackendReady(ok);
+      setBackendStatus(ok ? 'ready' : 'slow');
+      if (!ok) return;
+      setMountedPanels(['portfolio']);
+      setTimeout(() => setMountedPanels(p => [...p, 'tracker']), 400);
+      setTimeout(() => setMountedPanels(p => [...p, 'scan']), 800);
+      setTimeout(() => setMountedPanels(p => [...p, 'dreams']), 1200);
+    })();
+    return () => { cancelled = true; };
+  }, [authed, pipelineTick]);
 
   // Council Analyze state
   const [symbol,    setSymbol]    = useState('');
@@ -182,7 +198,7 @@ const App = () => {
         </div>
         {/* Full content */}
         <div style={{ flex:1, overflow:'auto' }}>
-          <PanelContent id={focusedPanel} autoRun={true} isOwner={isOwner} />
+          <PanelContent id={focusedPanel} autoRun={true} isOwner={isOwner} backendReady={backendReady} />
         </div>
       </div>
     );
@@ -191,7 +207,7 @@ const App = () => {
   // ── Dashboard (desktop 2x2 / mobile single panel) ───────────────────────────
   const renderDashboard = () => {
     // Backend waking screen
-    if (backendStatus !== 'ready' && mountedPanels.length === 0) {
+    if (!backendReady && mountedPanels.length === 0) {
       return (
         <div style={{ height: isMobile ? 'calc(100vh - 110px)' : 'calc(100vh - 152px)',
           display:'flex', alignItems:'center', justifyContent:'center',
@@ -215,7 +231,7 @@ const App = () => {
           {/* Panel content */}
           <div style={{ flex:1, overflow:'auto', background:'#050810' }}>
             {mountedPanels.includes(panel.id)
-              ? <PanelContent id={panel.id} autoRun={true} compact={false} isOwner={isOwner} />
+              ? <PanelContent id={panel.id} autoRun={true} compact={false} isOwner={isOwner} backendReady={backendReady} />
               : <div style={{ display:'flex', alignItems:'center', justifyContent:'center',
                   height:'200px', color:'#2a4a5a', fontSize:11, fontFamily:'monospace' }}>
                   ⧗ LOADING...
@@ -245,8 +261,17 @@ const App = () => {
 
     // ── DESKTOP: 2×2 grid ──
     return (
+      <div style={{ display:'flex', flexDirection:'column', height:'calc(100vh - 152px)', background:'#0a0f18' }}>
+        {isOwner && (
+          <div style={{ padding:'8px 10px 0', flexShrink:0 }}>
+            <PipelineBar
+              disabled={!backendReady}
+              onComplete={() => setPipelineTick(t => t + 1)}
+            />
+          </div>
+        )}
       <div style={{ display:'grid', gridTemplateColumns:'1fr 1fr', gridTemplateRows:'1fr 1fr',
-        height:'calc(100vh - 152px)', gap:2, background:'#0a0f18' }}>
+        flex:1, minHeight:0, gap:2 }}>
         {PANELS.map(panel => (
           <div key={panel.id} style={{ display:'flex', flexDirection:'column',
             background:'#050810', overflow:'hidden', minHeight:0 }}>
@@ -267,7 +292,7 @@ const App = () => {
             </div>
             <div style={{ flex:1, overflow:'auto', minHeight:0 }}>
               {mountedPanels.includes(panel.id)
-                ? <PanelContent id={panel.id} autoRun={true} compact={true} isOwner={isOwner} />
+                ? <PanelContent id={panel.id} autoRun={true} compact={true} isOwner={isOwner} backendReady={backendReady} />
                 : <div style={{ display:'flex', alignItems:'center', justifyContent:'center',
                     height:'100%', color:'#2a4a5a', fontSize:10, fontFamily:'monospace',
                     letterSpacing:2, flexDirection:'column', gap:8 }}>
@@ -277,6 +302,7 @@ const App = () => {
             </div>
           </div>
         ))}
+      </div>
       </div>
     );
   };
@@ -345,8 +371,8 @@ const App = () => {
               </span>
             )}
             <AmaStatus compact={isMobile} />
-            <span className="status-dot"></span>
-            {!isMobile && 'SYSTEM ONLINE'}
+            <span className="status-dot" style={{ background: backendReady ? '#00ff88' : '#fbbf24' }}></span>
+            {!isMobile && (backendReady ? 'SYSTEM ONLINE' : 'WAKING UP…')}
           </div>
         </header>
 

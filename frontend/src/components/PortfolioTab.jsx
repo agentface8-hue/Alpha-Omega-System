@@ -3,7 +3,8 @@ import { RefreshCw, Zap, RotateCcw, Target, BarChart2, Clock, ChevronDown, Chevr
 import { C as KC, StatCard as KStatCard } from './UIKit';
 import ChartPanel from './ChartPanel';
 
-const API = () => import.meta.env.VITE_API_URL || 'http://127.0.0.1:8000';
+import { fetchJson, API_BASE } from '../utils/api';
+const API = () => API_BASE;
 const fmt  = (n, d=2) => (n == null ? '—' : Number(n).toFixed(d));
 const pct  = n => `${n > 0 ? '+' : ''}${fmt(n)}%`;
 const usd  = n => `$${fmt(n, 0).replace(/\B(?=(\d{3})+(?!\d))/g, ',')}`;
@@ -693,7 +694,7 @@ const PeriodPnLBar = ({ closedPositions, startingCash }) => {
 };
 
 
-export default function PortfolioTab({ compact = false, isOwner = false }) {
+export default function PortfolioTab({ compact = false, isOwner = false, backendReady = true }) {
   const [data, setData]             = useState(null);
   const [loading, setLoading]       = useState(false);
   const [checking, setChecking]     = useState(false);
@@ -708,15 +709,15 @@ export default function PortfolioTab({ compact = false, isOwner = false }) {
   const [historyTab,     setHistoryTab]     = useState('log');  // 'log' | 'history'
 
   const load = useCallback(async (silent = false) => {
+    if (!backendReady) return;
     if (!silent) setLoading(true);
     try {
-      const r = await fetch(`${API()}/api/portfolio`);
-      if (!r.ok) throw new Error(await r.text());
-      setData(await r.json());
+      const json = await fetchJson('/api/portfolio', {}, { timeoutMs: 50000, retries: 3 });
+      setData(json);
       setError(null);
-    } catch (e) { setError(e.message); }
+    } catch (e) { setError(e.message || 'Failed to load portfolio'); }
     setLoading(false);
-  }, []);
+  }, [backendReady]);
 
   const fetchActionLog = useCallback(async () => {
     try {
@@ -859,7 +860,12 @@ export default function PortfolioTab({ compact = false, isOwner = false }) {
     } catch (e) { setError(e.message); }
   };
 
-  useEffect(() => { load(); fetchCandidates([]); fetchActionLog(); }, [load, fetchCandidates, fetchActionLog]);
+  useEffect(() => {
+    if (!backendReady) return;
+    load();
+    fetchCandidates([]);
+    fetchActionLog();
+  }, [load, fetchCandidates, fetchActionLog, backendReady]);
   useEffect(() => {
     if (!autoRefresh) return;
     const timer = setInterval(() => setCountdown(c => { if (c <= 1) { checkPrices(); return 30; } return c - 1; }), 1000);
@@ -927,7 +933,7 @@ export default function PortfolioTab({ compact = false, isOwner = false }) {
         <KStatCard label='UNREALIZED'    value={`${(s.total_unrealized_pnl||0)>=0?'+':''}${fmt(s.total_unrealized_pnl||0,0)}`} color={clr(s.total_unrealized_pnl||0)} compact={compact} />
         <KStatCard label='REALIZED'      value={`${(s.total_realized_pnl||0)>=0?'+':''}${fmt(s.total_realized_pnl||0,0)}`} color={clr(s.total_realized_pnl||0)} compact={compact} />
         <KStatCard label='OPEN'          value={s.open_count||0}      sub='positions' color='#fbbf24' compact={compact} />
-        <KStatCard label='WIN RATE'      value={`${s.win_rate||0}%`}  sub={`${s.total_closed||0} closed`} color={s.win_rate>=60?KC.green:s.win_rate>=40?KC.yellow:KC.red} compact={compact} />
+        <KStatCard label='WIN RATE'      value={(s.total_closed||0)===0?'—':`${s.win_rate||0}%`}  sub={`${s.total_closed||0} closed`} color={(s.total_closed||0)===0?KC.textFaint:(s.win_rate>=60?KC.green:s.win_rate>=40?KC.yellow:KC.red)} compact={compact} />
       </div>
 
       {/* ── Period P&L breakdown ── */}

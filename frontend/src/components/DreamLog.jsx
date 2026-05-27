@@ -2,21 +2,21 @@ import { useState, useEffect } from 'react';
 import { Moon, TrendingUp, AlertTriangle, Clock } from 'lucide-react';
 import { C, SectionCard, PageHeader, Badge, EmptyState, LoadingSpinner } from './UIKit';
 
-const API = import.meta.env.VITE_API_URL || 'http://127.0.0.1:8000';
+import { fetchJson } from '../utils/api';
 
 const EDGE_COLOR  = { HIGH: C.red,    MEDIUM: C.yellow, LOW: C.textFaint };
 const ACTION_COLOR = { WATCH_CLOSELY: C.green, MONITOR: C.blue, WAIT: C.textFaint };
 
-export default function DreamLog() {
+export default function DreamLog({ backendReady = true }) {
   const [dreams,  setDreams]  = useState([]);
   const [loading, setLoading] = useState(true);
   const [running, setRunning] = useState(false);
   const [lastRun, setLastRun] = useState(null);
 
   const fetchDreams = async () => {
+    if (!backendReady) { setLoading(false); return; }
     try {
-      const res  = await fetch(`${API}/api/dreams/latest?limit=20`);
-      const json = await res.json();
+      const json = await fetchJson('/api/dreams/latest?limit=20', {}, { timeoutMs: 45000, retries: 2 });
       setDreams(json.dreams || []);
     } catch(e) { console.error(e); }
     setLoading(false);
@@ -25,18 +25,18 @@ export default function DreamLog() {
   const runCycle = async () => {
     setRunning(true);
     try {
-      await fetch(`${API}/api/dreams/run`, {
+      await fetchJson('/api/dreams/run', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ force: true }),
-      });
+      }, { timeoutMs: 90000, retries: 1 });
       setLastRun(new Date().toLocaleTimeString());
       setTimeout(fetchDreams, 3000);
     } catch(e) { console.error(e); }
     setRunning(false);
   };
 
-  useEffect(() => { fetchDreams(); }, []);
+  useEffect(() => { fetchDreams(); }, [backendReady]);
 
   return (
     <div style={{ padding: '28px 28px', maxWidth: 900, margin: '0 auto' }}>

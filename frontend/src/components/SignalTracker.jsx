@@ -488,7 +488,7 @@ const SLHistoryPanel = ({ signal, entryTime, onClose }) => {
 };
 
 // ================================================
-const SignalTracker = ({ compact = false, isOwner = false }) => {
+const SignalTracker = ({ compact = false, isOwner = false, backendReady = true }) => {
   const [data,             setData]             = useState(null);
   const [loading,          setLoading]          = useState(false);
   const [refreshing,       setRefreshing]       = useState(false);
@@ -607,7 +607,11 @@ const SignalTracker = ({ compact = false, isOwner = false }) => {
     return () => { clearInterval(pi); clearInterval(ti); };
   }, [autoRefresh]);
   useEffect(() => { if (data?.active?.length>0 && !autoRefresh) setAutoRefresh(true); }, [data?.active?.length]);
-  useEffect(() => { fetchSignals(); fetchCandidates([]); }, []);
+  useEffect(() => {
+    if (!backendReady) return;
+    fetchSignals();
+    fetchCandidates([]);
+  }, [backendReady]);
 
   const stats     = data?.stats || {};
   const active    = data?.active || [];

@@ -80,7 +80,9 @@ def _run_scan_background(job_id: str, symbols: list):
 app = FastAPI(title="Alpha-Omega API")
 
 from backend.ama_routes import router as ama_router
+from backend.pipeline_routes import router as pipeline_router
 app.include_router(ama_router, prefix="/api/ama", tags=["ama"])
+app.include_router(pipeline_router, prefix="/api/pipeline", tags=["pipeline"])
 
 # ── Seed owner account on startup ─────────────────────────────────────────────
 
@@ -1470,8 +1472,15 @@ async def check_sector_flips():
 
 @app.get("/api/portfolio")
 async def get_portfolio_endpoint():
-    from core.portfolio_manager import get_portfolio
-    return get_portfolio()
+    import asyncio
+    import concurrent.futures
+    loop = asyncio.get_event_loop()
+    with concurrent.futures.ThreadPoolExecutor(max_workers=1) as ex:
+        try:
+            from core.portfolio_manager import get_portfolio
+            return await asyncio.wait_for(loop.run_in_executor(ex, get_portfolio), timeout=25.0)
+        except asyncio.TimeoutError:
+            raise HTTPException(status_code=504, detail="Portfolio load timed out after 25s")
 
 @app.post("/api/portfolio/check")
 async def check_portfolio_endpoint():
@@ -1516,15 +1525,25 @@ async def portfolio_autopilot_endpoint(body: dict = {}):
     Portfolio autopilot — uses Alpha-Mega ranked stocks as scan universe if cache is fresh.
     Falls back to watchlist if cache is empty.
     """
-    from core.portfolio_manager import autopilot_fill
+    import asyncio
+    import concurrent.futures
     import time as _tm
-    watchlist = (body or {}).get("watchlist","full_scan")
-    # ── Use Alpha-Mega ranked symbols if cache is fresh ──
-    alpha_mega_syms = None
-    if _ALPHA_MEGA_CACHE.get("data") and (_tm.time() - _ALPHA_MEGA_CACHE.get("ts",0)) < _CACHE_TTL:
-        alpha_mega_syms = [r["ticker"] for r in (_ALPHA_MEGA_CACHE["data"] or [])]
-        print(f"[AUTOPILOT-PORTFOLIO] Injecting Alpha-Mega universe ({len(alpha_mega_syms)} stocks)")
-    return autopilot_fill(watchlist, symbols_override=alpha_mega_syms)
+
+    def _run():
+        from core.portfolio_manager import autopilot_fill
+        watchlist = (body or {}).get("watchlist", "full_scan")
+        alpha_mega_syms = None
+        if _ALPHA_MEGA_CACHE.get("data") and (_tm.time() - _ALPHA_MEGA_CACHE.get("ts", 0)) < _CACHE_TTL:
+            alpha_mega_syms = [r["ticker"] for r in (_ALPHA_MEGA_CACHE["data"] or [])]
+            print(f"[AUTOPILOT-PORTFOLIO] Injecting Alpha-Mega universe ({len(alpha_mega_syms)} stocks)")
+        return autopilot_fill(watchlist, symbols_override=alpha_mega_syms)
+
+    loop = asyncio.get_event_loop()
+    with concurrent.futures.ThreadPoolExecutor(max_workers=1) as ex:
+        try:
+            return await asyncio.wait_for(loop.run_in_executor(ex, _run), timeout=120.0)
+        except asyncio.TimeoutError:
+            raise HTTPException(status_code=504, detail="Autopilot timed out after 120s")
 
 @app.post("/api/portfolio/reset")
 async def reset_portfolio_endpoint():
