@@ -22,6 +22,20 @@ These were fixed in **`9ec7893`** (`fix_parallel_health_checks`) and verified on
 
 ---
 
+## Deployment accounts (not Avi’s personal Vercel)
+
+| Layer | Where it lives | Notes |
+|--------|----------------|--------|
+| **Vercel** | Team **`synapse-s`** (`vercel.com/synapse-s-projects`) | Chrome profile **agent** · `agentface8@gmail.com` |
+| **Frontend project** | **`alpha-omega-ngfw`** only | Live: https://alpha-omega-ngfw.vercel.app |
+| **Stale Vercel project** | Older `alpha-omega-*` (e.g. Apr 2026) | **Do not use** — wrong/old deploy |
+| **GitHub** | `agentface8-hue/Alpha-Omega-System` | `git push origin main` → Render + Vercel (GitHub integration) |
+| **Render** | `alpha-omega-system.onrender.com` | Same repo; backend API |
+
+`origin` and `vercel` git remotes both point at the same GitHub repo — one push to `main` is enough. Docs-only commits do not change the live UI until frontend source changes.
+
+---
+
 ## READ FIRST
 Before starting, read these files in this order:
 1. `ALPHA-OMEGA-CURSOR-PRD.md` — full system architecture

@@ -64,16 +64,15 @@ npx vite build
 cd C:\Users\asus\Alpha-Omega-System
 git add -A
 git commit -m "descriptive message"
-git push origin main    # Render backend
-git push vercel main    # Vercel frontend
+git push origin main    # Render + Vercel (same GitHub repo; Vercel team synapse-s)
 
 # 3. Wait 30-60s for deploy, then verify
-# Backend: https://alpha-omega-api.onrender.com/docs
-# Frontend: https://alpha-omega-ngfw.vercel.app
+# Backend: https://alpha-omega-system.onrender.com/health
+# Frontend: https://alpha-omega-ngfw.vercel.app  (Vercel: synapse-s / project alpha-omega-ngfw)
 ```
 
 ### Important:
-- Always push to BOTH `origin` and `vercel`
+- One push to `origin main` is enough (`vercel` remote is duplicate URL)
 - Frontend build is required — Vercel builds from source
 - Render may take 1-2 min on cold start (free tier)
 
