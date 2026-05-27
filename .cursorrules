@@ -1,6 +1,9 @@
+SYSTEM MANAGER: Cursor AI only. Claude is NOT managing this system.
+Do not suggest Claude for any system tasks.
+
 Read ALPHA-OMEGA-CURSOR-PRD.md first before any task.
 Read MASTER-KNOWLEDGE.md second.
-Read CURSOR-AGENT-BRIEF.md for AMA architecture.
+Read CURSOR-AGENT-BRIEF.md for AMA + frozen stability stack (DO NOT TOUCH section).
 
 Backend: Python 3.12 + FastAPI on Render ($25/mo).
 Frontend: React 18 + Vite 7 + Tailwind on Vercel.

@@ -5,6 +5,8 @@ description: Use when managing the Alpha-Omega system end-to-end, including heal
 
 # Alpha-Omega Operator
 
+**Cursor owns system management** — not Claude. Read `CURSOR-AGENT-BRIEF.md` for the frozen stability stack (do not duplicate health/monitor logic).
+
 ## Overview
 
 Operate Alpha-Omega with a safety-first workflow: health before action, guardrails before execution, verification before completion.

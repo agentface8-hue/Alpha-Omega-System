@@ -1,3 +1,9 @@
+⛔ SYSTEM MANAGEMENT: Cursor AI only as of 2026-05-28.
+Claude reads this system for context only. Do not make changes, deploy code,
+or run commands on this system. Direct all work to Cursor.
+
+---
+
 # ALPHA-OMEGA SYSTEM — MASTER KNOWLEDGE BASE
 # Last Updated: 2026-05-27
 # Location: C:\Users\asus\Alpha-Omega-System\MASTER-KNOWLEDGE.md

@@ -1,4 +1,26 @@
-# TASK: BUILD ALPHA-OMEGA AUTONOMOUS MANAGEMENT AGENT (AMA)
+# ALPHA-OMEGA — CURSOR SYSTEM BRIEF
+
+**System manager: Cursor only** (as of 2026-05-28). Claude does not run deploys, edits, or ops on this repo — it may answer questions and write briefs for Cursor. Do not duplicate health/monitor/learning logic elsewhere; extend AMA (`core/ama/`) instead.
+
+---
+
+## ⛔ DO NOT TOUCH (stability stack — deployed & verified)
+
+These were fixed in **`9ec7893`** (`fix_parallel_health_checks`) and verified on Render. Do not revert, re-wrap, or re-implement parallel checks in other modules.
+
+| File / surface | Why frozen |
+|----------------|------------|
+| `core/system_health.py` | Parallel 9-check health; executor timeouts |
+| `core/live_monitor.py` | L1–L3 monitor loops; L3 uses **in-process** checks (not self-HTTP to public URL) |
+| `backend/main.py` → `GET /api/health/full` | Full health via executor + timeout |
+| `backend/main.py` → `GET /api/learning/summary` | Summary via executor + 10s cap |
+| `backend/main.py` → `GET /api/trade-history` | Trade log fetch + enrichment |
+
+**Before changing any row above:** reproduce the issue on production, confirm the fix is not already here, and run `POST /api/monitor/run` + `GET /api/monitor/status` after deploy.
+
+**Safe to extend without duplicating:** `core/ama/*`, `backend/ama_routes.py`, frontend `AmaStatus.jsx` / `SystemMonitor.jsx`, operator skill `.claude/skills/alpha-omega-operator/SKILL.md`.
+
+---
 
 ## READ FIRST
 Before starting, read these files in this order:
