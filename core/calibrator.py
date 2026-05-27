@@ -32,27 +32,72 @@ def save_calibration(params: Dict[str, Any]):
     print(f"[CALIB] Saved to {CALIB_FILE}")
 
 
+# Defaults when learning loop has no regime sample yet
+DEFAULT_REGIME_THRESHOLDS = {
+    "Trending Bull": 72,
+    "Choppy / Range": 65,
+    "High-Vol Event": 70,
+    "Trending Bear": 75,
+}
+
+
+def _conviction_bracket(conviction: int) -> str:
+    if conviction >= 85:
+        return "85-100"
+    if conviction >= 75:
+        return "75-84"
+    if conviction >= 65:
+        return "65-74"
+    if conviction >= 60:
+        return "60-64"
+    return "50-59"
+
+
+def apply_learning_offsets(raw_conviction: int, params: Dict[str, Any]) -> int:
+    """Apply per-bracket offsets from learning_loop (closed-trade win rates)."""
+    offsets = params.get("conviction_offsets") or {}
+    if not offsets:
+        return raw_conviction
+    offset = float(offsets.get(_conviction_bracket(raw_conviction), 0))
+    return max(0, min(100, round(raw_conviction + offset)))
+
+
+def get_regime_conviction_threshold(regime: str) -> int:
+    """Regime floor: max(hardcoded safe default, learned threshold)."""
+    params = load_calibration()
+    learned = params.get("regime_thresholds") or {}
+    base = int(DEFAULT_REGIME_THRESHOLDS.get(regime, 70))
+    if regime in learned and learned[regime] is not None:
+        return max(base, int(learned[regime]))
+    return base
+
+
+def sector_conviction_penalty(sector: str) -> int:
+    """Extra conviction % required for COLD sectors; small relief for HOT."""
+    bias = (load_calibration().get("sector_bias") or {}).get(sector or "Unknown", "NEUTRAL")
+    if bias == "COLD":
+        return 5
+    if bias == "HOT":
+        return -2
+    return 0
+
+
 def apply_calibration(raw_conviction: int, params: Dict = None) -> int:
-    """Apply calibration to a raw conviction score."""
+    """Apply learning offsets + optional linear/curve calibration."""
     if params is None:
         params = load_calibration()
+    conviction = apply_learning_offsets(raw_conviction, params)
     mode = params.get("mode", "none")
-    if mode == "none":
-        return raw_conviction
-    elif mode == "linear":
-        calibrated = raw_conviction * params["scale"] + params["offset"]
-        return max(0, min(100, round(calibrated)))
-    elif mode == "curve":
-        # Piecewise mapping from backtest data
+    if mode == "linear":
+        conviction = conviction * params["scale"] + params["offset"]
+        return max(0, min(100, round(conviction)))
+    if mode == "curve":
         mapping = params.get("mapping", [])
-        if not mapping:
-            return raw_conviction
-        # Find bracket
-        for m in mapping:
-            if m["raw_min"] <= raw_conviction <= m["raw_max"]:
-                return max(0, min(100, round(m["calibrated"])))
-        return raw_conviction
-    return raw_conviction
+        if mapping:
+            for m in mapping:
+                if m["raw_min"] <= conviction <= m["raw_max"]:
+                    return max(0, min(100, round(m["calibrated"])))
+    return conviction
 
 
 def run_calibration(symbols: List[str] = None,

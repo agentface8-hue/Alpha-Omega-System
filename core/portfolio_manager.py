@@ -548,9 +548,9 @@ def autopilot_fill(watchlist_name: str = "full_scan", symbols_override: list = N
     except Exception:
         regime = "Trending Bull"
 
-    REGIME_THRESHOLDS = {"Trending Bull": 72, "Choppy / Range": 65, "High-Vol Event": 70, "Trending Bear": 75}
-    conv_threshold = REGIME_THRESHOLDS.get(regime, 70)
-    print(f"[AUTOPILOT] Regime: {regime} -> conviction threshold: {conv_threshold}%")
+    from core.calibrator import get_regime_conviction_threshold, sector_conviction_penalty
+    conv_threshold = get_regime_conviction_threshold(regime)
+    print(f"[AUTOPILOT] Regime: {regime} -> conviction threshold: {conv_threshold}% (learned+fallback)")
 
     scan_result = run_scan(symbols)
     raw = scan_result.get("results", [])
@@ -561,9 +561,22 @@ def autopilot_fill(watchlist_name: str = "full_scan", symbols_override: list = N
     except Exception as _ce:
         print(f"[AUTOPILOT] Cache save failed: {_ce}")
 
+    try:
+        from core.universe_builder import get_ticker_sector as _gts_early
+    except Exception:
+        def _gts_early(t): return "Other"
+
+    def _learning_gate(r: dict) -> bool:
+        if r.get("hard_fail") or r.get("rr", 0) < 1.5 or r["ticker"] in existing_tickers:
+            return False
+        sector = _gts_early(r["ticker"])
+        need = conv_threshold + sector_conviction_penalty(sector)
+        return r.get("conviction_pct", 0) >= need
+
     candidates = sorted(
-        [r for r in raw if not r.get("hard_fail") and r.get("conviction_pct", 0) >= conv_threshold and r.get("rr", 0) >= 1.5 and r["ticker"] not in existing_tickers],
-        key=lambda x: x["conviction_pct"], reverse=True
+        [r for r in raw if _learning_gate(r)],
+        key=lambda x: x["conviction_pct"] - sector_conviction_penalty(_gts_early(x["ticker"])),
+        reverse=True,
     )
 
     # ── VOL GATE: data-driven from 74-trade analysis ──────────────────────────

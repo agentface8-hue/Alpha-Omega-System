@@ -1991,6 +1991,31 @@ async def run_fast_learning():
         except asyncio.TimeoutError:
             raise HTTPException(status_code=504, detail="Fast learning timed out after 30s")
 
+@app.get("/api/learning/readiness")
+async def learning_readiness():
+    """Paper-profit readiness + closed-trade expectancy (learning wired check)."""
+    import asyncio
+    import concurrent.futures
+    loop = asyncio.get_event_loop()
+    with concurrent.futures.ThreadPoolExecutor(max_workers=1) as ex:
+        from core.autoresearch import profit_readiness
+        return await asyncio.wait_for(loop.run_in_executor(ex, profit_readiness), timeout=15.0)
+
+
+@app.post("/api/learning/autoresearch")
+async def learning_autoresearch():
+    """Fast learning + autoresearch experiment log (ATLAS-style scoring)."""
+    import asyncio
+    import concurrent.futures
+    loop = asyncio.get_event_loop()
+    with concurrent.futures.ThreadPoolExecutor(max_workers=1) as ex:
+        try:
+            from core.autoresearch import run_autoresearch_fast
+            return await asyncio.wait_for(loop.run_in_executor(ex, run_autoresearch_fast), timeout=45.0)
+        except asyncio.TimeoutError:
+            raise HTTPException(status_code=504, detail="Autoresearch timed out after 45s")
+
+
 @app.post("/api/learning/run-deep")
 async def run_deep_learning():
     """Full 5D calibration + Opus meta-judge deep research."""

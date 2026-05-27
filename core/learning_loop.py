@@ -327,6 +327,7 @@ def run_fast(signals: Optional[List[Dict]] = None) -> Dict:
 
     conviction_data = _analyze_conviction(signals)
     regime_data     = _analyze_regime(signals)
+    sector_data     = _analyze_sectors(signals)
     advisor_data    = _analyze_advisor(signals)
 
     params = _load_calibration()
@@ -334,6 +335,8 @@ def run_fast(signals: Optional[List[Dict]] = None) -> Dict:
     params["conviction_stats"]     = conviction_data["stats"]
     params["regime_thresholds"]    = regime_data["thresholds"]
     params["regime_stats"]         = regime_data["stats"]
+    params["sector_bias"]          = sector_data["bias"]
+    params["sector_stats"]         = sector_data["stats"]
     params["advisor_accuracy"]     = advisor_data
     params["fast_run_count"]       = params.get("fast_run_count", 0) + 1
     params["last_fast_run"]        = datetime.utcnow().isoformat()
@@ -343,9 +346,22 @@ def run_fast(signals: Optional[List[Dict]] = None) -> Dict:
     _last_analyzed_count = len(signals)
     logger.info(f"[LEARN] Fast analysis done — {len(signals)} signals, "
                 f"offsets={conviction_data['offsets']}")
+
+    autoresearch_entry = None
+    try:
+        from core.autoresearch import compute_expectancy, record_experiment
+        exp = compute_expectancy(signals)
+        autoresearch_entry = record_experiment(
+            "fast_inline", exp, exp, {"status": "ok", "type": "fast"}
+        )
+    except Exception as e:
+        logger.warning(f"[LEARN] autoresearch log skipped: {e}")
+
     return {"status": "ok", "type": "fast", "signals": len(signals),
             "conviction_offsets": conviction_data["offsets"],
-            "regime_thresholds": regime_data["thresholds"]}
+            "regime_thresholds": regime_data["thresholds"],
+            "sector_bias": sector_data["bias"],
+            "autoresearch": autoresearch_entry}
 
 
 # ── Deep weekly analysis (Meta-Judge) ────────────────────────────────────────
