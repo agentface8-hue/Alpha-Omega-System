@@ -22,17 +22,23 @@ These were fixed in **`9ec7893`** (`fix_parallel_health_checks`) and verified on
 
 ---
 
-## Deployment accounts (not Avi’s personal Vercel)
+## Alpha-Omega production (this system only)
 
-| Layer | Where it lives | Notes |
-|--------|----------------|--------|
-| **Vercel** | Team **`synapse-s`** (`vercel.com/synapse-s-projects`) | Chrome profile **agent** · `agentface8@gmail.com` |
-| **Frontend project** | **`alpha-omega-ngfw`** only | Live: https://alpha-omega-ngfw.vercel.app |
-| **Stale Vercel project** | Older `alpha-omega-*` (e.g. Apr 2026) | **Do not use** — wrong/old deploy |
-| **GitHub** | `agentface8-hue/Alpha-Omega-System` | `git push origin main` → Render + Vercel (GitHub integration) |
-| **Render** | `alpha-omega-system.onrender.com` | Same repo; backend API |
+**Alpha-Omega** = one product, two live URLs — do not mix with other Vercel projects on the same team.
 
-`origin` and `vercel` git remotes both point at the same GitHub repo — one push to `main` is enough. Docs-only commits do not change the live UI until frontend source changes.
+| Piece | Production URL | Host / account |
+|--------|----------------|----------------|
+| **Frontend** | https://alpha-omega-ngfw.vercel.app | Vercel team **`synapse-s`** · project **`alpha-omega-ngfw`** |
+| **Backend API** | https://alpha-omega-system.onrender.com | Render · same GitHub repo |
+| **Repo** | `github.com/agentface8-hue/Alpha-Omega-System` | `git push origin main` deploys **both** |
+
+**Vercel dashboard:** `vercel.com/synapse-s-projects/alpha-omega-ngfw`  
+Deploys may show **Created by `lpurches`** — that is the linked Vercel/Git user on the team (normal).  
+You may browse in Chrome profile **agent** (`agentface8@gmail.com`); that is not a different app.
+
+**Not Alpha-Omega:** older `alpha-omega-*` Vercel project (Apr 2026), personal **avi** Vercel, or project **synapse** on the same team.
+
+`origin` and `vercel` git remotes are the same GitHub URL — one push is enough. Docs-only commits redeploy Vercel but do not change UI until `frontend/` changes.
 
 ---
 
