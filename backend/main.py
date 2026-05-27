@@ -79,6 +79,9 @@ def _run_scan_background(job_id: str, symbols: list):
 
 app = FastAPI(title="Alpha-Omega API")
 
+from backend.ama_routes import router as ama_router
+app.include_router(ama_router, prefix="/api/ama", tags=["ama"])
+
 # ── Seed owner account on startup ─────────────────────────────────────────────
 
 
@@ -99,28 +102,6 @@ app.add_middleware(
 @app.get("/health")
 async def health():
     return {"status": "online", "ts": __import__("datetime").datetime.utcnow().isoformat()}
-
-@app.get("/api/memory")
-async def memory_status():
-    """Live memory usage — monitor Render instance health."""
-    try:
-        import psutil, os as _os
-        proc = psutil.Process(_os.getpid())
-        mem  = proc.memory_info()
-        vm   = psutil.virtual_memory()
-        rss  = round(mem.rss / 1024**2, 1)
-        limit = 2048  # Standard tier = 2GB
-        return {
-            "process_rss_mb":  rss,
-            "system_used_mb":  round(vm.used / 1024**2, 1),
-            "system_avail_mb": round(vm.available / 1024**2, 1),
-            "system_percent":  vm.percent,
-            "render_limit_mb": limit,
-            "headroom_mb":     round(limit - rss, 1),
-            "status":          "OK" if rss < limit * 0.8 else "WARNING",
-        }
-    except Exception as e:
-        return {"error": str(e)}
 
 @app.get("/api/memory")
 async def memory_status():
@@ -194,6 +175,14 @@ async def startup_all():
         start_health_agent(); log.info("[STARTUP] AI Health Monitor started")
     except Exception as e:
         log.warning(f"[STARTUP] AI Health Monitor failed: {e}")
+
+    # 6. Autonomous Management Agent (AMA)
+    try:
+        from core.ama.agent import start as start_ama
+        start_ama()
+        log.info("[STARTUP] AMA started")
+    except Exception as e:
+        log.warning(f"[STARTUP] AMA failed: {e}")
 
 # --- Demo Mode Data ---
 DEMO_SCENARIOS = {
@@ -1486,8 +1475,19 @@ async def get_portfolio_endpoint():
 
 @app.post("/api/portfolio/check")
 async def check_portfolio_endpoint():
-    from core.portfolio_manager import check_portfolio
-    return check_portfolio()
+    """Refresh portfolio prices + TP/SL — must not block the event loop."""
+    import asyncio
+    import concurrent.futures
+    loop = asyncio.get_event_loop()
+    with concurrent.futures.ThreadPoolExecutor(max_workers=1) as ex:
+        try:
+            from core.portfolio_manager import check_portfolio
+            return await asyncio.wait_for(
+                loop.run_in_executor(ex, check_portfolio),
+                timeout=45.0,
+            )
+        except asyncio.TimeoutError:
+            raise HTTPException(status_code=504, detail="Portfolio check timed out after 45s")
 
 @app.post("/api/portfolio/open")
 async def open_position_endpoint(body: dict):
@@ -1622,10 +1622,14 @@ async def manual_ping():
 async def agent_status():
     import threading
     threads={t.name:t.is_alive() for t in threading.enumerate()}
-    return {"keepalive_running":threads.get("keepalive",False),
-            "agent_running":threads.get("telegram_agent",False),
-            "learning_running":threads.get("learning_loop",False),
-            "active_threads":list(threads.keys())}
+    learn_on = threads.get("learning_loop", False) or threads.get("learn_fast", False)
+    return {
+        "keepalive_running": threads.get("keepalive", False),
+        "agent_running": threads.get("telegram_agent", False),
+        "learning_running": learn_on,
+        "monitor_running": any(threads.get(n) for n in ("monitor_l1", "monitor_l2", "monitor_l3")),
+        "active_threads": list(threads.keys()),
+    }
 
 
 # ── Dreaming Agent ────────────────────────────────────────────────────────────
@@ -1946,12 +1950,27 @@ async def learning_summary():
     """Current calibration params + outcomes summary. Hard cap: 10s."""
     import asyncio, concurrent.futures
     def _get_summary():
+        import json as _json
         from core.learning_loop import _load_calibration, _load_closed
         from core.outcomes_grader import load_outcomes_summary
         params   = _load_calibration()
         outcomes = load_outcomes_summary()
         closed   = _load_closed()
-        return {"calibration": params, "outcomes": outcomes, "total_closed": len(closed)}
+        research_log = []
+        try:
+            from pathlib import Path
+            rp = Path(__file__).parent.parent / "calibration" / "deep_research_log.json"
+            if rp.exists():
+                research_log = _json.loads(rp.read_text())[-3:]
+        except Exception:
+            pass
+        return {
+            "calibration": params,
+            "outcomes": outcomes,
+            "total_closed": len(closed),
+            "deep_research_latest": params.get("deep_research"),
+            "deep_research_history": research_log,
+        }
     loop = asyncio.get_event_loop()
     with concurrent.futures.ThreadPoolExecutor() as ex:
         try:
@@ -1962,14 +1981,28 @@ async def learning_summary():
 @app.post("/api/learning/run-fast")
 async def run_fast_learning():
     """Trigger a fast learning cycle manually."""
-    from core.learning_loop import run_fast
-    return run_fast()
+    import asyncio
+    import concurrent.futures
+    loop = asyncio.get_event_loop()
+    with concurrent.futures.ThreadPoolExecutor(max_workers=1) as ex:
+        try:
+            from core.learning_loop import run_fast
+            return await asyncio.wait_for(loop.run_in_executor(ex, run_fast), timeout=30.0)
+        except asyncio.TimeoutError:
+            raise HTTPException(status_code=504, detail="Fast learning timed out after 30s")
 
 @app.post("/api/learning/run-deep")
 async def run_deep_learning():
-    """Trigger a full deep learning cycle (all 5 dimensions)."""
-    from core.learning_loop import run_deep
-    return run_deep()
+    """Full 5D calibration + Opus meta-judge deep research."""
+    import asyncio
+    import concurrent.futures
+    loop = asyncio.get_event_loop()
+    with concurrent.futures.ThreadPoolExecutor(max_workers=1) as ex:
+        try:
+            from core.learning_loop import run_deep
+            return await asyncio.wait_for(loop.run_in_executor(ex, run_deep), timeout=120.0)
+        except asyncio.TimeoutError:
+            raise HTTPException(status_code=504, detail="Deep learning timed out after 120s")
 
 
 # ── System Health endpoints ──────────────────────────────────────────────────

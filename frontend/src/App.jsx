@@ -17,6 +17,7 @@ import DeepScan from './components/DeepScan';
 import DreamLog           from './components/DreamLog';
 import SystemMonitor      from './components/SystemMonitor';
 import LoginScreen        from './components/LoginScreen';
+import AmaStatus          from './components/AmaStatus';
 import { playThinkingSound, playSuccessSound, playErrorSound } from './utils/sounds';
 
 // ── Mobile detection ──────────────────────────────────────────────────────────
@@ -343,6 +344,7 @@ const App = () => {
                 {!isOwner && !isMobile && <span style={{ color:'#4a6a8a', fontSize:9 }}> · VIEWER</span>}
               </span>
             )}
+            <AmaStatus compact={isMobile} />
             <span className="status-dot"></span>
             {!isMobile && 'SYSTEM ONLINE'}
           </div>

@@ -76,27 +76,52 @@ export default function SystemMonitor() {
   const timerRef = useRef(null);
   const countRef = useRef(null);
   const logRef   = useRef(null);
+  const tickRef  = useRef(0);
+  const [learningSummary, setLearningSummary] = useState(null);
+  const [deepRunning, setDeepRunning] = useState(false);
+  const [amaStatus, setAmaStatus] = useState(null);
 
   function addLog(msg, level = "info") {
     const now = new Date();
     setLog(prev => [{ date: now, msg, level }, ...prev].slice(0, 200));
   }
 
-  async function fetchAll() {
+  async function fetchJson(path, ms = 20000) {
+    const ctrl = new AbortController();
+    const t = setTimeout(() => ctrl.abort(), ms);
+    try {
+      const r = await fetch(`${API}${path}`, { signal: ctrl.signal });
+      if (!r.ok) throw new Error(`${path} ${r.status}`);
+      return await r.json();
+    } finally {
+      clearTimeout(t);
+    }
+  }
+
+  async function fetchAll(forceFull = false) {
     setLoading(true);
     setCountdown(30);
+    tickRef.current += 1;
+    const runFull = forceFull || tickRef.current % 5 === 1;
     try {
-      const [h, a, ai, p, m] = await Promise.allSettled([
-        fetch(`${API}/api/health/full`).then(r => r.json()),
-        fetch(`${API}/api/agent/status`).then(r => r.json()),
-        fetch(`${API}/api/health/agent`).then(r => r.json()),
-        fetch(`${API}/api/analytics/performance`).then(r => r.json()),
-        fetch(`${API}/api/memory`).then(r => r.json()),
+      const healthPath = runFull ? "/api/health/full" : "/api/health/quick";
+      const [h, a, ai, p, m, mon, learn, ama] = await Promise.allSettled([
+        fetchJson(healthPath, runFull ? 22000 : 12000),
+        fetchJson("/api/agent/status", 10000),
+        fetchJson("/api/health/agent", 10000),
+        fetchJson("/api/analytics/performance", 15000),
+        fetchJson("/api/memory", 10000),
+        fetchJson("/api/monitor/status", 10000),
+        fetchJson("/api/learning/summary", 12000),
+        fetchJson("/api/ama/status", 8000),
       ]);
 
       if (h.status === "fulfilled") {
         setHealth(h.value);
-        if (h.value.reds?.length) addLog(`${h.value.reds.length} RED: ${h.value.reds.map(r => r.name).join(", ")}`, "error");
+        const reds = h.value.checks?.filter(c => c.status === "RED") || h.value.reds || [];
+        if (reds.length) addLog(`${reds.length} RED: ${reds.map(r => r.name).join(", ")}`, "error");
+      } else {
+        addLog(`Health ${runFull ? "full" : "quick"} failed`, "warn");
       }
       if (a.status === "fulfilled") setAgentStatus(a.value);
       if (ai.status === "fulfilled") {
@@ -111,9 +136,14 @@ export default function SystemMonitor() {
         setMemData({ rss_mb: rss, headroom_mb: md.headroom_mb ?? null, ok });
         if (rss != null && rss > 1600) addLog(`Memory WARNING: ${rss}MB used`, "warn");
       }
+      if (mon.status === "fulfilled" && mon.value?.status === "RED") {
+        addLog(`Monitor: ${mon.value.active_failures} active failures`, "error");
+      }
+      if (learn.status === "fulfilled") setLearningSummary(learn.value);
+      if (ama.status === "fulfilled") setAmaStatus(ama.value);
 
       setLastRefresh(new Date());
-      addLog("Health check complete", "info");
+      addLog(`Refresh OK (${runFull ? "full" : "quick"} health)`, "info");
     } catch (e) {
       addLog(`Fetch error: ${e.message}`, "error");
     }
@@ -131,11 +161,43 @@ export default function SystemMonitor() {
   }
 
   async function runLearning() {
-    addLog("Triggering learning loop...", "info");
+    addLog("Triggering fast learning...", "info");
     try {
-      await fetch(`${API}/api/learning/run-fast`, { method: "POST" });
-      addLog("Learning loop triggered", "info");
+      const r = await fetch(`${API}/api/learning/run-fast`, { method: "POST" });
+      const d = await r.json();
+      addLog(`Fast learning: ${d.status || "done"}`, "info");
+      fetchAll(false);
     } catch (e) { addLog(`Learning failed: ${e.message}`, "error"); }
+  }
+
+  async function runAmaNow() {
+    addLog("Running AMA cycle...", "info");
+    try {
+      const r = await fetch(`${API}/api/ama/run-now`, { method: "POST" });
+      const d = await r.json();
+      addLog(`AMA cycle ${d.cycle}: ${d.actions} actions`, "info");
+      fetchAll(false);
+    } catch (e) { addLog(`AMA failed: ${e.message}`, "error"); }
+  }
+
+  async function runDeepLearning() {
+    setDeepRunning(true);
+    addLog("Deep learning + Opus research (up to 2 min)...", "info");
+    try {
+      const ctrl = new AbortController();
+      const t = setTimeout(() => ctrl.abort(), 125000);
+      const r = await fetch(`${API}/api/learning/run-deep`, { method: "POST", signal: ctrl.signal });
+      clearTimeout(t);
+      const d = await r.json();
+      const dr = d.deep_research || {};
+      if (dr.status === "ok") {
+        addLog(`Meta-Judge: ${dr.headline || "complete"}`, "info");
+      } else {
+        addLog(`Deep run done (${dr.status || d.status})`, "warn");
+      }
+      fetchAll(true);
+    } catch (e) { addLog(`Deep learning failed: ${e.message}`, "error"); }
+    setDeepRunning(false);
   }
 
   useEffect(() => {
@@ -239,7 +301,7 @@ export default function SystemMonitor() {
           )}
         </div>
         <div style={{ display: "flex", gap: 8 }}>
-          <button onClick={fetchAll} style={{ fontSize: 12, padding: "4px 12px", cursor: "pointer" }}>Refresh</button>
+          <button onClick={() => fetchAll(true)} style={{ fontSize: 12, padding: "4px 12px", cursor: "pointer" }}>Refresh</button>
           <button onClick={runAgentNow} style={{ fontSize: 12, padding: "4px 12px", cursor: "pointer" }}>Run AI check</button>
           <span style={{ fontSize: 12, color: "var(--color-text-tertiary)", display: "flex", alignItems: "center" }}>next in {countdown}s</span>
         </div>
@@ -262,8 +324,20 @@ export default function SystemMonitor() {
               <Row status={agentStatus.keepalive_running ? "GREEN" : "RED"} label="Keepalive" detail={agentStatus.keepalive_running ? "running" : "stopped"} />
               <Row status={agentStatus.agent_running ? "GREEN" : "RED"} label="Telegram AI Agent" detail={agentStatus.agent_running ? "polling" : "stopped"} />
               <Row status={agentStatus.active_threads?.includes("ai_health_agent") ? "GREEN" : "RED"} label="AI Health Monitor" detail="every 30 min" />
-              <Row status={agentStatus.active_threads?.includes("learn_fast") ? "GREEN" : "YELLOW"} label="Learning Loop" detail="fast + deep" />
+              <Row status={agentStatus.learning_running || agentStatus.active_threads?.includes("learn_fast") ? "GREEN" : "YELLOW"} label="Learning Loop" detail="fast + deep" />
+              <Row status={agentStatus.monitor_running ? "GREEN" : "YELLOW"} label="Live Monitor" detail={agentStatus.monitor_running ? "L1/L2/L3" : "threads missing"} />
               <Row status={agentStatus.active_threads?.includes("dreaming_agent") ? "GREEN" : "YELLOW"} label="Dreaming Agent" detail="every 4h" />
+            </>
+          ) : <div style={{ fontSize: 13, color: "var(--color-text-secondary)" }}>loading...</div>}
+        </Card>
+
+        <Card title="Autonomous Agent (AMA)">
+          {amaStatus ? (
+            <>
+              <Row status={amaStatus.running && !amaStatus.paused ? "GREEN" : "YELLOW"} label="AMA" detail={amaStatus.paused ? "paused" : amaStatus.running ? "active" : "off"} />
+              <Row status="GREEN" label="Cycle" detail={`#${amaStatus.cycle_number || 0}`} />
+              <Row status="GREEN" label="Actions today" detail={amaStatus.actions_today ?? 0} />
+              <button onClick={runAmaNow} style={{ marginTop: 10, fontSize: 12, padding: "4px 12px", cursor: "pointer", width: "100%" }}>Run AMA cycle now</button>
             </>
           ) : <div style={{ fontSize: 13, color: "var(--color-text-secondary)" }}>loading...</div>}
         </Card>
@@ -302,7 +376,15 @@ export default function SystemMonitor() {
               <Row status="GREEN" label="Avg loss"     detail={perf.avg_loss_pct != null ? `${perf.avg_loss_pct}%`  : "-"} />
               <Row status="GREEN" label="TP1 hit rate" detail={perf.tp1_hit_rate != null ? `${perf.tp1_hit_rate}%`  : "-"} />
               <Row status={(perf.stopped_out_rate ?? 0) > 60 ? "YELLOW" : "GREEN"} label="Stopped out" detail={perf.stopped_out_rate != null ? `${perf.stopped_out_rate}%` : "-"} />
-              <button onClick={runLearning} style={{ marginTop: 10, fontSize: 12, padding: "4px 12px", cursor: "pointer", width: "100%" }}>Run learning loop</button>
+              <button onClick={runLearning} style={{ marginTop: 10, fontSize: 12, padding: "4px 12px", cursor: "pointer", width: "100%" }}>Run fast learning</button>
+              <button onClick={runDeepLearning} disabled={deepRunning} style={{ marginTop: 6, fontSize: 12, padding: "4px 12px", cursor: deepRunning ? "wait" : "pointer", width: "100%" }}>
+                {deepRunning ? "Deep research running…" : "Run deep research (Opus)"}
+              </button>
+              {learningSummary?.deep_research_latest?.headline && (
+                <div style={{ marginTop: 8, fontSize: 11, color: "var(--color-text-secondary)", lineHeight: 1.4 }}>
+                  Last research: {learningSummary.deep_research_latest.headline}
+                </div>
+              )}
             </>
           ) : <div style={{ fontSize: 13, color: "var(--color-text-secondary)" }}>loading performance...</div>}
         </Card>

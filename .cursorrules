@@ -1,0 +1,14 @@
+Read ALPHA-OMEGA-CURSOR-PRD.md first before any task.
+Read MASTER-KNOWLEDGE.md second.
+Read CURSOR-AGENT-BRIEF.md for AMA architecture.
+
+Backend: Python 3.12 + FastAPI on Render ($25/mo).
+Frontend: React 18 + Vite 7 + Tailwind on Vercel.
+Single git remote: git push origin main deploys both.
+
+Never block the FastAPI event loop — wrap all blocking I/O in asyncio.run_in_executor() with timeouts.
+Never write signals/portfolio state directly to JSON — always go through signal_store.py or portfolio_store.py.
+Signal Tracker (/api/signals) and Portfolio (/api/portfolio) are completely separate systems.
+Conviction threshold is 72%. Volume gate: vol_ratio < 1.0x is blocked.
+All API keys live in Render dashboard, not .env for production.
+AMA runs via core/ama/ — do not bypass safety caps (AMA_AUTO_TRADE=false by default).

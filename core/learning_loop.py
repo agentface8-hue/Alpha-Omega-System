@@ -25,6 +25,7 @@ Triggers:
   - After every 5 new closed signals (fast loop, lightweight)
   - Weekly deep analysis (full Opus-powered Meta-Judge)
 """
+import os
 import threading
 import time
 import json
@@ -206,6 +207,112 @@ def _analyze_dtp(signals: List[Dict]) -> Dict:
     }
 
 
+# ── Deep research (Opus Meta-Judge) ───────────────────────────────────────────
+
+OPUS_MODEL = "claude-opus-4-6"
+_DEEP_RESEARCH_LOG = Path(__file__).parent.parent / "calibration" / "deep_research_log.json"
+
+_META_JUDGE_SYSTEM = """You are the Alpha-Omega Meta-Judge — deep research layer on top of quantitative trade analytics.
+You receive aggregate statistics from closed paper trades (conviction brackets, regimes, sectors, advisor, DTP).
+Your job: strategic calibration guidance for a swing trading system. Be conservative and evidence-based.
+
+Return ONLY valid JSON (no markdown):
+{
+  "headline": "<one line executive summary>",
+  "conviction_verdict": "<KEEP_72|RAISE_TO_X|LOWER_TO_X with brief reason>",
+  "regime_insights": ["<insight>", "..."],
+  "sector_insights": ["<insight>", "..."],
+  "advisor_insights": "<1-2 sentences>",
+  "dtp_insights": "<1-2 sentences>",
+  "top_3_actions": ["<actionable>", "<actionable>", "<actionable>"],
+  "risk_flags": ["<flag if any>"],
+  "confidence": "HIGH" | "MEDIUM" | "LOW"
+}"""
+
+
+def _build_research_prompt(signals: List[Dict], conviction: Dict, regime: Dict,
+                           sector: Dict, advisor: Dict, dtp: Dict) -> str:
+    wins = sum(1 for s in signals if (s.get("realized_pnl", s.get("pnl_pct", 0)) or 0) > 0)
+    wr = round(wins / len(signals) * 100, 1) if signals else 0
+    payload = {
+        "trade_count": len(signals),
+        "portfolio_win_rate_pct": wr,
+        "conviction_stats": conviction.get("stats", {}),
+        "regime_stats": regime.get("stats", {}),
+        "sector_stats": sector.get("stats", {}),
+        "advisor": advisor,
+        "dtp": dtp,
+        "current_autopilot_threshold": 72,
+        "volume_gate": "block vol_ratio < 1.0x",
+    }
+    return (
+        "Analyze this closed-trade calibration dataset and recommend threshold/strategy adjustments.\n\n"
+        + json.dumps(payload, indent=2, default=str)
+    )
+
+
+def _call_opus_research(prompt: str) -> Dict:
+    api_key = os.environ.get("ANTHROPIC_API_KEY", "").strip()
+    if not api_key:
+        raise RuntimeError("ANTHROPIC_API_KEY not set")
+    import anthropic
+    client = anthropic.Anthropic(api_key=api_key)
+    msg = client.messages.create(
+        model=OPUS_MODEL,
+        max_tokens=900,
+        system=_META_JUDGE_SYSTEM,
+        messages=[{"role": "user", "content": prompt}],
+    )
+    raw = msg.content[0].text.strip()
+    if raw.startswith("```"):
+        raw = raw.split("```")[1]
+        if raw.startswith("json"):
+            raw = raw[4:]
+    return json.loads(raw.strip())
+
+
+def _save_deep_research_log(entry: Dict):
+    try:
+        existing = []
+        if _DEEP_RESEARCH_LOG.exists():
+            try:
+                existing = json.loads(_DEEP_RESEARCH_LOG.read_text())
+            except Exception:
+                pass
+        existing.append(entry)
+        existing = existing[-20:]
+        _DEEP_RESEARCH_LOG.write_text(json.dumps(existing, indent=2, default=str))
+    except Exception as e:
+        logger.warning(f"[LEARN] deep research log save failed: {e}")
+
+
+def run_deep_research(signals: List[Dict], conviction: Dict, regime: Dict,
+                      sector: Dict, advisor: Dict, dtp: Dict) -> Dict:
+    """
+    Opus meta-judge: strategic insights on top of 5D stats.
+    Never raises — returns error dict on failure so run_deep still completes.
+    """
+    t0 = time.time()
+    try:
+        if len(signals) < _DEEP_MIN:
+            return {"status": "skipped", "reason": f"need {_DEEP_MIN}+ trades, have {len(signals)}"}
+        prompt = _build_research_prompt(signals, conviction, regime, sector, advisor, dtp)
+        research = _call_opus_research(prompt)
+        elapsed_ms = int((time.time() - t0) * 1000)
+        out = {
+            "status": "ok",
+            "model": OPUS_MODEL,
+            "elapsed_ms": elapsed_ms,
+            "generated_at": datetime.utcnow().isoformat(),
+            **research,
+        }
+        _save_deep_research_log(out)
+        return out
+    except Exception as e:
+        logger.warning(f"[LEARN] Deep research failed: {e}")
+        return {"status": "error", "detail": str(e)[:200]}
+
+
 # ── Fast analysis (every 5 new closes) ───────────────────────────────────────
 
 def run_fast(signals: Optional[List[Dict]] = None) -> Dict:
@@ -270,10 +377,15 @@ def run_deep(signals: Optional[List[Dict]] = None) -> Dict:
     params["deep_run_count"]       = params.get("deep_run_count", 0) + 1
     params["last_deep_run"]        = datetime.utcnow().isoformat()
     params["signals_analyzed"]     = len(signals)
+
+    research = run_deep_research(
+        signals, conviction_data, regime_data, sector_data, advisor_data, dtp_data
+    )
+    params["deep_research"] = research
     _save_calibration(params)
 
     _send_deep_summary(signals, conviction_data, regime_data,
-                       sector_data, advisor_data, dtp_data)
+                       sector_data, advisor_data, dtp_data, research)
 
     logger.info(f"[LEARN] Deep analysis done — {len(signals)} signals analyzed")
     return {
@@ -285,12 +397,13 @@ def run_deep(signals: Optional[List[Dict]] = None) -> Dict:
         "sectors":      sector_data,
         "advisor":      advisor_data,
         "dtp":          dtp_data,
+        "deep_research": research,
     }
 
 
 # ── Telegram summary ──────────────────────────────────────────────────────────
 
-def _send_deep_summary(signals, conviction, regime, sector, advisor, dtp):
+def _send_deep_summary(signals, conviction, regime, sector, advisor, dtp, research=None):
     try:
         from core.telegram_alerts import _send
 
@@ -327,6 +440,17 @@ def _send_deep_summary(signals, conviction, regime, sector, advisor, dtp):
             status = "✅ working" if dtp["dtp_working"] else "⚠️ needs review"
             lines.append(f"\n🎯 DTP: {status} | high-conv avg {dtp['high_conv_avg_pnl']:+.1f}% "
                          f"vs normal {dtp['normal_conv_avg_pnl']:+.1f}%")
+
+        if research and research.get("status") == "ok":
+            lines.append("\n🧠 <b>Meta-Judge (Opus):</b>")
+            lines.append(f"  {research.get('headline', '')}")
+            lines.append(f"  Conviction: {research.get('conviction_verdict', '?')}")
+            for act in (research.get("top_3_actions") or [])[:3]:
+                lines.append(f"  • {act}")
+            if research.get("risk_flags"):
+                lines.append(f"  ⚠️ {', '.join(research['risk_flags'][:2])}")
+        elif research and research.get("status") == "error":
+            lines.append(f"\n🧠 Meta-Judge skipped: {research.get('detail', '?')[:80]}")
 
         lines.append(f"\n🕐 {datetime.utcnow().strftime('%Y-%m-%d %H:%M UTC')}")
         _send("\n".join(lines))

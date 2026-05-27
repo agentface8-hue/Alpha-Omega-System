@@ -38,7 +38,7 @@ TG_TOKEN  = os.environ.get("TELEGRAM_TOKEN", "")
 TG_CHAT   = os.environ.get("TELEGRAM_PERSONAL_CHAT_ID", "")
 SB_URL    = os.environ.get("SUPABASE_URL", "")
 SB_KEY    = os.environ.get("SUPABASE_ANON_KEY", "")
-STATE_FILE= Path(__file__).parent / "data" / "monitor_state.json"
+STATE_FILE = Path(__file__).parent.parent / "data" / "monitor_state.json"
 
 logging.basicConfig(level=logging.INFO,
     format="%(asctime)s [MONITOR] %(message)s", datefmt="%H:%M:%S")
@@ -127,9 +127,19 @@ CHECKS_L2 = [  # Every 15 min — integrations
         "https://alpha-omega-ngfw.vercel.app",timeout=10).status, False),
 ]
 
+def _health_full_direct():
+    """In-process health check — avoids HTTP self-call contention on Render."""
+    from core.system_health import run_full_check
+    r = run_full_check(send_telegram=False)
+    overall = r.get("overall", "?")
+    if overall != "GREEN":
+        raise RuntimeError(f"overall={overall}")
+    return overall
+
+
 CHECKS_L3 = [  # Every 30 min — performance
     ("learning.summary",  lambda: _get("/api/learning/summary", timeout=12), False),
-    ("health.full",       lambda: _get("/api/health/full", timeout=18), False),
+    ("health.full",       _health_full_direct, False),
     ("trade_history",     lambda: _get("/api/trade-history", timeout=12), False),
 ]
 
