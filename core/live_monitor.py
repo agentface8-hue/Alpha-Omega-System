@@ -137,10 +137,35 @@ def _health_full_direct():
     return overall
 
 
-CHECKS_L3 = [  # Every 30 min — performance
-    ("learning.summary",  lambda: _get("/api/learning/summary", timeout=12), False),
+def _learning_summary_direct():
+    """In-process learning summary — same data as GET /api/learning/summary."""
+    from core.learning_loop import _load_calibration, _load_closed
+    from core.outcomes_grader import load_outcomes_summary
+    params = _load_calibration()
+    outcomes = load_outcomes_summary()
+    closed = _load_closed()
+    if outcomes is None:
+        raise RuntimeError("outcomes summary unavailable")
+    return f"closed={len(closed)} calibration={params.get('mode', '?')}"
+
+
+def _trade_history_direct():
+    """In-process trade log read — avoids slow self-HTTP on Render."""
+    if not SB_URL or not SB_KEY:
+        raise RuntimeError("Supabase not configured")
+    req = urllib.request.Request(
+        f"{SB_URL}/rest/v1/trade_log?select=id&limit=1&order=date_closed.desc",
+        headers={"apikey": SB_KEY, "Authorization": f"Bearer {SB_KEY}"},
+    )
+    with urllib.request.urlopen(req, timeout=10) as r:
+        rows = json.loads(r.read())
+    return f"{len(rows)} trade_log rows"
+
+
+CHECKS_L3 = [  # Every 30 min — performance (in-process; no self-HTTP)
+    ("learning.summary",  _learning_summary_direct, False),
     ("health.full",       _health_full_direct, False),
-    ("trade_history",     lambda: _get("/api/trade-history", timeout=12), False),
+    ("trade_history",     _trade_history_direct, False),
 ]
 
 # ── Alert logic ───────────────────────────────────────────────────
