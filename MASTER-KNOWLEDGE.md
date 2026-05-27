@@ -1,5 +1,5 @@
 # ALPHA-OMEGA SYSTEM — MASTER KNOWLEDGE BASE
-# Last Updated: 2026-05-26
+# Last Updated: 2026-05-27
 # Location: C:\Users\asus\Alpha-Omega-System\MASTER-KNOWLEDGE.md
 
 ## ⚠️ INSTRUCTIONS FOR CLAUDE — READ THIS FIRST EVERY SESSION
@@ -512,47 +512,16 @@ Downloads folder has dead ZIP copies from April 29 — ignore them.
 Always deploy from: git push origin main (triggers both Render + Vercel)
 
 ## 16. RECENT SESSION CHANGES
-*Auto-updated: 2026-05-26 19:00 UTC*
+*Auto-updated: 2026-05-27 19:00 UTC*
+
+### `1042109` 2026-05-26 22:00 - auto: session memory 2026-05-26 19:00
+- `CLAUDE.md`
+- `MASTER-KNOWLEDGE.md`
+- `calibration/session_log.json`
 
 ### `528a17d` 2026-05-25 22:00 - auto: session memory 2026-05-25 19:00
 - `CLAUDE.md`
 - `MASTER-KNOWLEDGE.md`
 - `calibration/session_log.json`
-
-### `a6c4808` 2026-05-25 17:42 - fix: L2/L3 monitor checks always use public URL - no localhost contention
-- `core/live_monitor.py`
-
-### `de13cf7` 2026-05-25 17:27 - fix: L1 checks use correct function names - get_portfolio + load_active. Monitor 12/12 clean
-- `core/live_monitor.py`
-
-### `3f5ea69` 2026-05-25 17:19 - fix: signals.load check uses load_active (correct import, fast)
-- `core/live_monitor.py`
-
-### `e8f02a4` 2026-05-25 17:12 - fix: L1 monitor checks use direct Python imports (no HTTP self-call). Only external services (Supabase/Telegram/Vercel) use HTTP
-- `core/live_monitor.py`
-
-### `555ee6f` 2026-05-25 17:04 - fix: live_monitor uses localhost on Render (not public URL), monitor/run runs in thread executor to avoid event loop block
-- `backend/main.py`
-- `core/live_monitor.py`
-
-### `e04a405` 2026-05-25 16:55 - feat: live_monitor.py - 3-level check loops (5m/15m/30m), immediate Telegram on failure/recovery, /api/monitor/status + /api/monitor/run endpoints
-- `backend/main.py`
-- `core/live_monitor.py`
-- `run_system_test.py`
-
-### `7c5a038` 2026-05-25 16:47 - fix: portfolio autopilot message - use backend dynamic threshold, not hardcoded 55%. Update R:R text to 1.5
-- `core/portfolio_manager.py`
-- `frontend/src/components/PortfolioTab.jsx`
-
-### `c041a1f` 2026-05-25 10:03 - fix: use trade_log (not signal_history) - no DDL needed, learning loop seeded with 84 trades from Supabase, Portfolio history tab reads trade_log directly
-- `backend/main.py`
-- `core/signal_history.py`
-
-### `7b4694d` 2026-05-25 09:37 - feat: trade history - signal_history table, seed script, /api/trade-history endpoint, Portfolio history tab, learning loop seeded with 85 historical trades
-- `backend/main.py`
-- `core/learning_loop.py`
-- `core/signal_history.py`
-- `docs/signal_history_migration.sql`
-- `frontend/src/components/PortfolioTab.jsx`
 
 
