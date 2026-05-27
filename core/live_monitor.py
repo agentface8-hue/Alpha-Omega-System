@@ -128,9 +128,9 @@ CHECKS_L2 = [  # Every 15 min — integrations
 ]
 
 CHECKS_L3 = [  # Every 30 min — performance
-    ("learning.summary",  lambda: _get("/api/learning/summary"), False),
-    ("health.full",       lambda: _get("/api/health/full",timeout=30), False),
-    ("trade_history",     lambda: _get("/api/trade-history"), False),
+    ("learning.summary",  lambda: _get("/api/learning/summary", timeout=12), False),
+    ("health.full",       lambda: _get("/api/health/full", timeout=18), False),
+    ("trade_history",     lambda: _get("/api/trade-history", timeout=12), False),
 ]
 
 # ── Alert logic ───────────────────────────────────────────────────

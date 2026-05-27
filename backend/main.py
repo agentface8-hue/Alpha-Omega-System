@@ -1943,17 +1943,21 @@ async def executor_test(request: Request):
 
 @app.get("/api/learning/summary")
 async def learning_summary():
-    """Current calibration params + outcomes summary."""
-    from core.learning_loop import _load_calibration, _load_closed
-    from core.outcomes_grader import load_outcomes_summary
-    params   = _load_calibration()
-    outcomes = load_outcomes_summary()
-    closed   = _load_closed()
-    return {
-        "calibration":  params,
-        "outcomes":     outcomes,
-        "total_closed": len(closed),
-    }
+    """Current calibration params + outcomes summary. Hard cap: 10s."""
+    import asyncio, concurrent.futures
+    def _get_summary():
+        from core.learning_loop import _load_calibration, _load_closed
+        from core.outcomes_grader import load_outcomes_summary
+        params   = _load_calibration()
+        outcomes = load_outcomes_summary()
+        closed   = _load_closed()
+        return {"calibration": params, "outcomes": outcomes, "total_closed": len(closed)}
+    loop = asyncio.get_event_loop()
+    with concurrent.futures.ThreadPoolExecutor() as ex:
+        try:
+            return await asyncio.wait_for(loop.run_in_executor(ex, _get_summary), timeout=10.0)
+        except asyncio.TimeoutError:
+            return {"error": "Summary timed out", "calibration": {}, "outcomes": {}, "total_closed": 0}
 
 @app.post("/api/learning/run-fast")
 async def run_fast_learning():
@@ -1972,9 +1976,19 @@ async def run_deep_learning():
 
 @app.get("/api/health/full")
 async def full_health_check(telegram: bool = False):
-    """Run all 9 health checks. Set ?telegram=true to also fire Telegram alert."""
-    from core.system_health import run_full_check
-    return run_full_check(send_telegram=telegram)
+    """Run all health checks in parallel. Hard cap: 16s total."""
+    import asyncio, concurrent.futures
+    loop = asyncio.get_event_loop()
+    with concurrent.futures.ThreadPoolExecutor() as ex:
+        try:
+            from core.system_health import run_full_check
+            result = await asyncio.wait_for(
+                loop.run_in_executor(ex, lambda: run_full_check(send_telegram=telegram)),
+                timeout=16.0
+            )
+            return result
+        except asyncio.TimeoutError:
+            return {"overall": "YELLOW", "error": "Health check timed out after 16s", "checks": []}
 
 @app.get("/api/health/agent")
 async def agent_health_status():
@@ -2166,17 +2180,18 @@ async def monitor_run_now():
 @app.get("/api/trade-history")
 async def get_trade_history(limit: int = 200):
     """Return all historical trades from trade_log for Portfolio history tab."""
-    import os, urllib.request as _ur
-    sb_url = os.environ.get("SUPABASE_URL", "")
-    sb_key = os.environ.get("SUPABASE_ANON_KEY", "")
-    if not sb_url or not sb_key:
-        raise HTTPException(status_code=503, detail="Supabase not configured")
-    try:
+    import asyncio, concurrent.futures
+    def _fetch():
+        import os, urllib.request as _ur
+        sb_url = os.environ.get("SUPABASE_URL", "")
+        sb_key = os.environ.get("SUPABASE_ANON_KEY", "")
+        if not sb_url or not sb_key:
+            raise HTTPException(status_code=503, detail="Supabase not configured")
         req = _ur.Request(
             f"{sb_url}/rest/v1/trade_log?select=*&limit={limit}&order=date_closed.desc",
             headers={"apikey": sb_key, "Authorization": f"Bearer {sb_key}"}
         )
-        with _ur.urlopen(req, timeout=10) as r:
+        with _ur.urlopen(req, timeout=7) as r:
             trades = __import__("json").loads(r.read())
 
         # Merge enriched TAS/vol from signal_history module
@@ -2214,6 +2229,12 @@ async def get_trade_history(limit: int = 200):
                 "avg_mae":       round(sum(float(t.get("mae_pct") or 0) for t in valid) / total, 2) if total else 0,
             }
         }
-    except Exception as e:
-        traceback.print_exc()
-        raise HTTPException(status_code=500, detail=str(e))
+    loop = asyncio.get_event_loop()
+    with concurrent.futures.ThreadPoolExecutor() as ex:
+        try:
+            return await asyncio.wait_for(loop.run_in_executor(ex, _fetch), timeout=10.0)
+        except asyncio.TimeoutError:
+            raise HTTPException(status_code=504, detail="Trade history timed out")
+        except Exception as e:
+            traceback.print_exc()
+            raise HTTPException(status_code=500, detail=str(e))

@@ -67,7 +67,7 @@ def check_anthropic_api() -> Dict:
                 "anthropic-version": "2023-06-01"
             }
         )
-        with urllib.request.urlopen(req, timeout=15) as r:
+        with urllib.request.urlopen(req, timeout=6) as r:
             data = json.loads(r.read())
         text = data["content"][0]["text"][:20]
         return _ok("Anthropic API", f"claude-haiku responded: {text}")
@@ -221,12 +221,37 @@ ALL_CHECKS = [
 
 
 def run_full_check(send_telegram: bool = True) -> Dict[str, Any]:
-    results = []
-    for name, fn in ALL_CHECKS:
+    """Run all health checks IN PARALLEL with per-check timeouts. Max total: 15s."""
+    import concurrent.futures
+
+    PER_CHECK_TIMEOUT = 7   # seconds — each individual check
+    TOTAL_TIMEOUT     = 14  # seconds — hard cap on entire function
+
+    def _safe_run(name: str, fn) -> Dict:
         try:
-            results.append(fn())
+            return fn()
         except Exception as e:
-            results.append(_fail(name, f"Check crashed: {str(e)[:80]}"))
+            return _fail(name, f"Check crashed: {str(e)[:80]}")
+
+    results = []
+    futures_list = []
+
+    with concurrent.futures.ThreadPoolExecutor(max_workers=len(ALL_CHECKS)) as ex:
+        futures = [(ex.submit(_safe_run, name, fn), name) for name, fn in ALL_CHECKS]
+        done, not_done = concurrent.futures.wait(
+            [f for f, _ in futures], timeout=TOTAL_TIMEOUT
+        )
+        fut_to_name = {f: n for f, n in futures}
+        for fut in done:
+            name = fut_to_name[fut]
+            try:
+                results.append(fut.result(timeout=0))
+            except Exception as e:
+                results.append(_fail(name, f"Crashed: {str(e)[:80]}"))
+        for fut in not_done:
+            name = fut_to_name[fut]
+            results.append(_warn(name, f"Timed out (>{PER_CHECK_TIMEOUT}s) — service slow"))
+            fut.cancel()
 
     reds    = [r for r in results if r["status"] == "RED"]
     yellows = [r for r in results if r["status"] == "YELLOW"]
