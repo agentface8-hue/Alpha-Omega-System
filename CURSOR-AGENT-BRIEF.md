@@ -11,7 +11,7 @@ These were fixed in **`9ec7893`** (`fix_parallel_health_checks`) and verified on
 | File / surface | Why frozen |
 |----------------|------------|
 | `core/system_health.py` | Parallel 9-check health; executor timeouts |
-| `core/live_monitor.py` | L1–L3 monitor loops; L3 uses **in-process** checks (not self-HTTP to public URL) |
+| `core/live_monitor.py` | L1–L3 monitor; L3 + `prices.live` **in-process** (no self-HTTP); non-critical alerts need 2 consecutive fails |
 | `backend/main.py` → `GET /api/health/full` | Full health via executor + timeout |
 | `backend/main.py` → `GET /api/learning/summary` | Summary via executor + 10s cap |
 | `backend/main.py` → `GET /api/trade-history` | Trade log fetch + enrichment |

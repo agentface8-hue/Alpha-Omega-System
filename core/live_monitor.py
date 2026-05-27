@@ -27,13 +27,11 @@ import urllib.request, urllib.error
 sys.path.insert(0, str(Path(__file__).parent))
 from dotenv import load_dotenv; load_dotenv()
 
-# L1 uses direct Python imports (no HTTP).
-# L2/L3 always use the PUBLIC URL — avoids localhost self-call contention.
+# L1 + L3 + prices.live use in-process calls (no self-HTTP to public URL on Render).
+# External L2 checks (Supabase, Telegram, Vercel) use direct outbound HTTP only.
 _ON_RENDER  = bool(os.environ.get("RENDER") or os.environ.get("RENDER_EXTERNAL_URL"))
 _PORT       = os.environ.get("PORT", "10000")
-BASE_LOCAL  = f"http://127.0.0.1:{_PORT}"   # for background threads on Render
 BASE_PUBLIC = "https://alpha-omega-system.onrender.com"
-BASE        = BASE_PUBLIC                    # L2/L3 always use public URL
 TG_TOKEN  = os.environ.get("TELEGRAM_TOKEN", "")
 TG_CHAT   = os.environ.get("TELEGRAM_PERSONAL_CHAT_ID", "")
 SB_URL    = os.environ.get("SUPABASE_URL", "")
@@ -54,20 +52,6 @@ def load_state():
 def save_state(s):
     STATE_FILE.parent.mkdir(exist_ok=True)
     STATE_FILE.write_text(json.dumps(s, indent=2, default=str))
-
-# ── HTTP helpers ──────────────────────────────────────────────────
-def _get(path, timeout=15):
-    req = urllib.request.Request(f"{BASE}{path}",
-        headers={"Accept": "application/json"})
-    with urllib.request.urlopen(req, timeout=timeout) as r:
-        return json.loads(r.read()), r.status
-
-def _post(path, body=None, timeout=15):
-    data = json.dumps(body or {}).encode()
-    req  = urllib.request.Request(f"{BASE}{path}", data=data,
-        headers={"Content-Type":"application/json","Accept":"application/json"})
-    with urllib.request.urlopen(req, timeout=timeout) as r:
-        return json.loads(r.read()), r.status
 
 def _sb_write_test():
     """Quick Supabase connectivity check — just read one row."""
@@ -105,27 +89,17 @@ def run_check(name, fn, critical=False, slow_threshold_ms=8000):
         return {"name":name,"status":"FAIL","ms":ms,"error":str(e)[:200],
                 "critical":critical,"tb":traceback.format_exc()[-300:]}
 
-# ── Check definitions ─────────────────────────────────────────────
-CHECKS_L1 = [  # Every 5 min — direct internal calls, no HTTP
-    ("backend.process",    lambda: "alive",                                                                                    True),
-    ("portfolio.data",     lambda: __import__("core.portfolio_manager", fromlist=["get_portfolio"]).get_portfolio(),           True),
-    ("signals.active",     lambda: __import__("core.signal_store",      fromlist=["load_active"]).load_active(),               True),
-    ("supabase.reachable", lambda: _sb_write_test(),                                                                           True),
-]
+def _prices_live_direct():
+    """In-process SPY quote — avoids POST /api/prices self-HTTP on Render."""
+    import yfinance as yf
+    hist = yf.Ticker("SPY").history(period="2d")
+    if hist is None or len(hist) < 1:
+        raise RuntimeError("no SPY price data")
+    close = float(hist["Close"].iloc[-1])
+    if close <= 0:
+        raise RuntimeError("invalid SPY price")
+    return f"SPY={round(close, 2)}"
 
-CHECKS_L2 = [  # Every 15 min — integrations
-    ("supabase.signals",  lambda: urllib.request.urlopen(
-        urllib.request.Request(f"{SB_URL}/rest/v1/signals?limit=1",
-        headers={"apikey":SB_KEY,"Authorization":f"Bearer {SB_KEY}"}),timeout=8).status, False),
-    ("supabase.trade_log",lambda: urllib.request.urlopen(
-        urllib.request.Request(f"{SB_URL}/rest/v1/trade_log?limit=1",
-        headers={"apikey":SB_KEY,"Authorization":f"Bearer {SB_KEY}"}),timeout=8).status, False),
-    ("prices.live",       lambda: _post("/api/prices",{"symbols":["SPY"]}), False),
-    ("telegram.bot",      lambda: urllib.request.urlopen(
-        f"https://api.telegram.org/bot{TG_TOKEN}/getMe",timeout=8).status, False),
-    ("frontend.vercel",   lambda: urllib.request.urlopen(
-        "https://alpha-omega-ngfw.vercel.app",timeout=10).status, False),
-]
 
 def _health_full_direct():
     """In-process health check — avoids HTTP self-call contention on Render."""
@@ -168,6 +142,28 @@ CHECKS_L3 = [  # Every 30 min — performance (in-process; no self-HTTP)
     ("trade_history",     _trade_history_direct, False),
 ]
 
+# ── Check definitions ─────────────────────────────────────────────
+CHECKS_L1 = [  # Every 5 min — direct internal calls, no HTTP
+    ("backend.process",    lambda: "alive",                                                                                    True),
+    ("portfolio.data",     lambda: __import__("core.portfolio_manager", fromlist=["get_portfolio"]).get_portfolio(),           True),
+    ("signals.active",     lambda: __import__("core.signal_store",      fromlist=["load_active"]).load_active(),               True),
+    ("supabase.reachable", lambda: _sb_write_test(),                                                                           True),
+]
+
+CHECKS_L2 = [  # Every 15 min — integrations (prices.live in-process)
+    ("supabase.signals",  lambda: urllib.request.urlopen(
+        urllib.request.Request(f"{SB_URL}/rest/v1/signals?limit=1",
+        headers={"apikey":SB_KEY,"Authorization":f"Bearer {SB_KEY}"}),timeout=8).status, False),
+    ("supabase.trade_log",lambda: urllib.request.urlopen(
+        urllib.request.Request(f"{SB_URL}/rest/v1/trade_log?limit=1",
+        headers={"apikey":SB_KEY,"Authorization":f"Bearer {SB_KEY}"}),timeout=8).status, False),
+    ("prices.live",       _prices_live_direct, False),
+    ("telegram.bot",      lambda: urllib.request.urlopen(
+        f"https://api.telegram.org/bot{TG_TOKEN}/getMe",timeout=8).status, False),
+    ("frontend.vercel",   lambda: urllib.request.urlopen(
+        "https://alpha-omega-ngfw.vercel.app",timeout=10).status, False),
+]
+
 # ── Alert logic ───────────────────────────────────────────────────
 ALERT_COOLDOWN_S = 3600  # 1h between repeated alerts for same check
 
@@ -192,7 +188,13 @@ def process_results(checks, state):
             first_fail = not prev  # was passing before
             cooldown_expired = (now - last) > ALERT_COOLDOWN_S
 
-            if first_fail or (cooldown_expired and consec >= 3):
+            critical = r.get("critical", False)
+            # Non-critical: alert on 2nd consecutive fail, then hourly if still failing
+            if critical:
+                should_alert = first_fail or (cooldown_expired and consec >= 3)
+            else:
+                should_alert = consec == 2 or (cooldown_expired and consec >= 3)
+            if should_alert:
                 alerts.append(r)
                 state["last_alert"][name] = now
         else:
@@ -235,7 +237,13 @@ def _run_level(level_name, checks, interval_s, state_ref):
     log.info(f"Starting {level_name} loop (every {interval_s//60}m)")
     while True:
         try:
-            results = [run_check(name, fn, crit) for name, fn, crit in checks]
+            results = [
+                run_check(
+                    name, fn, crit,
+                    slow_threshold_ms=20000 if name == "prices.live" else 8000,
+                )
+                for name, fn, crit in checks
+            ]
             alerts  = process_results(results, state_ref["state"])
             save_state(state_ref["state"])
 
