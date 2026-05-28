@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import { Play, RefreshCw } from 'lucide-react';
 import { fetchJson } from '../utils/api';
 
@@ -9,10 +9,14 @@ const C = {
   faint: '#6a8a9a',
 };
 
-export default function PipelineBar({ disabled, onComplete }) {
+const AUTO_RUN_KEY = 'ao_pipeline_last_autorun_ms';
+const AUTO_RUN_COOLDOWN_MS = 2 * 60 * 60 * 1000; // 2h safety cooldown
+
+export default function PipelineBar({ disabled, onComplete, autoRun = false }) {
   const [running, setRunning] = useState(false);
   const [last, setLast] = useState(null);
   const [err, setErr] = useState(null);
+  const autoTriedRef = useRef(false);
 
   const run = async () => {
     if (running || disabled) return;
@@ -35,6 +39,18 @@ export default function PipelineBar({ disabled, onComplete }) {
     }
     setRunning(false);
   };
+
+  useEffect(() => {
+    if (!autoRun || disabled || running || autoTriedRef.current) return;
+    autoTriedRef.current = true;
+    try {
+      const lastMs = Number(localStorage.getItem(AUTO_RUN_KEY) || '0');
+      const now = Date.now();
+      if (now - lastMs < AUTO_RUN_COOLDOWN_MS) return;
+      localStorage.setItem(AUTO_RUN_KEY, String(now));
+    } catch {}
+    run();
+  }, [autoRun, disabled, running]);
 
   const s = last?.summary;
 

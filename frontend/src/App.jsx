@@ -283,6 +283,7 @@ const App = () => {
           <div style={{ padding:'8px 10px 0', flexShrink:0 }}>
             <PipelineBar
               disabled={!backendReady}
+              autoRun={backendReady}
               onComplete={() => setPipelineTick(t => t + 1)}
             />
           </div>
