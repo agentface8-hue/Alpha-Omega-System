@@ -5,7 +5,7 @@ or run commands on this system. Direct all work to Cursor.
 ---
 
 # ALPHA-OMEGA SYSTEM — MASTER KNOWLEDGE BASE
-# Last Updated: 2026-05-27
+# Last Updated: 2026-05-28
 # Location: C:\Users\asus\Alpha-Omega-System\MASTER-KNOWLEDGE.md
 
 ## ⚠️ INSTRUCTIONS FOR CLAUDE — READ THIS FIRST EVERY SESSION
@@ -518,16 +518,58 @@ Downloads folder has dead ZIP copies from April 29 — ignore them.
 Always deploy from: git push origin main (triggers both Render + Vercel)
 
 ## 16. RECENT SESSION CHANGES
-*Auto-updated: 2026-05-27 19:00 UTC*
+*Auto-updated: 2026-05-28 19:00 UTC*
 
-### `1042109` 2026-05-26 22:00 - auto: session memory 2026-05-26 19:00
-- `CLAUDE.md`
-- `MASTER-KNOWLEDGE.md`
-- `calibration/session_log.json`
+### `0e5d93c` 2026-05-28 11:55 - feat: auto-run unified pipeline after dashboard startup
+- `frontend/src/App.jsx`
+- `frontend/src/components/PipelineBar.jsx`
 
-### `528a17d` 2026-05-25 22:00 - auto: session memory 2026-05-25 19:00
+### `96adc0c` 2026-05-28 11:12 - fix: improve UI readability with persistent app zoom controls
+- `frontend/src/App.jsx`
+- `frontend/src/index.css`
+
+### `57d89f3` 2026-05-28 10:57 - feat: reorganize UI into five focused workspaces
+- `frontend/src/App.jsx`
+
+### `9ca2c74` 2026-05-28 09:39 - feat: add theme learning loop and extend portfolio check resilience
+- `backend/main.py`
+- `backend/theme_routes.py`
+- `core/daily_pipeline.py`
+- `core/learning_loop.py`
+- `core/portfolio_manager.py`
+
+### `b86c300` 2026-05-28 02:18 - feat: unified pipeline, backend warmup, reliable API fetch
+- `backend/main.py`
+- `backend/pipeline_routes.py`
+- `core/daily_pipeline.py`
+- `frontend/src/App.jsx`
+- `frontend/src/components/DreamLog.jsx`
+
+### `5193bf1` 2026-05-28 01:51 - feat: wire learning calibration into scan/autopilot + autoresearch loop
+- `backend/main.py`
+- `core/autoresearch.py`
+- `core/calibrator.py`
+- `core/learning_loop.py`
+- `core/portfolio_manager.py`
+
+### `05383c8` 2026-05-28 01:15 - fix: monitor prices.live in-process; fewer false Telegram alerts
+- `CURSOR-AGENT-BRIEF.md`
+- `core/live_monitor.py`
+
+### `cf15481` 2026-05-28 01:12 - docs: Alpha-Omega production map (synapse-s ngfw + Render)
 - `CLAUDE.md`
+- `CURSOR-AGENT-BRIEF.md`
+
+### `c4ad3c9` 2026-05-28 01:09 - docs: record Vercel synapse-s account and canonical ngfw project
+- `CLAUDE.md`
+- `COWORK-SKILLS.md`
+- `CURSOR-AGENT-BRIEF.md`
+
+### `c7bee4e` 2026-05-28 01:06 - docs: Cursor owns ops; frozen health stack in CURSOR-AGENT-BRIEF
+- `.claude/skills/alpha-omega-operator/SKILL.md`
+- `.cursorrules`
+- `CLAUDE.md`
+- `CURSOR-AGENT-BRIEF.md`
 - `MASTER-KNOWLEDGE.md`
-- `calibration/session_log.json`
 
 
