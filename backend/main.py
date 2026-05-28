@@ -81,8 +81,10 @@ app = FastAPI(title="Alpha-Omega API")
 
 from backend.ama_routes import router as ama_router
 from backend.pipeline_routes import router as pipeline_router
+from backend.theme_routes import router as theme_router
 app.include_router(ama_router, prefix="/api/ama", tags=["ama"])
 app.include_router(pipeline_router, prefix="/api/pipeline", tags=["pipeline"])
+app.include_router(theme_router, prefix="/api/themes", tags=["themes"])
 
 # ── Seed owner account on startup ─────────────────────────────────────────────
 
@@ -1493,10 +1495,10 @@ async def check_portfolio_endpoint():
             from core.portfolio_manager import check_portfolio
             return await asyncio.wait_for(
                 loop.run_in_executor(ex, check_portfolio),
-                timeout=45.0,
+                timeout=120.0,
             )
         except asyncio.TimeoutError:
-            raise HTTPException(status_code=504, detail="Portfolio check timed out after 45s")
+            raise HTTPException(status_code=504, detail="Portfolio check timed out after 120s")
 
 @app.post("/api/portfolio/open")
 async def open_position_endpoint(body: dict):

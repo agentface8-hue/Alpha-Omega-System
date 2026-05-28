@@ -1,7 +1,7 @@
 """
 daily_pipeline.py — Unifies Alpha-Omega features into one operational run.
 
-Steps: health → regime → sectors → dream → portfolio check → autopilot → learning → monitor
+Steps: health → regime → sectors → themes → dream → portfolio check → autopilot → learning → monitor
 """
 from __future__ import annotations
 
@@ -66,6 +66,14 @@ def run_daily_pipeline(
 
     steps.append(_step("sector_momentum", sectors))
 
+    def themes():
+        from core.theme_engine import refresh_themes, get_active_themes
+        reg = refresh_themes(use_llm=False)
+        active = get_active_themes()
+        return {"active_ids": [t["id"] for t in active], "count": len(active)}
+
+    steps.append(_step("theme_learning", themes, "sector+headline scan"))
+
     dream_result = None
 
     if run_dream:
@@ -84,7 +92,7 @@ def run_daily_pipeline(
         chk = check_portfolio() if open_n else {"skipped": True, "reason": "no open positions"}
         return {"open_count": open_n, "check": chk}
 
-    steps.append(_step("portfolio_check", portfolio_check, "price refresh can take 20-45s"))
+    steps.append(_step("portfolio_check", portfolio_check, "price refresh can take up to 90s"))
 
     autopilot_result = None
 
@@ -131,12 +139,16 @@ def run_daily_pipeline(
     ok = sum(1 for s in steps if s["status"] == "ok")
     fail = sum(1 for s in steps if s["status"] == "fail")
 
+    theme_step = next((s for s in steps if s.get("name") == "theme_learning" and s.get("status") == "ok"), None)
+    active_themes = (theme_step or {}).get("result", {}).get("active_ids") or []
+
     summary = {
         "started_at": started,
         "finished_at": datetime.now(timezone.utc).isoformat(),
         "steps_ok": ok,
         "steps_fail": fail,
         "regime": regime_data.get("regime"),
+        "active_themes": active_themes,
         "dream_edge": (dream_result or {}).get("edge_level") if dream_result else None,
         "dream_ticker": (dream_result or {}).get("top_ticker") if dream_result else None,
         "autopilot_opened": len((autopilot_result or {}).get("opened") or []) if autopilot_result else 0,
@@ -152,6 +164,8 @@ def run_daily_pipeline(
             lines.append(f"Dream: {summary['dream_edge']} → {summary['dream_ticker']}")
         if summary.get("autopilot_opened"):
             lines.append(f"Autopilot opened: {summary['autopilot_opened']}")
+        if summary.get("active_themes"):
+            lines.append(f"Themes: {', '.join(summary['active_themes'][:5])}")
         _send("\n".join(lines))
     except Exception:
         pass

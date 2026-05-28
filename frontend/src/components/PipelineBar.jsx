@@ -57,11 +57,11 @@ export default function PipelineBar({ disabled, onComplete }) {
           UNIFIED PIPELINE
         </div>
         <div style={{ color: C.faint, fontSize: 10, marginTop: 4, fontFamily: 'sans-serif' }}>
-          Regime → sectors → dream → portfolio check → autopilot → learning → monitor
+          Regime → sectors → themes → dream → portfolio check → autopilot → learning → monitor
         </div>
         {s && (
           <div style={{ color: '#8899aa', fontSize: 10, marginTop: 6, fontFamily: 'monospace' }}>
-            {s.regime} · dream {s.dream_edge || '—'} {s.dream_ticker || ''} · opened {s.autopilot_opened ?? 0}
+            {s.regime} · themes {(s.active_themes || []).join(', ') || '—'} · dream {s.dream_edge || '—'} {s.dream_ticker || ''} · opened {s.autopilot_opened ?? 0}
           </div>
         )}
         {err && <div style={{ color: '#ff4466', fontSize: 10, marginTop: 6 }}>{err}</div>}

@@ -313,6 +313,36 @@ def run_deep_research(signals: List[Dict], conviction: Dict, regime: Dict,
         return {"status": "error", "detail": str(e)[:200]}
 
 
+def _analyze_themes() -> Dict[str, Any]:
+    """Score closed portfolio trades by entry_themes; tune registry strengths."""
+    try:
+        from core.portfolio_store import load_positions
+        from core.theme_engine import analyze_theme_performance, load_registry, save_registry
+    except Exception as e:
+        logger.warning(f"[LEARN] theme analysis skipped: {e}")
+        return {"stats": {}}
+
+    closed = load_positions("closed")
+    stats = analyze_theme_performance(closed)
+    if not stats:
+        return {"stats": stats}
+
+    reg = load_registry()
+    for t in reg.get("themes", []):
+        tid = t.get("id")
+        if tid not in stats or stats[tid].get("samples", 0) < 3:
+            continue
+        wr = float(stats[tid]["win_rate"])
+        s = float(t.get("strength", 0.5))
+        if wr < 35:
+            t["strength"] = round(max(0.25, s - 0.12), 2)
+        elif wr > 60:
+            t["strength"] = round(min(1.0, s + 0.06), 2)
+        t["active"] = t["strength"] >= 0.55
+    save_registry(reg)
+    return {"stats": stats}
+
+
 # ── Fast analysis (every 5 new closes) ───────────────────────────────────────
 
 def run_fast(signals: Optional[List[Dict]] = None) -> Dict:
@@ -329,6 +359,7 @@ def run_fast(signals: Optional[List[Dict]] = None) -> Dict:
     regime_data     = _analyze_regime(signals)
     sector_data     = _analyze_sectors(signals)
     advisor_data    = _analyze_advisor(signals)
+    theme_data      = _analyze_themes()
 
     params = _load_calibration()
     params["conviction_offsets"]   = conviction_data["offsets"]
@@ -338,6 +369,7 @@ def run_fast(signals: Optional[List[Dict]] = None) -> Dict:
     params["sector_bias"]          = sector_data["bias"]
     params["sector_stats"]         = sector_data["stats"]
     params["advisor_accuracy"]     = advisor_data
+    params["theme_performance"]    = theme_data.get("stats", {})
     params["fast_run_count"]       = params.get("fast_run_count", 0) + 1
     params["last_fast_run"]        = datetime.utcnow().isoformat()
     params["signals_analyzed"]     = len(signals)
@@ -345,7 +377,7 @@ def run_fast(signals: Optional[List[Dict]] = None) -> Dict:
 
     _last_analyzed_count = len(signals)
     logger.info(f"[LEARN] Fast analysis done — {len(signals)} signals, "
-                f"offsets={conviction_data['offsets']}")
+                f"offsets={conviction_data['offsets']} themes={list(theme_data.get('stats', {}).keys())}")
 
     autoresearch_entry = None
     try:
@@ -361,6 +393,7 @@ def run_fast(signals: Optional[List[Dict]] = None) -> Dict:
             "conviction_offsets": conviction_data["offsets"],
             "regime_thresholds": regime_data["thresholds"],
             "sector_bias": sector_data["bias"],
+            "theme_performance": theme_data.get("stats", {}),
             "autoresearch": autoresearch_entry}
 
 

@@ -787,9 +787,7 @@ export default function PortfolioTab({ compact = false, isOwner = false, backend
   const checkPrices = async () => {
     setChecking(true);
     try {
-      const r = await fetch(`${API()}/api/portfolio/check`, { method:'POST' });
-      if (!r.ok) throw new Error(await r.text());
-      const result = await r.json();
+      const result = await fetchJson('/api/portfolio/check', { method: 'POST' }, { timeoutMs: 120000, retries: 2 });
       setData(result.portfolio);
       setCountdown(30);
       const tickers = (result.portfolio?.open_positions || []).map(p => p.ticker.toUpperCase());

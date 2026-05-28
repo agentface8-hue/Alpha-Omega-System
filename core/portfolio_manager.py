@@ -71,6 +71,14 @@ def _size_position(entry: float, sl: float) -> Dict:
             "tp1_shares": tp1_shares, "tp2_shares": tp2_shares, "tp3_shares": tp3_shares}
 
 
+def _entry_themes_for(ticker: str, sector: str) -> List[str]:
+    try:
+        from core.theme_engine import get_ticker_themes
+        return get_ticker_themes(ticker, sector)
+    except Exception:
+        return []
+
+
 def open_position(ticker: str, entry_price: float, sl: float,
                   tp1: float, tp2: float, tp3: float,
                   conviction: int = 0, asset_type: str = "stock",
@@ -206,6 +214,7 @@ def open_position(ticker: str, entry_price: float, sl: float,
         "pillar_scores": pillar_scores or {},
         "tas": tas or "",
         "sector": _sector,
+        "entry_themes": _entry_themes_for(ticker, _sector),
         "entry_market_context": entry_market_context or {},
         "trades": [{"id": str(uuid.uuid4()), "type": "entry",
                     "price": round(entry_price, 4), "shares": sizing["shares"],
@@ -549,6 +558,7 @@ def autopilot_fill(watchlist_name: str = "full_scan", symbols_override: list = N
         regime = "Trending Bull"
 
     from core.calibrator import get_regime_conviction_threshold, sector_conviction_penalty
+    from core.theme_engine import theme_conviction_adjustment
     conv_threshold = get_regime_conviction_threshold(regime)
     print(f"[AUTOPILOT] Regime: {regime} -> conviction threshold: {conv_threshold}% (learned+fallback)")
 
@@ -570,12 +580,17 @@ def autopilot_fill(watchlist_name: str = "full_scan", symbols_override: list = N
         if r.get("hard_fail") or r.get("rr", 0) < 1.5 or r["ticker"] in existing_tickers:
             return False
         sector = _gts_early(r["ticker"])
-        need = conv_threshold + sector_conviction_penalty(sector)
+        theme_bonus = theme_conviction_adjustment(r["ticker"], sector)
+        need = conv_threshold + sector_conviction_penalty(sector) - theme_bonus
         return r.get("conviction_pct", 0) >= need
 
     candidates = sorted(
         [r for r in raw if _learning_gate(r)],
-        key=lambda x: x["conviction_pct"] - sector_conviction_penalty(_gts_early(x["ticker"])),
+        key=lambda x: (
+            x["conviction_pct"]
+            - sector_conviction_penalty(_gts_early(x["ticker"]))
+            + theme_conviction_adjustment(x["ticker"], _gts_early(x["ticker"]))
+        ),
         reverse=True,
     )
 
