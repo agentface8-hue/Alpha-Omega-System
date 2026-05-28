@@ -1,6 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { Search, Activity, BarChart3, Brain, Briefcase, DollarSign, Moon,
-         Maximize2, LayoutGrid, ChevronLeft } from 'lucide-react';
+import { Search, Activity, Maximize2, ChevronLeft } from 'lucide-react';
 import Terminal           from './components/Terminal';
 import ResultCard         from './components/ResultCard';
 import LiveTicker         from './components/LiveTicker';
@@ -71,9 +70,8 @@ const App = () => {
   const [authed,        setAuthed]        = useState(() => hasValidSession());
   const [userRole,      setUserRole]      = useState(() => localStorage.getItem('ao_role') || 'owner');
   const [displayName,   setDisplayName]   = useState(() => localStorage.getItem('ao_display_name') || '');
-  const [viewMode,      setViewMode]      = useState('dashboard');
   const [focusedPanel,  setFocusedPanel]  = useState(null);
-  const [activeTab,     setActiveTab]     = useState('analyze');
+  const [activeTab,     setActiveTab]     = useState('home');
   const [mountedPanels, setMountedPanels] = useState([]);
   const [backendStatus, setBackendStatus] = useState('connecting');
   const [backendReady,  setBackendReady]  = useState(false);
@@ -168,13 +166,11 @@ const App = () => {
 
   // ── Tab bar items ───────────────────────────────────────────────────────────
   const TAB_ITEMS = [
-    { id:'alphamega', label:'ALPHA-MEGA',       color:'#c084fc' },
-    { id:'analytics', label:'ANALYTICS',        color:'#00d4ff' },
-    { id:'analyze',   label:'COUNCIL ANALYZE',  color:'#00d4ff' },
-    { id:'printing',  label:'PRINTING PROFITS', color:'#fbbf24' },
-    { id:'backtest',  label:'BACKTESTER',        color:'#a855f7' },
-    { id:'monitor',   label:'LIVE MONITOR',     color:'#00ff88' },
-    { id:'deepscan',  label:'DEEP SCAN',        color:'#1D9E75' },
+    { id:'home',        label:'HOME',         color:'#00ff88' },
+    { id:'scanner',     label:'SCANNER',      color:'#00d4ff' },
+    { id:'decisions',   label:'DECISIONS',    color:'#c084fc' },
+    { id:'performance', label:'PERFORMANCE',  color:'#a855f7' },
+    { id:'system',      label:'SYSTEM',       color:'#fbbf24' },
   ];
 
   // ── Focus mode: single panel full screen ────────────────────────────────────
@@ -223,11 +219,17 @@ const App = () => {
       );
     }
 
-    // ── MOBILE: one panel at a time + bottom nav ──
+    // ── MOBILE: one panel at a time + top movers strip ──
     if (isMobile) {
       const panel = PANELS.find(p => p.id === mobilePanel) || PANELS[0];
       return (
         <div style={{ display:'flex', flexDirection:'column', height:'calc(100vh - 110px)' }}>
+          <div style={{ padding:'8px 10px', background:'#0a0f18', borderBottom:'1px solid #1a2535', overflow:'auto' }}>
+            <div style={{ color:'#00d4ff', fontFamily:'monospace', fontSize:9, letterSpacing:2, marginBottom:6 }}>
+              TOP STOCKS (NEWSROOM CONTEXT)
+            </div>
+            <TopStocks onSelectTicker={setSymbol} />
+          </div>
           {/* Panel content */}
           <div style={{ flex:1, overflow:'auto', background:'#050810' }}>
             {mountedPanels.includes(panel.id)
@@ -259,7 +261,7 @@ const App = () => {
       );
     }
 
-    // ── DESKTOP: 2×2 grid ──
+    // ── DESKTOP: top movers + 2×2 grid ──
     return (
       <div style={{ display:'flex', flexDirection:'column', height:'calc(100vh - 152px)', background:'#0a0f18' }}>
         {isOwner && (
@@ -270,8 +272,16 @@ const App = () => {
             />
           </div>
         )}
+      <div style={{ padding:'8px 10px 0', flexShrink:0 }}>
+        <div style={{ background:'#0a0f18', border:'1px solid #1a2535', borderRadius:10, padding:'8px 12px' }}>
+          <div style={{ color:'#00d4ff', fontFamily:'monospace', fontSize:10, letterSpacing:2, marginBottom:6 }}>
+            TOP STOCKS + NEWSROOM CONTEXT
+          </div>
+          <TopStocks onSelectTicker={setSymbol} />
+        </div>
+      </div>
       <div style={{ display:'grid', gridTemplateColumns:'1fr 1fr', gridTemplateRows:'1fr 1fr',
-        flex:1, minHeight:0, gap:2 }}>
+        flex:1, minHeight:0, gap:2, marginTop:8 }}>
         {PANELS.map(panel => (
           <div key={panel.id} style={{ display:'flex', flexDirection:'column',
             background:'#050810', overflow:'hidden', minHeight:0 }}>
@@ -309,13 +319,50 @@ const App = () => {
 
   // ── Tab content ─────────────────────────────────────────────────────────────
   const renderTabContent = () => {
-    if (activeTab === 'alphamega') return <AlphaMegaDashboard />;
-    if (activeTab === 'analytics') return <Analytics />;
-    if (activeTab === 'printing')  return <PrintingProfits />;
-    if (activeTab === 'backtest')  return <BacktestDashboard />;
-    if (activeTab === 'monitor')   return <SystemMonitor />;
-    if (activeTab === 'deepscan')  return <DeepScan />;
-    // Council Analyze
+    if (activeTab === 'home') return renderDashboard();
+
+    if (activeTab === 'scanner') {
+      return (
+        <div style={{ display:'grid', gridTemplateColumns:isMobile ? '1fr' : '1fr 1fr', gap:10, padding:10, background:'#050810', minHeight:'calc(100vh - 152px)' }}>
+          <div style={{ background:'#0a0f18', border:'1px solid #1a2535', borderRadius:10, overflow:'hidden' }}>
+            <div style={{ padding:'8px 12px', borderBottom:'1px solid #1a2535', color:'#00d4ff', fontFamily:'monospace', fontSize:11, letterSpacing:1 }}>SWING SCAN + CANDIDATES</div>
+            <ScanDashboard autoScan={backendReady} compact={isMobile} isOwner={isOwner} />
+          </div>
+          <div style={{ background:'#0a0f18', border:'1px solid #1a2535', borderRadius:10, overflow:'hidden' }}>
+            <div style={{ padding:'8px 12px', borderBottom:'1px solid #1a2535', color:'#00d4ff', fontFamily:'monospace', fontSize:11, letterSpacing:1 }}>ALPHA-MEGA + DEEP SCAN</div>
+            <AlphaMegaDashboard />
+            <div style={{ borderTop:'1px solid #1a2535' }}>
+              <DeepScan />
+            </div>
+          </div>
+        </div>
+      );
+    }
+
+    if (activeTab === 'performance') {
+      return (
+        <div style={{ display:'grid', gridTemplateColumns:isMobile ? '1fr' : '1fr 1fr', gap:10, padding:10, background:'#050810', minHeight:'calc(100vh - 152px)' }}>
+          <div style={{ background:'#0a0f18', border:'1px solid #1a2535', borderRadius:10, overflow:'hidden' }}>
+            <div style={{ padding:'8px 12px', borderBottom:'1px solid #1a2535', color:'#a855f7', fontFamily:'monospace', fontSize:11, letterSpacing:1 }}>ANALYTICS + LEARNING INSIGHTS</div>
+            <Analytics />
+            <div style={{ borderTop:'1px solid #1a2535' }}>
+              <DreamLog backendReady={backendReady} />
+            </div>
+          </div>
+          <div style={{ background:'#0a0f18', border:'1px solid #1a2535', borderRadius:10, overflow:'hidden' }}>
+            <div style={{ padding:'8px 12px', borderBottom:'1px solid #1a2535', color:'#a855f7', fontFamily:'monospace', fontSize:11, letterSpacing:1 }}>BACKTEST + ALT STRATEGY VIEW</div>
+            <BacktestDashboard />
+            <div style={{ borderTop:'1px solid #1a2535' }}>
+              <PrintingProfits />
+            </div>
+          </div>
+        </div>
+      );
+    }
+
+    if (activeTab === 'system') return <SystemMonitor />;
+
+    // Decisions (Council + Newsroom/Top Stocks)
     return (
       <main className="main-container">
         <form className="search-form" onSubmit={handleAnalyze}>
@@ -328,7 +375,7 @@ const App = () => {
             </button>
           </div>
         </form>
-        <div className="search-hint">Press Enter to analyze a stock symbol</div>
+        <div className="search-hint">Press Enter to analyze a stock symbol · Newsroom context is shown on the right</div>
         <div className="dashboard-grid">
           <div className="dashboard-main">
             <Terminal logs={logs} />
@@ -336,7 +383,10 @@ const App = () => {
             <ResultCard result={result} />
             <ChartPanel symbol={result ? result.symbol : symbol} tradeParams={result?.trade_params} />
           </div>
-          <div className="dashboard-sidebar"><TopStocks onSelectTicker={setSymbol} /></div>
+          <div className="dashboard-sidebar">
+            <div style={{ color:'#00d4ff', fontFamily:'monospace', fontSize:10, letterSpacing:2, marginBottom:6 }}>NEWSROOM + TOP STOCKS</div>
+            <TopStocks onSelectTicker={setSymbol} />
+          </div>
         </div>
       </main>
     );
@@ -382,22 +432,12 @@ const App = () => {
           background:'#080b0f', borderBottom:'1px solid #1a2535',
           overflowX:'auto', WebkitOverflowScrolling:'touch',
           scrollbarWidth:'none' }}>
-          <button onClick={() => setViewMode('dashboard')}
-            style={{ background: viewMode==='dashboard' ? '#0d1a2a' : 'transparent',
-              color: viewMode==='dashboard' ? '#00ff88' : '#8899aa', border:'none',
-              borderBottom: viewMode==='dashboard' ? '2px solid #00ff88' : '2px solid transparent',
-              padding: isMobile ? '8px 10px' : '10px 18px',
-              fontSize: isMobile ? 9 : 11, fontWeight:'bold', fontFamily:'sans-serif',
-              cursor:'pointer', display:'flex', alignItems:'center', gap: isMobile ? 4 : 6,
-              letterSpacing:1, whiteSpace:'nowrap', flexShrink:0 }}>
-            <LayoutGrid size={isMobile ? 11 : 14}/> {isMobile ? 'HOME' : 'DASHBOARD'}
-          </button>
           {TAB_ITEMS.map(({ id, label, color }) => (
             <button key={id}
-              onClick={() => { setViewMode('tab'); setActiveTab(id); }}
-              style={{ background: viewMode==='tab' && activeTab===id ? '#0d1a2a' : 'transparent',
-                color: viewMode==='tab' && activeTab===id ? color : '#8899aa', border:'none',
-                borderBottom: viewMode==='tab' && activeTab===id ? `2px solid ${color}` : '2px solid transparent',
+              onClick={() => setActiveTab(id)}
+              style={{ background: activeTab===id ? '#0d1a2a' : 'transparent',
+                color: activeTab===id ? color : '#8899aa', border:'none',
+                borderBottom: activeTab===id ? `2px solid ${color}` : '2px solid transparent',
                 padding: isMobile ? '8px 10px' : '10px 18px',
                 fontSize: isMobile ? 9 : 11, fontWeight:'bold', fontFamily:'sans-serif',
                 cursor:'pointer', letterSpacing:1, whiteSpace:'nowrap', flexShrink:0 }}>
@@ -409,9 +449,7 @@ const App = () => {
         {/* Content */}
         {focusedPanel
           ? renderFocused()
-          : viewMode === 'dashboard'
-            ? renderDashboard()
-            : renderTabContent()
+          : renderTabContent()
         }
       </>}
     </div>
