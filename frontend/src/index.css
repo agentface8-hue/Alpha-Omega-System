@@ -4,6 +4,7 @@
 
 :root {
   color-scheme: dark;
+  --ao-ui-zoom: 1;
   --bg-primary: #0a0e17;
   --bg-card: #0d1117;
   --border-color: #1a2332;
@@ -46,6 +47,9 @@ body::before {
 #root {
   position: relative;
   z-index: 1;
+  zoom: var(--ao-ui-zoom);
+  width: calc(100% / var(--ao-ui-zoom));
+  transform-origin: top left;
 }
 
 ::-webkit-scrollbar {
@@ -605,6 +609,11 @@ body::before {
 
 /* ===== RESPONSIVE ===== */
 @media (max-width: 768px) {
+  #root {
+    zoom: 1;
+    width: 100%;
+  }
+
   .header {
     padding: 16px;
   }

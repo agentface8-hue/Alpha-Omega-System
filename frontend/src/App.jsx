@@ -77,8 +77,23 @@ const App = () => {
   const [backendReady,  setBackendReady]  = useState(false);
   const [pipelineTick,  setPipelineTick]  = useState(0);
   const [mobilePanel,   setMobilePanel]   = useState('portfolio'); // active panel on mobile
+  const [uiZoom,        setUiZoom]        = useState(() => {
+    try {
+      const saved = Number(localStorage.getItem('ao_ui_zoom') || '1.1');
+      return Number.isFinite(saved) ? Math.min(1.35, Math.max(0.9, saved)) : 1;
+    } catch {
+      return 1.1;
+    }
+  });
 
   const isOwner = userRole === 'owner';
+
+  useEffect(() => {
+    try {
+      localStorage.setItem('ao_ui_zoom', String(uiZoom));
+    } catch {}
+    document.documentElement.style.setProperty('--ao-ui-zoom', String(uiZoom));
+  }, [uiZoom]);
 
   const handleLogin = ({ username, role, display_name }) => {
     setUserRole(role);
@@ -412,6 +427,37 @@ const App = () => {
             </div>
           </div>
           <div className="system-status" style={{ fontSize: isMobile ? 9 : undefined }}>
+            {!isMobile && (
+              <span style={{ display:'inline-flex', alignItems:'center', gap:4, marginRight:10 }}>
+                <button
+                  type="button"
+                  onClick={() => setUiZoom(z => Math.max(0.9, Number((z - 0.05).toFixed(2))))}
+                  style={{
+                    background:'transparent', border:'1px solid #1a2535', borderRadius:4,
+                    color:'#8899aa', padding:'1px 6px', cursor:'pointer', fontSize:10
+                  }}
+                  title="Zoom out"
+                >-</button>
+                <button
+                  type="button"
+                  onClick={() => setUiZoom(1)}
+                  style={{
+                    background:'transparent', border:'1px solid #1a2535', borderRadius:4,
+                    color:'#00d4ff', padding:'1px 6px', cursor:'pointer', fontSize:10, minWidth:46
+                  }}
+                  title="Reset zoom"
+                >{Math.round(uiZoom * 100)}%</button>
+                <button
+                  type="button"
+                  onClick={() => setUiZoom(z => Math.min(1.35, Number((z + 0.05).toFixed(2))))}
+                  style={{
+                    background:'transparent', border:'1px solid #1a2535', borderRadius:4,
+                    color:'#8899aa', padding:'1px 6px', cursor:'pointer', fontSize:10
+                  }}
+                  title="Zoom in"
+                >+</button>
+              </span>
+            )}
             {displayName && (
               <span style={{ fontSize: isMobile ? 9 : 10,
                 color: isOwner ? '#00ff88' : '#c084fc',
