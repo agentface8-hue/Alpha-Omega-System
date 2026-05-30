@@ -59,10 +59,34 @@ def _load_closed() -> List[Dict]:
         live = []
     try:
         from core.signal_history import load_merged
-        return load_merged(live)
+        merged = load_merged(live)
     except Exception as e:
         logger.warning(f"[LEARN] history merge failed, using live only: {e}")
-        return live
+        merged = live
+    return _enrich_signal_metadata(merged)
+
+
+def _resolve_sector(signal: Dict) -> str:
+    sector = signal.get("sector") or (signal.get("entry_snapshot") or {}).get("sector") or ""
+    if sector and sector not in ("Unknown", "Other", ""):
+        return sector
+    try:
+        from core.universe_builder import get_ticker_sector
+        return get_ticker_sector(signal.get("ticker", "")) or "Unknown"
+    except Exception:
+        return "Unknown"
+
+
+def _enrich_signal_metadata(signals: List[Dict]) -> List[Dict]:
+    """Backfill sector/regime on historical rows missing metadata."""
+    out = []
+    for s in signals:
+        row = dict(s)
+        row["sector"] = _resolve_sector(row)
+        if not row.get("regime"):
+            row["regime"] = (row.get("entry_market_context") or {}).get("regime", "")
+        out.append(row)
+    return out
 
 
 def _load_calibration() -> Dict:

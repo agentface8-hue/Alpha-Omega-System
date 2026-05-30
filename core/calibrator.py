@@ -34,7 +34,7 @@ def save_calibration(params: Dict[str, Any]):
 
 # Defaults when learning loop has no regime sample yet
 DEFAULT_REGIME_THRESHOLDS = {
-    "Trending Bull": 72,
+    "Trending Bull": 78,
     "Choppy / Range": 65,
     "High-Vol Event": 70,
     "Trending Bear": 75,
@@ -70,6 +70,19 @@ def get_regime_conviction_threshold(regime: str) -> int:
     if regime in learned and learned[regime] is not None:
         return max(base, int(learned[regime]))
     return base
+
+
+def regime_conviction_penalty(regime: str) -> int:
+    """Extra conviction required in historically weak regimes."""
+    stats = (load_calibration().get("regime_stats") or {}).get(regime or "", {})
+    wr = stats.get("win_rate")
+    if regime == "Trending Bull":
+        return 5
+    if wr is not None and wr < 40:
+        return 4
+    if wr is not None and wr < 50:
+        return 2
+    return 0
 
 
 def sector_conviction_penalty(sector: str) -> int:

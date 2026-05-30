@@ -29,6 +29,82 @@ const formatDuration = (startIso, endIso = null) => {
   } catch { return '—'; }
 };
 
+const portfolioActionsFromPositions = (portfolioJson) => {
+  const positions = [
+    ...(portfolioJson?.open_positions || []),
+    ...(portfolioJson?.closed_positions || []),
+  ];
+  const actions = [];
+  for (const pos of positions) {
+    const ticker = pos.ticker || '?';
+    for (const tr of (pos.trades || [])) {
+      actions.push({
+        ts: tr.executed_at || pos.updated_at || pos.entry_date,
+        ticker,
+        action: (tr.type || 'TRADE').toUpperCase(),
+        detail: `${tr.type || 'trade'} ${tr.shares || '?'} @ $${tr.price ?? '?'}${tr.pnl ? ` pnl $${Number(tr.pnl).toFixed(2)}` : ''}`,
+        category: (tr.pnl || 0) > 0 ? 'profit' : (tr.pnl || 0) < 0 ? 'bad' : 'neutral',
+        source: 'portfolio',
+      });
+    }
+    if (pos.close_reason) {
+      actions.push({
+        ts: pos.closed_at || pos.updated_at,
+        ticker,
+        action: 'CLOSED',
+        detail: pos.close_reason,
+        category: (pos.realized_pnl || 0) >= 0 ? 'profit' : 'bad',
+        source: 'portfolio',
+      });
+    } else if (pos.status === 'open') {
+      actions.push({
+        ts: pos.entry_date || pos.updated_at,
+        ticker,
+        action: 'OPENED',
+        detail: `Portfolio entry conv ${pos.conviction || '?'}% · ${pos.sector || '?'}`,
+        category: 'neutral',
+        source: 'portfolio',
+      });
+    }
+  }
+  return actions;
+};
+
+const dedupeSignalActions = (actions) => {
+  const out = [];
+  const lastByTicker = {};
+  for (const a of actions) {
+    if (a.action !== 'STATE_CHANGE') {
+      out.push(a);
+      continue;
+    }
+    const key = a.ticker || '?';
+    const ts = new Date(a.ts || 0).getTime();
+    const prev = lastByTicker[key];
+    if (prev && ts - prev.ts < 30 * 60 * 1000 && prev.detail === a.detail) continue;
+    lastByTicker[key] = { ts, detail: a.detail || '' };
+    out.push(a);
+  }
+  return out;
+};
+
+const mergeActionLog = (portfolioJson, signalJson) => {
+  const portfolioActs = portfolioActionsFromPositions(portfolioJson);
+  const sigs = [...(signalJson?.active || []), ...(signalJson?.closed || [])];
+  const signalActs = dedupeSignalActions(
+    sigs.flatMap(s =>
+      (s.action_log || []).map(a => ({
+        ...a,
+        ticker: s.ticker || a.ticker || '?',
+        source: 'signal',
+      }))
+    )
+  );
+  return [...portfolioActs, ...signalActs]
+    .sort((a, b) => (b.ts || '').localeCompare(a.ts || ''))
+    .slice(0, 50);
+};
+
 const buildCloseReason = (pos) => {
   if (pos.close_reason && pos.close_reason.length > 5) return pos.close_reason;
   const lastTrade = (pos.trades || []).slice(-1)[0] || {};
@@ -721,17 +797,13 @@ export default function PortfolioTab({ compact = false, isOwner = false, backend
 
   const fetchActionLog = useCallback(async () => {
     try {
-      const r = await fetch(`${API()}/api/signals`);
-      if (!r.ok) return;
-      const d = await r.json();
-      const sigs = [...(d.active || []), ...(d.closed || [])];
-      const actions = sigs.flatMap(s =>
-        (s.action_log || []).map(a => ({ ...a, ticker: s.ticker || a.ticker || '?' }))
-      );
-      actions.sort((a, b) => (b.ts || '').localeCompare(a.ts || ''));
-      setAllActions(actions.slice(0, 50));
+      const [sigRes, pfJson] = await Promise.all([
+        fetch(`${API()}/api/signals`).then(r => (r.ok ? r.json() : { active: [], closed: [] })).catch(() => ({ active: [], closed: [] })),
+        data ? Promise.resolve(data) : fetchJson('/api/portfolio', {}, { timeoutMs: 50000, retries: 1 }).catch(() => null),
+      ]);
+      setAllActions(mergeActionLog(pfJson, sigRes));
     } catch { /* silent */ }
-  }, []);
+  }, [data]);
 
   const fetchTradeHistory = useCallback(async () => {
     try {
@@ -1036,7 +1108,7 @@ export default function PortfolioTab({ compact = false, isOwner = false, backend
 
         {/* ACTION LOG tab */}
         {historyTab === 'log' && (<>
-          <div style={{ fontSize:10, color:'#2a4a5a', marginBottom:12, fontFamily:'sans-serif' }}>Last 50 actions across all signals</div>
+          <div style={{ fontSize:10, color:'#2a4a5a', marginBottom:12, fontFamily:'sans-serif' }}>Last 50 actions — portfolio trades + signal events (STATE_CHANGE noise filtered)</div>
           {allActions.length === 0 ? (
             <div style={{ textAlign:'center', padding:'20px', color:'#2a4a5a', fontSize:12, fontFamily:'monospace' }}>No actions recorded yet.</div>
           ) : (

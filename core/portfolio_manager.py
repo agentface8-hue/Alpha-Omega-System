@@ -557,10 +557,11 @@ def autopilot_fill(watchlist_name: str = "full_scan", symbols_override: list = N
     except Exception:
         regime = "Trending Bull"
 
-    from core.calibrator import get_regime_conviction_threshold, sector_conviction_penalty
+    from core.calibrator import get_regime_conviction_threshold, sector_conviction_penalty, regime_conviction_penalty
     from core.theme_engine import theme_conviction_adjustment
     conv_threshold = get_regime_conviction_threshold(regime)
-    print(f"[AUTOPILOT] Regime: {regime} -> conviction threshold: {conv_threshold}% (learned+fallback)")
+    regime_penalty = regime_conviction_penalty(regime)
+    print(f"[AUTOPILOT] Regime: {regime} -> threshold {conv_threshold}% + penalty {regime_penalty}%")
 
     scan_result = run_scan(symbols)
     raw = scan_result.get("results", [])
@@ -581,7 +582,7 @@ def autopilot_fill(watchlist_name: str = "full_scan", symbols_override: list = N
             return False
         sector = _gts_early(r["ticker"])
         theme_bonus = theme_conviction_adjustment(r["ticker"], sector)
-        need = conv_threshold + sector_conviction_penalty(sector) - theme_bonus
+        need = conv_threshold + sector_conviction_penalty(sector) + regime_penalty - theme_bonus
         return r.get("conviction_pct", 0) >= need
 
     candidates = sorted(

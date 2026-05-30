@@ -34,6 +34,75 @@ FADE_GIVEBACK_PCT   = 2.0  # % given back from MFE peak
 # Trailing SL settings
 TSL_TRIGGER_PCT = 0.5  # Activate TSL once trade is +0.5% or more in profit
 
+# DTP state machine — hysteresis bands reduce PROTECTING↔DEVELOPING flip noise
+_STATE_PROMOTE = {"PROTECTING": 57, "DEVELOPING": 72, "RUNNING": 70}
+_STATE_DEMOTE = {"RUNNING": 68, "DEVELOPING": 53, "PROTECTING": 38}
+_STATE_LOG_MIN_SCORE_DELTA = 5
+_STATE_LOG_MIN_MINUTES = 30
+
+
+def _ticker_sector(ticker: str) -> str:
+    try:
+        from core.universe_builder import get_ticker_sector
+        return get_ticker_sector(ticker) or "Unknown"
+    except Exception:
+        return "Unknown"
+
+
+def _resolve_trade_state(score: float, current: Optional[str], direction: float) -> str:
+    """Assign trade_state with hysteresis so small score noise does not flip states."""
+    cur = current or ""
+    if cur == "RUNNING":
+        if score < _STATE_DEMOTE["RUNNING"]:
+            cur = "DEVELOPING"
+        else:
+            return "RUNNING"
+    if cur == "DEVELOPING":
+        if score >= _STATE_PROMOTE["RUNNING"] and direction >= 0:
+            return "RUNNING"
+        if score < _STATE_DEMOTE["DEVELOPING"]:
+            cur = "PROTECTING"
+        else:
+            return "DEVELOPING"
+    if cur == "PROTECTING":
+        if score >= _STATE_PROMOTE["DEVELOPING"]:
+            return "DEVELOPING"
+        if score < _STATE_DEMOTE["PROTECTING"]:
+            return "EXIT"
+        return "PROTECTING"
+    if cur == "EXIT":
+        if score >= _STATE_PROMOTE["PROTECTING"]:
+            return "PROTECTING"
+        return "EXIT"
+    # Initial assignment (no prior state)
+    if score >= 70 and direction >= 0:
+        return "RUNNING"
+    if score >= 55:
+        return "DEVELOPING"
+    if score >= 40:
+        return "PROTECTING"
+    return "EXIT"
+
+
+def _should_log_state_change(signal: Dict, old_state: str, new_state: str, score: float) -> bool:
+    """Debounce STATE_CHANGE logs — ignore rapid oscillation around thresholds."""
+    if old_state == new_state:
+        return False
+    now = datetime.datetime.utcnow()
+    last_ts = signal.get("last_state_log_at")
+    last_score = signal.get("last_state_log_score")
+    if last_ts and last_score is not None:
+        try:
+            prev = datetime.datetime.fromisoformat(last_ts.replace("Z", ""))
+            mins = (now - prev).total_seconds() / 60.0
+            if mins < _STATE_LOG_MIN_MINUTES and abs(score - float(last_score)) < _STATE_LOG_MIN_SCORE_DELTA:
+                return False
+        except Exception:
+            pass
+    signal["last_state_log_at"] = now.isoformat()
+    signal["last_state_log_score"] = round(score, 1)
+    return True
+
 
 def _get_atr_multipliers(regime_str: str) -> dict:
     return REGIME_MULTIPLIERS.get(regime_str, _DEFAULT_MULTS)
@@ -313,8 +382,10 @@ def record_signal(scan_result: Dict[str, Any], asset_type: str = "stock") -> Lis
         if r.get("hard_fail") or r.get("conviction_pct",0)<60: continue
         ticker=r["ticker"]
         if ticker in active_tickers: continue
+        _sector = r.get("sector") or _ticker_sector(ticker)
         signal={
             "id":str(uuid.uuid4())[:8],"ticker":ticker,"asset_type":asset_type,
+            "sector": _sector,
             "entry_price":r["last_close"],"entry_time":datetime.datetime.utcnow().isoformat(),
             "conviction":r["conviction_pct"],"heat":r["heat"],
             "sl":r["sl"],"tp1":r["tp1"],"tp2":r["tp2"],"tp3":r["tp3"],
@@ -463,6 +534,7 @@ def create_turbo_signal(symbol: str, asset_type: str = "stock", scan_data: Dict 
 
     signal = {
         "id":str(uuid.uuid4())[:8],"ticker":sym,"asset_type":asset_type,
+        "sector": scan_data.get("sector") if scan_data else sector_gate_info.get("sector") or _ticker_sector(sym),
         "entry_price":round(price,4),"entry_time":datetime.datetime.utcnow().isoformat(),
         "conviction":conviction,"heat":heat,"sl":sl,"tp1":tp1,"tp2":tp2,"tp3":tp3,
         "rr":rr,"qty":0,"regime":regime_str,"tas":tas,"trend":trend,
@@ -701,16 +773,9 @@ def check_signals() -> Dict[str, Any]:
                 s["live_score_prev"] = _prev_score
                 s["live_score"] = _new_score
                 s["live_score_updated_at"] = datetime.datetime.utcnow().isoformat()
-                if _new_score >= 70 and _direction >= 0:
-                    _new_state = "RUNNING"
-                elif _new_score >= 55:
-                    _new_state = "DEVELOPING"
-                elif _new_score >= 40:
-                    _new_state = "PROTECTING"
-                else:
-                    _new_state = "EXIT"
                 _old_state = s.get("trade_state")
-                if _old_state != _new_state:
+                _new_state = _resolve_trade_state(float(_new_score), _old_state, float(_direction))
+                if _should_log_state_change(s, _old_state or "NEW", _new_state, float(_new_score)):
                     _append_action(s, "STATE_CHANGE",
                         f"State {_old_state or 'NEW'} → {_new_state} · score {_new_score}%",
                         "neutral")

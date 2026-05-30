@@ -116,12 +116,14 @@ def run_daily_pipeline(
         def learning():
             from core.learning_loop import _load_closed, run_fast
             from core.autoresearch import profit_readiness
+            from core.outcomes_grader import backfill_ungraded_outcomes
             closed = _load_closed()
+            backfill = backfill_ungraded_outcomes(limit=5)
             if len(closed) < 10:
-                return {"skipped": True, "count": len(closed)}
+                return {"skipped": True, "count": len(closed), "backfill": backfill}
             fast = run_fast(closed)
             ready = profit_readiness(closed)
-            return {"fast": fast, "readiness": ready}
+            return {"fast": fast, "readiness": ready, "backfill": backfill}
 
         steps.append(_step("learning_fast", learning))
 

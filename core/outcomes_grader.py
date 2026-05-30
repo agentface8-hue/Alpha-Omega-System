@@ -197,6 +197,74 @@ def _grade_in_background(signal: Dict):
     logger.info(f"[GRADER] {ticker} graded {result.get('grade')} — {result.get('lesson','')[:60]}")
 
 
+def _rule_based_grade(signal: Dict) -> Dict[str, Any]:
+    """Fast offline grade when Opus is unavailable or for backfill."""
+    pnl = float(signal.get("pnl_pct", 0) or 0)
+    conv = int(signal.get("conviction", 0) or 0)
+    mfe = float(signal.get("mfe_pct", 0) or 0)
+    if pnl >= 8:
+        grade = "A" if conv >= 70 else "B"
+    elif pnl >= 2:
+        grade = "B" if conv >= 65 else "C"
+    elif pnl >= -2:
+        grade = "C"
+    elif pnl >= -8:
+        grade = "D"
+    else:
+        grade = "F"
+    accuracy = "CALIBRATED"
+    if conv >= 75 and pnl < 0:
+        accuracy = "OVERCONFIDENT"
+    elif conv < 60 and pnl > 5:
+        accuracy = "UNDERCONFIDENT"
+    return {
+        "grade": grade,
+        "was_conviction_right": pnl >= 0,
+        "pnl_outcome": "WIN" if pnl > 0 else "LOSS" if pnl < 0 else "BREAKEVEN",
+        "lesson": f"{'Win' if pnl >= 0 else 'Loss'} at {pnl:+.1f}% with conviction {conv}% (MFE +{mfe:.1f}%).",
+        "improvement": "None — execution was acceptable" if pnl >= 0 else "Raise entry quality or tighten weak-regime gate.",
+        "conviction_accuracy": accuracy,
+        "source": "rule_based",
+    }
+
+
+def backfill_ungraded_outcomes(limit: int = 5) -> Dict[str, Any]:
+    """Grade recently closed signals missing outcome_grade (rule-based, sync)."""
+    try:
+        from core import signal_store as store
+        closed = store.load_closed()
+    except Exception as e:
+        return {"status": "error", "detail": str(e)[:120]}
+
+    targets = [s for s in closed if not s.get("outcome_grade")][-limit:]
+    graded = 0
+    for s in targets:
+        result = _rule_based_grade(s)
+        outcome = {
+            "signal_id": s.get("id", "?"),
+            "ticker": s.get("ticker", "?"),
+            "ts": datetime.datetime.utcnow().isoformat(),
+            "pnl_pct": s.get("pnl_pct", 0),
+            "close_reason": s.get("close_reason", ""),
+            **result,
+            "model": "rule_based",
+        }
+        _save_outcome(outcome)
+        try:
+            closed_all = store.load_closed()
+            for row in closed_all:
+                if row.get("id") == s.get("id"):
+                    row["outcome_grade"] = result.get("grade")
+                    row["outcome_lesson"] = result.get("lesson", "")
+                    row["was_conviction_right"] = result.get("was_conviction_right")
+                    break
+            store.save_closed(closed_all)
+        except Exception:
+            pass
+        graded += 1
+    return {"status": "ok", "graded": graded, "remaining": max(0, len([s for s in closed if not s.get("outcome_grade")]) - graded)}
+
+
 # ── Public API ────────────────────────────────────────────────────────────────
 
 def grade_outcome(signal: Dict) -> None:
@@ -218,9 +286,10 @@ def load_outcomes_summary() -> Dict[str, Any]:
     outcomes = []
 
     try:
-        from core import signal_store as store
-        if store._sb():
-            result = (store._sb().table("outcomes")
+        from core.signal_store import _get_supabase
+        sb = _get_supabase()
+        if sb:
+            result = (sb.table("outcomes")
                       .select("*").order("ts", desc=True).limit(100).execute())
             outcomes = result.data or []
     except Exception:
@@ -236,7 +305,22 @@ def load_outcomes_summary() -> Dict[str, Any]:
             pass
 
     if not outcomes:
-        return {"total": 0, "grade_distribution": {}, "lessons": []}
+        try:
+            from core import signal_store as store
+            for s in store.load_closed()[-100:]:
+                if s.get("outcome_grade"):
+                    outcomes.append({
+                        "ticker": s.get("ticker"),
+                        "grade": s.get("outcome_grade"),
+                        "pnl_pct": s.get("pnl_pct", 0),
+                        "lesson": s.get("outcome_lesson", ""),
+                        "was_conviction_right": s.get("was_conviction_right"),
+                    })
+        except Exception:
+            pass
+
+    if not outcomes:
+        return {"total": 0, "grade_distribution": {}, "lessons": [], "recent_lessons": []}
 
     from collections import Counter
     grades = [o.get("grade", "?") for o in outcomes]
