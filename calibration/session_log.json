@@ -193,5 +193,13 @@
       "docs: record Vercel synapse-s account and canonical ngfw project",
       "docs: Cursor owns ops; frozen health stack in CURSOR-AGENT-BRIEF"
     ]
+  },
+  {
+    "ts": "2026-05-30T19:00:02.557380",
+    "commits": 2,
+    "messages": [
+      "fix: resolve action-log noise, sector learning, grader, and regime gates",
+      "auto: session memory 2026-05-28 19:00"
+    ]
   }
 ]
