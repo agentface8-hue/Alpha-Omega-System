@@ -32,27 +32,91 @@ FIX LOG:
        normalised to /status before intent parsing.
   2026-05-01 — New bot created: @AlphaOmegaCEO_bot (old bot deleted)
 """
-import os, json, time, logging, threading, urllib.request, urllib.parse
+import os, json, time, logging, threading, urllib.request, urllib.parse, urllib.error, socket
 from concurrent.futures import ThreadPoolExecutor
-from datetime import datetime
+from datetime import datetime, timedelta
 from typing import Optional, Dict, Any
 
 logger = logging.getLogger(__name__)
 
-TOKEN       = os.environ.get("TELEGRAM_TOKEN", "8246500243:AAFXsq94Fia3RimL4_Q-AM6sdDJpZNoxTYM")
-PERSONAL_ID = os.environ.get("TELEGRAM_PERSONAL_CHAT_ID", "5812682751")
-GROUP_ID    = os.environ.get("TELEGRAM_GROUP_CHAT_ID", "-5228475615")
-BASE_URL    = f"https://api.telegram.org/bot{TOKEN}"
+TOKEN       = os.environ.get("TELEGRAM_TOKEN", "")
+PERSONAL_ID = os.environ.get("TELEGRAM_PERSONAL_CHAT_ID", "")
+GROUP_ID    = os.environ.get("TELEGRAM_GROUP_CHAT_ID", "")
+BASE_URL    = f"https://api.telegram.org/bot{TOKEN}" if TOKEN else ""
 
 # Only accept commands from owner
-ALLOWED_CHAT_IDS = {PERSONAL_ID, GROUP_ID}
+ALLOWED_CHAT_IDS = {x for x in (PERSONAL_ID, GROUP_ID) if x}
 
 _last_update_id = 0
+_POLL_LOCK_ID = "telegram_poll"
+_POLL_TTL_S = 90
+_on_render = bool(os.environ.get("RENDER") or os.environ.get("RENDER_EXTERNAL_URL"))
+
+
+def _poll_enabled() -> bool:
+    if not TOKEN:
+        return False
+    return os.environ.get("TELEGRAM_POLL_ENABLED", "true").lower() not in ("0", "false", "no")
+
+
+def _instance_id() -> str:
+    return (
+        os.environ.get("RENDER_INSTANCE_ID")
+        or os.environ.get("HOSTNAME")
+        or socket.gethostname()
+        or "local"
+    )
+
+
+def _sb_client():
+    url = os.environ.get("SUPABASE_URL", "")
+    key = os.environ.get("SUPABASE_ANON_KEY", "")
+    if not url or not key:
+        return None
+    try:
+        from supabase import create_client
+        return create_client(url, key)
+    except Exception:
+        return None
+
+
+def _acquire_poll_lock() -> bool:
+    """Supabase lease — only one process may call getUpdates for this bot token."""
+    sb = _sb_client()
+    if not sb:
+        return True
+    now = datetime.utcnow()
+    inst = _instance_id()
+    try:
+        r = sb.table("portfolio_state").select("data").eq("id", _POLL_LOCK_ID).execute()
+        if r.data:
+            lock = r.data[0].get("data") or {}
+            holder = lock.get("holder")
+            exp_raw = lock.get("expires_at")
+            if holder and holder != inst and exp_raw:
+                try:
+                    exp_dt = datetime.fromisoformat(str(exp_raw).replace("Z", "")[:26])
+                    if exp_dt > now:
+                        return False
+                except Exception:
+                    pass
+        expires = (now + timedelta(seconds=_POLL_TTL_S)).isoformat()
+        sb.table("portfolio_state").upsert({
+            "id": _POLL_LOCK_ID,
+            "data": {"holder": inst, "expires_at": expires, "updated_at": now.isoformat()},
+            "updated_at": now.isoformat(),
+        }).execute()
+        return True
+    except Exception as e:
+        logger.warning(f"[AGENT] poll lock skipped: {e}")
+        return True
 
 
 # ------ Telegram helpers -----------------------------------------------
 
-def _tg_request(method: str, data: dict) -> Optional[dict]:
+def _tg_request(method: str, data: dict, *, quiet_409: bool = False) -> Optional[dict]:
+    if not TOKEN:
+        return None
     try:
         url  = f"{BASE_URL}/{method}"
         body = json.dumps(data).encode()
@@ -60,9 +124,25 @@ def _tg_request(method: str, data: dict) -> Optional[dict]:
             headers={"Content-Type": "application/json", "User-Agent": "Mozilla/5.0"})
         with urllib.request.urlopen(req, timeout=15) as r:
             return json.loads(r.read().decode())
+    except urllib.error.HTTPError as e:
+        if e.code == 409:
+            if not quiet_409:
+                logger.warning(f"[AGENT] Telegram 409 on {method} — another poller active")
+            raise
+        logger.error(f"[TG] {method} HTTP {e.code}: {e.reason}")
+        return None
     except Exception as e:
         logger.error(f"[TG] {method} error: {e}")
         return None
+
+
+def _get_updates(offset: int) -> list:
+    result = _tg_request("getUpdates", {
+        "offset": offset, "timeout": 5, "allowed_updates": ["message"]
+    }, quiet_409=True)
+    if result and result.get("ok"):
+        return result.get("result", [])
+    return []
 
 
 def _send(chat_id: str, text: str, parse_mode: str = "HTML") -> bool:
@@ -72,15 +152,6 @@ def _send(chat_id: str, text: str, parse_mode: str = "HTML") -> bool:
         "disable_web_page_preview": True,
     })
     return bool(result and result.get("ok"))
-
-
-def _get_updates(offset: int) -> list:
-    result = _tg_request("getUpdates", {
-        "offset": offset, "timeout": 5, "allowed_updates": ["message"]
-    })
-    if result and result.get("ok"):
-        return result.get("result", [])
-    return []
 
 
 def _delete_webhook() -> bool:
@@ -97,6 +168,8 @@ def _delete_webhook() -> bool:
         else:
             logger.warning(f"[AGENT] deleteWebhook unexpected response: {result}")
             return False
+    except urllib.error.HTTPError:
+        return False
     except Exception as e:
         logger.error(f"[AGENT] deleteWebhook error: {e}")
         return False
@@ -470,30 +543,46 @@ def _poll_loop():
     global _last_update_id
     logger.info("[AGENT] Telegram polling loop started")
     _consecutive_409 = 0
+    _standby_logged = False
     while True:
+        if not _acquire_poll_lock():
+            if not _standby_logged:
+                logger.info("[AGENT] Standby — another instance holds Telegram poll lock")
+                _standby_logged = True
+            time.sleep(20)
+            continue
+        _standby_logged = False
         try:
             updates = _get_updates(_last_update_id + 1)
             _consecutive_409 = 0
             for update in updates:
                 _last_update_id = max(_last_update_id, update.get("update_id", 0))
                 _executor.submit(_handle_message, update)
-        except Exception as e:
-            if "409" in str(e):
+        except urllib.error.HTTPError as e:
+            if e.code == 409:
                 _consecutive_409 += 1
-                wait = min(30, 5 * _consecutive_409)
-                logger.warning(f"[AGENT] 409 Conflict — another instance polling. Waiting {wait}s...")
+                wait = min(60, 5 * _consecutive_409)
+                if _consecutive_409 <= 3 or _consecutive_409 % 5 == 0:
+                    logger.warning(
+                        f"[AGENT] 409 Conflict — another getUpdates poller active. "
+                        f"Waiting {wait}s (attempt {_consecutive_409})"
+                    )
+                _delete_webhook()
                 time.sleep(wait)
                 continue
-            else:
-                logger.error(f"[AGENT] Poll error: {e}")
+            logger.error(f"[AGENT] Poll HTTP error: {e}")
+        except Exception as e:
+            logger.error(f"[AGENT] Poll error: {e}")
         time.sleep(4)
 
 
 def start():
-    # 10s delay: lets old Render instance die before new one polls
-    # Prevents 409 during zero-downtime redeploys on Standard tier
-    logger.info("[AGENT] Waiting 10s before polling (deploy guard)...")
-    time.sleep(10)
+    if not _poll_enabled():
+        logger.info("[AGENT] Telegram polling disabled (no token or TELEGRAM_POLL_ENABLED=false)")
+        return
+    guard = 45 if _on_render else 10
+    logger.info(f"[AGENT] Waiting {guard}s before polling (deploy guard)...")
+    time.sleep(guard)
     logger.info("[AGENT] Deleting webhook before polling...")
     _delete_webhook()
 
