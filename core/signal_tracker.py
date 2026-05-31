@@ -625,7 +625,9 @@ def create_turbo_signal(symbol: str, asset_type: str = "stock", scan_data: Dict 
 # SIGNAL MONITORING
 # ══════════════════════════════════════════════════════════════
 
-STALE_ORPHAN_DAYS = 21
+STALE_ORPHAN_DAYS = 14
+STALE_FLAT_DAYS = 7
+STALE_FLAT_PNL = 2.0  # abs % — idle turbo signals with no movement
 
 
 def _close_stale_orphans(active: List[Dict]) -> List[Dict]:
@@ -638,8 +640,11 @@ def _close_stale_orphans(active: List[Dict]) -> List[Dict]:
             days = (datetime.datetime.utcnow() - datetime.datetime.fromisoformat(s["entry_time"])).days
         except Exception:
             days = 0
-        if days >= STALE_ORPHAN_DAYS:
-            close_signal(s["id"], "STALE_ORPHAN")
+        pnl = abs(float(s.get("pnl_pct") or 0))
+        stale = days >= STALE_ORPHAN_DAYS or (days >= STALE_FLAT_DAYS and pnl < STALE_FLAT_PNL)
+        if stale:
+            reason = "STALE_FLAT" if days < STALE_ORPHAN_DAYS else "STALE_ORPHAN"
+            close_signal(s["id"], reason)
             closed_tickers.append(s.get("ticker", "?"))
     if closed_tickers:
         print(f"  [STALE] Auto-closed orphan signals ({STALE_ORPHAN_DAYS}d+): {closed_tickers}")

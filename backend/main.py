@@ -1977,7 +1977,7 @@ async def executor_test(request: Request):
 
 @app.get("/api/learning/summary")
 async def learning_summary():
-    """Current calibration params + outcomes summary. Hard cap: 25s."""
+    """Current calibration params + outcomes summary. Hard cap: 30s."""
     import asyncio, concurrent.futures
     def _get_summary():
         from core.learning_loop import get_summary_fast
@@ -1985,7 +1985,7 @@ async def learning_summary():
     loop = asyncio.get_event_loop()
     with concurrent.futures.ThreadPoolExecutor() as ex:
         try:
-            return await asyncio.wait_for(loop.run_in_executor(ex, _get_summary), timeout=25.0)
+            return await asyncio.wait_for(loop.run_in_executor(ex, _get_summary), timeout=30.0)
         except asyncio.TimeoutError:
             from core.learning_loop import _load_calibration
             params = _load_calibration()

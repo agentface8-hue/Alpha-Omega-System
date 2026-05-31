@@ -576,25 +576,34 @@ def _deep_loop():
 
 def get_summary_fast() -> Dict[str, Any]:
     """Lightweight summary for API — skips per-signal sector enrich (can exceed 10s on Render)."""
+    import concurrent.futures
+
+    def _with_timeout(fn, seconds: float, default=None):
+        with concurrent.futures.ThreadPoolExecutor(max_workers=1) as ex:
+            fut = ex.submit(fn)
+            try:
+                return fut.result(timeout=seconds)
+            except Exception as e:
+                logger.warning(f"[LEARN] summary step timed out/failed: {e}")
+                return default
+
     params = _load_calibration()
-    outcomes: Dict[str, Any] = {"total": 0, "grade_distribution": {}, "recent_lessons": []}
-    try:
-        from core.outcomes_grader import load_outcomes_summary
-        outcomes = load_outcomes_summary()
-    except Exception as e:
-        logger.warning(f"[LEARN] outcomes summary failed: {e}")
-    closed: List[Dict] = []
-    try:
+
+    def _count_closed() -> int:
         from core.signal_store import load_closed
         from core.signal_history import load_merged
-        closed = load_merged(load_closed())
-    except Exception as e:
-        logger.warning(f"[LEARN] closed merge failed: {e}")
-        try:
-            from core.signal_store import load_closed
-            closed = load_closed()
-        except Exception:
-            closed = []
+        return len(load_merged(load_closed()))
+
+    def _outcomes() -> Dict[str, Any]:
+        from core.outcomes_grader import load_outcomes_summary
+        return load_outcomes_summary()
+
+    total_closed = _with_timeout(_count_closed, 12, default=0) or 0
+    outcomes = _with_timeout(
+        _outcomes, 8,
+        default={"total": 0, "grade_distribution": {}, "recent_lessons": []},
+    ) or {"total": 0, "grade_distribution": {}, "recent_lessons": []}
+
     research_log: List[Any] = []
     try:
         rp = Path(__file__).parent.parent / "calibration" / "deep_research_log.json"
@@ -605,7 +614,7 @@ def get_summary_fast() -> Dict[str, Any]:
     return {
         "calibration": params,
         "outcomes": outcomes,
-        "total_closed": len(closed),
+        "total_closed": total_closed,
         "deep_research_latest": params.get("deep_research"),
         "deep_research_history": research_log,
     }

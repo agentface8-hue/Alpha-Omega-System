@@ -50,7 +50,7 @@ def load_history() -> List[Dict]:
             f"{_SB_URL}/rest/v1/trade_log?select=*&limit=500&order=date_closed.asc",
             headers={"apikey": _SB_KEY, "Authorization": f"Bearer {_SB_KEY}"}
         )
-        with urllib.request.urlopen(req, timeout=10) as r:
+        with urllib.request.urlopen(req, timeout=6) as r:
             rows = json.loads(r.read())
         logger.info(f"[HISTORY] loaded {len(rows)} rows from trade_log")
         return rows or []
