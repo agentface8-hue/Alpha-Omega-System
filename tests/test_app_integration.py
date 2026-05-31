@@ -67,6 +67,22 @@ def test_timeout_helper_returns_without_waiting_for_hung_worker():
     assert elapsed < 0.8
 
 
+def test_async_timeout_helper_uses_fresh_executor():
+    """Async timeout must not depend on the loop's possibly saturated default executor."""
+    import asyncio
+    import time
+    from core.timeout_utils import run_async_with_timeout
+
+    async def run():
+        started = time.time()
+        result = await run_async_with_timeout(lambda: time.sleep(2) or "late", timeout_s=0.1, fallback="fallback")
+        return result, time.time() - started
+
+    result, elapsed = asyncio.run(run())
+    assert result == "fallback"
+    assert elapsed < 0.8
+
+
 def test_decision_ledger_has_outcome_helpers():
     """Ledger has update_decision_outcomes and get_decisions_pending_outcomes for attribution job."""
     from core.decision_ledger import update_decision_outcomes, get_decisions_pending_outcomes
