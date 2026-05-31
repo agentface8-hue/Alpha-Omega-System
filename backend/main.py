@@ -245,38 +245,44 @@ async def root():
 
 @app.post("/api/analyze", response_model=AnalysisResponse)
 async def analyze_stock(request: AnalysisRequest):
-    try:
-        symbol = request.symbol.upper()
+    import asyncio
+    import concurrent.futures
+
+    symbol = request.symbol.upper()
+
+    def _run_v2():
+        from core.orchestrator import Orchestrator
+        return Orchestrator().run_cycle_v2(symbol)
+
+    def _run_smart():
+        from core.smart_analyze import analyze
+        return analyze(symbol)
+
+    loop = asyncio.get_event_loop()
+    with concurrent.futures.ThreadPoolExecutor(max_workers=1) as ex:
         try:
-            from core.orchestrator import Orchestrator
-            orchestrator = Orchestrator()
-            context = orchestrator.run_cycle_v2(symbol)
-            rec = context.get("recommendation", "HOLD")
-            vetoed = context.get("vetoed", False)
-            executioner_decision = f"{rec} (vetoed)" if vetoed else rec
-            if context.get("position_size_pct") is not None:
-                executioner_decision += f" — position size: {context['position_size_pct']:.1f}%"
+            context = await asyncio.wait_for(loop.run_in_executor(ex, _run_v2), timeout=90.0)
+            rec = context.get("executioner_decision") or context.get("recommendation", "HOLD")
             return AnalysisResponse(
                 symbol=symbol,
                 consensus_view=context.get("consensus_view", "N/A"),
                 confidence_score=context.get("confidence_score", 0.0),
-                executioner_decision=executioner_decision,
+                executioner_decision=rec,
                 full_report=context.get("reports", {}),
             )
+        except asyncio.TimeoutError:
+            print(f"[V2 TIMEOUT] {symbol} — falling back to smart_analyze")
         except Exception as real_err:
             print(f"[V2 FAILED] {real_err}, falling back to smart_analyze...")
-            try:
-                from core.smart_analyze import analyze
-                result = analyze(symbol)
-                if "error" in result:
-                    return get_demo_response(symbol)
-                return AnalysisResponse(**result)
-            except Exception as sa_err:
-                print(f"[SMART FAILED] {sa_err}, using demo data.")
+
+        try:
+            result = await asyncio.wait_for(loop.run_in_executor(ex, _run_smart), timeout=45.0)
+            if "error" in result:
                 return get_demo_response(symbol)
-    except Exception as e:
-        traceback.print_exc()
-        raise HTTPException(status_code=500, detail=str(e))
+            return AnalysisResponse(**result)
+        except Exception as sa_err:
+            print(f"[SMART FAILED] {sa_err}, using demo data.")
+            return get_demo_response(symbol)
 
 
 @app.post("/api/scan")
@@ -869,6 +875,23 @@ async def test_telegram_alert():
 # ── Chart Data ──────────────────────────────────────────────
 @app.get("/api/chart/{symbol}")
 async def get_chart_data(symbol: str, interval: str = "1d", period: str = "6M"):
+    import asyncio
+    import concurrent.futures
+
+    def _build():
+        return _build_chart_payload(symbol, interval, period)
+
+    loop = asyncio.get_event_loop()
+    with concurrent.futures.ThreadPoolExecutor(max_workers=1) as ex:
+        try:
+            return await asyncio.wait_for(loop.run_in_executor(ex, _build), timeout=60.0)
+        except asyncio.TimeoutError:
+            raise HTTPException(status_code=504, detail="Chart data timed out")
+        except Exception as e:
+            raise HTTPException(status_code=500, detail=str(e))
+
+
+def _build_chart_payload(symbol: str, interval: str, period: str):
     try:
         import yfinance as yf
         import numpy as np
@@ -935,9 +958,9 @@ async def get_chart_data(symbol: str, interval: str = "1d", period: str = "6M"):
                "tf_1d":mtf_trend("1d","3mo"),"tf_1w":mtf_trend("1wk","1y")}
         return {"symbol":symbol.upper(),"interval":interval,"period":period,
                 "candles":candles,"sr_levels":filtered_sr[:10],"channel":channel,"signals":signals,"mtf":mtf}
-    except HTTPException: raise
-    except Exception as e:
-        traceback.print_exc(); raise HTTPException(status_code=500, detail=str(e))
+    except Exception:
+        traceback.print_exc()
+        raise
 
 
 # ── Universe endpoint ────────────────────────────────────────

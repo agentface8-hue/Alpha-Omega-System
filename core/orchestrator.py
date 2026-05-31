@@ -1,4 +1,5 @@
 from typing import Dict, Any, List, Optional
+from concurrent.futures import ThreadPoolExecutor, TimeoutError as FutTimeout
 from agents.historian import HistorianAgent
 from agents.newsroom import NewsroomAgent
 from agents.macro_strategist import MacroStrategistAgent
@@ -8,7 +9,7 @@ from agents.regime_detector import RegimeDetectorAgent
 from agents.bear_case_advocate import BearCaseAdvocateAgent
 from agents.risk_officer import RiskOfficerAgent
 from agents.portfolio_architect import PortfolioArchitectAgent
-from agents.base_agent import AgentVote, SignalDirection
+from agents.base_agent import AgentVote, SignalDirection, AgentClass
 from core.decision_matrix import DecisionMatrix, build_default_scenarios
 from core.decision_ledger import record_decision
 from langchain_core.messages import HumanMessage, SystemMessage
@@ -35,9 +36,53 @@ class Orchestrator:
 
         # Coordinator LLM for synthesis
         self.coordinator_llm = ChatGoogleGenerativeAI(
-            model=settings.DEFAULT_LLM_MODEL, 
+            model=settings.FAST_LLM_MODEL,
             temperature=0.3,
             google_api_key=settings.GOOGLE_API_KEY
+        )
+
+    def _run_timed(self, fn, timeout: float = 40.0, fallback: str = "Unavailable"):
+        with ThreadPoolExecutor(max_workers=1) as ex:
+            fut = ex.submit(fn)
+            try:
+                return fut.result(timeout=timeout)
+            except FutTimeout:
+                return f"{fallback} (timed out)"
+            except Exception as e:
+                return f"{fallback}: {str(e)[:120]}"
+
+    def _build_executioner_decision(
+        self,
+        symbol: str,
+        recommendation: str,
+        position_size_pct: float,
+        vetoed: bool,
+        veto_reason: str,
+        consensus_view: str,
+        confidence_score: float,
+        agent_votes: Dict[str, AgentVote],
+    ) -> str:
+        """Deterministic Executioner verdict from council output — always instant."""
+        conf_pct = round(confidence_score * 100)
+        rd = agent_votes.get("Regime Detector")
+        regime = (rd.metadata.get("detected_regime") if rd and rd.metadata else "Unknown")
+        thesis = (consensus_view or "No consensus")[:220]
+        if vetoed:
+            return (
+                f"HALT — Council VETO on {symbol}. "
+                f"{veto_reason or 'Risk limits breached.'} Do not enter."
+            )
+        if recommendation == "BUY":
+            return (
+                f"BUY {symbol} — Council approved ({conf_pct}% confidence, {regime}). "
+                f"Allocate up to {position_size_pct:.1f}% of portfolio. "
+                f"Set stop per Risk Officer tiers. Thesis: {thesis}"
+            )
+        if recommendation == "SELL":
+            return f"SELL / REDUCE {symbol} — Council bearish ({conf_pct}% confidence, {regime})."
+        return (
+            f"HOLD {symbol} — Confidence {conf_pct}% or mixed council signals. "
+            f"Monitor for decisive breakout. {thesis}"
         )
 
     def synthesize_reports(self, reports: Dict[str, str], symbol: str) -> Dict[str, Any]:
@@ -174,15 +219,36 @@ class Orchestrator:
         portfolio = portfolio or {}
         print(f"--- Starting Alpha-Omega Cycle V2 for {symbol} ---")
 
-        # Phase A — Ingestion (unchanged)
+        # Phase A — Ingestion (parallel for speed)
         print("1. Gathering Intelligence from Agents...")
         reports: Dict[str, str] = {}
-        reports["historian"] = self.historian.execute("Analyze price action.", {"symbol": symbol})
-        reports["newsroom"] = self.newsroom.execute("Analyze sentiment.", {"symbol": symbol})
-        reports["macro"] = self.macro.execute("Analyze macro regime impact.", {"symbol": symbol})
+        ctx_base = {"symbol": symbol}
+
+        def _hist():
+            return self.historian.execute("Analyze price action.", ctx_base)
+        def _news():
+            return self.newsroom.execute("Analyze sentiment.", ctx_base)
+        def _macro():
+            return self.macro.execute("Analyze macro regime impact.", ctx_base)
+
+        with ThreadPoolExecutor(max_workers=3) as pool:
+            f_h = pool.submit(_hist)
+            f_n = pool.submit(_news)
+            f_m = pool.submit(_macro)
+            for key, fut in [("historian", f_h), ("newsroom", f_n), ("macro", f_m)]:
+                try:
+                    reports[key] = fut.result(timeout=45)
+                except Exception as e:
+                    reports[key] = f"{key} unavailable: {str(e)[:120]}"
 
         print("2. Synthesizing Preliminary Consensus...")
-        synthesis = self.synthesize_reports(reports, symbol)
+        synthesis = self._run_timed(
+            lambda: self.synthesize_reports(reports, symbol),
+            35,
+            {"consensus_view": "Synthesis unavailable.", "confidence_score": 0.5, "full_synthesis": ""},
+        )
+        if isinstance(synthesis, str):
+            synthesis = {"consensus_view": synthesis, "confidence_score": 0.5, "full_synthesis": synthesis}
         consensus_view = synthesis["consensus_view"]
         confidence_score = synthesis["confidence_score"]
 
@@ -194,11 +260,29 @@ class Orchestrator:
         task = "Evaluate this trade proposal."
         agent_votes: Dict[str, AgentVote] = {}
 
-        ctx_rd = {"symbol": symbol, "macro_data": macro_data, "reports": reports}
-        agent_votes["Regime Detector"] = self.regime_detector.vote(task, ctx_rd)
+        def _fallback_vote(name: str, note: str) -> AgentVote:
+            return AgentVote(
+                agent_name=name,
+                agent_class=AgentClass.ANALYSIS.value,
+                signal=SignalDirection.NEUTRAL.value,
+                confidence=0.5,
+                rationale=note,
+            )
 
+        ctx_rd = {"symbol": symbol, "macro_data": macro_data, "reports": reports}
         ctx_bca = {"symbol": symbol, "consensus_view": consensus_view, "reports": reports}
-        agent_votes["Bear Case Advocate"] = self.bear_case_advocate.vote(task, ctx_bca)
+
+        with ThreadPoolExecutor(max_workers=2) as pool:
+            f_rd = pool.submit(self.regime_detector.vote, task, ctx_rd)
+            f_bca = pool.submit(self.bear_case_advocate.vote, task, ctx_bca)
+            try:
+                agent_votes["Regime Detector"] = f_rd.result(timeout=35)
+            except Exception as e:
+                agent_votes["Regime Detector"] = _fallback_vote("Regime Detector", str(e)[:120])
+            try:
+                agent_votes["Bear Case Advocate"] = f_bca.result(timeout=35)
+            except Exception as e:
+                agent_votes["Bear Case Advocate"] = _fallback_vote("Bear Case Advocate", str(e)[:120])
 
         ctx_ro = {
             "symbol": symbol,
@@ -206,15 +290,23 @@ class Orchestrator:
             "confidence_score": confidence_score,
             "agent_votes": agent_votes,
         }
-        agent_votes["The Risk Officer"] = self.risk_officer.vote(task, ctx_ro)
-
         ctx_pa = {
             "symbol": symbol,
             "consensus_view": consensus_view,
             "confidence_score": confidence_score,
             "portfolio": portfolio,
         }
-        agent_votes["Portfolio Architect"] = self.portfolio_architect.vote(task, ctx_pa)
+        with ThreadPoolExecutor(max_workers=2) as pool:
+            f_ro = pool.submit(self.risk_officer.vote, task, ctx_ro)
+            f_pa = pool.submit(self.portfolio_architect.vote, task, ctx_pa)
+            try:
+                agent_votes["The Risk Officer"] = f_ro.result(timeout=35)
+            except Exception as e:
+                agent_votes["The Risk Officer"] = _fallback_vote("The Risk Officer", str(e)[:120])
+            try:
+                agent_votes["Portfolio Architect"] = f_pa.result(timeout=35)
+            except Exception as e:
+                agent_votes["Portfolio Architect"] = _fallback_vote("Portfolio Architect", str(e)[:120])
 
         # Phase C — Veto and recommendation
         vetoed = any(v.veto for v in agent_votes.values())
@@ -282,7 +374,12 @@ class Orchestrator:
             "regime": regime,
         }
         decision_id = record_decision(decision_data)
-        print(f"4. Decision recorded (id={decision_id}). Recommendation: {recommendation}.")
+        executioner_decision = self._build_executioner_decision(
+            symbol, recommendation, position_size_pct, vetoed, veto_reason,
+            consensus_view, confidence_score, agent_votes,
+        )
+        print(f"4. Executioner: {executioner_decision[:80]}...")
+        print(f"5. Decision recorded (id={decision_id}). Recommendation: {recommendation}.")
         print("--- Cycle V2 Complete ---\n")
 
         return {
@@ -296,6 +393,7 @@ class Orchestrator:
             "veto_reason": veto_reason,
             "recommendation": recommendation,
             "position_size_pct": position_size_pct,
+            "executioner_decision": executioner_decision,
             "decision_matrix": decision_matrix,
             "decision_id": decision_id,
             "decision_data": decision_data,

@@ -197,8 +197,16 @@ class BaseAgent(ABC):
         Provide well-reasoned, data-backed analysis.
         """
 
-    def query_llm(self, prompt: str, system_prompt: Optional[str] = None) -> str:
+    def query_llm(self, prompt: str, system_prompt: Optional[str] = None, timeout: float = 35.0) -> str:
         sys_prompt = system_prompt or self._build_system_prompt()
         messages = [SystemMessage(content=sys_prompt)] + self.memory + [HumanMessage(content=prompt)]
-        response = self.llm.invoke(messages)
+        from concurrent.futures import ThreadPoolExecutor, TimeoutError as FutTimeout
+        with ThreadPoolExecutor(max_workers=1) as ex:
+            fut = ex.submit(self.llm.invoke, messages)
+            try:
+                response = fut.result(timeout=timeout)
+            except FutTimeout:
+                return f"{self.name}: analysis timed out — using council consensus."
+            except Exception as e:
+                return f"{self.name}: unavailable ({str(e)[:100]})."
         return response.content

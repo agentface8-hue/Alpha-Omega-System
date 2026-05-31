@@ -19,7 +19,7 @@ import LoginScreen        from './components/LoginScreen';
 import AmaStatus          from './components/AmaStatus';
 import PipelineBar        from './components/PipelineBar';
 import { playThinkingSound, playSuccessSound, playErrorSound } from './utils/sounds';
-import { warmupBackend } from './utils/api';
+import { warmupBackend, fetchJson } from './utils/api';
 
 // ── Mobile detection ──────────────────────────────────────────────────────────
 const useMobile = () => {
@@ -137,12 +137,12 @@ const App = () => {
     if (!symbol || isLoading) return;
     setIsLoading(true); setLogs([]); setResult(null); setError(null);
     const steps = [
-      { agent:'The Historian',      action:'is analyzing...' },
-      { agent:'The Newsroom',       action:'is analyzing...' },
+      { agent:'The Historian',       action:'is analyzing...' },
+      { agent:'The Newsroom',        action:'is analyzing...' },
       { agent:'The Macro-Strategist',action:'is analyzing...' },
-      { agent:'Synthesis Engine',   action:'is analyzing...' },
-      { agent:'The Contrarian',     action:'is analyzing...' },
-      { agent:'The Executioner',    action:'is analyzing...' },
+      { agent:'Synthesis Engine',    action:'is analyzing...' },
+      { agent:'The Contrarian',      action:'is analyzing...' },
+      { agent:'The Executioner',     action:'is analyzing...' },
     ];
     let stepIndex = 0;
     const interval = setInterval(() => {
@@ -152,30 +152,34 @@ const App = () => {
         setLogs(prev => [...prev, { timestamp:getTimestamp(),
           message:`>> ${step.agent} ${step.action}`, type:'info' }]);
         stepIndex++;
-      } else { clearInterval(interval); }
+      }
     }, 800);
     try {
-      const apiUrl = import.meta.env.VITE_API_URL || 'http://127.0.0.1:8000';
-      const response = await fetch(`${apiUrl}/api/analyze`, {
-        method:'POST', headers:{'Content-Type':'application/json'},
+      const data = await fetchJson('/api/analyze', {
+        method:'POST',
+        headers:{'Content-Type':'application/json'},
         body: JSON.stringify({ symbol }),
-      });
-      if (!response.ok) throw new Error(`Analysis failed (${response.status})`);
-      const data = await response.json();
-      setTimeout(() => {
-        playSuccessSound(); setResult(data);
-        setLogs(prev => [...prev, { timestamp:getTimestamp(),
-          message:`✓ Analysis complete. Confidence: ${(data.confidence_score*100).toFixed(0)}%`,
-          type:'success' }]);
-        setIsLoading(false);
-      }, steps.length * 800 + 500);
+      }, { timeoutMs: 120000, retries: 1 });
+      clearInterval(interval);
+      playSuccessSound();
+      setResult(data);
+      setLogs(prev => [
+        ...prev,
+        { timestamp:getTimestamp(),
+          message:`>> The Executioner verdict: ${data.executioner_decision}`,
+          type:'success' },
+        { timestamp:getTimestamp(),
+          message:`✓ Analysis complete. Confidence: ${(data.confidence_score * 100).toFixed(0)}%`,
+          type:'success' },
+      ]);
     } catch (err) {
-      setTimeout(() => {
-        playErrorSound(); setError(err.message);
-        setLogs(prev => [...prev, { timestamp:getTimestamp(),
-          message:`ERROR: ${err.message}`, type:'error' }]);
-        setIsLoading(false);
-      }, steps.length * 800 + 500);
+      clearInterval(interval);
+      playErrorSound();
+      setError(err.message);
+      setLogs(prev => [...prev, { timestamp:getTimestamp(),
+        message:`ERROR: ${err.message}`, type:'error' }]);
+    } finally {
+      setIsLoading(false);
     }
   };
 

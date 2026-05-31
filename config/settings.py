@@ -48,8 +48,8 @@ class Settings(BaseSettings):
     OLLAMA_MODEL: str = Field(default="llama3.2", description="Ollama model name (local dev only)")
 
     # Model Configuration
-    DEFAULT_LLM_MODEL: str = "gemini-pro"
-    FAST_LLM_MODEL: str = "gemini-pro"
+    DEFAULT_LLM_MODEL: str = "gemini-2.0-flash"
+    FAST_LLM_MODEL: str = "gemini-2.0-flash"
     REASONING_LLM_MODEL: str = "claude-opus-4-6"
 
     # Risk Management

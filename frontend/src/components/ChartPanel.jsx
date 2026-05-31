@@ -1,5 +1,6 @@
 import React, { useState, useEffect, useRef } from 'react';
 import { RefreshCw, TrendingUp, TrendingDown, Minus } from 'lucide-react';
+import { fetchJson } from '../utils/api';
 
 const PAD = { l:66, r:72, t:22, b:36 };
 
@@ -132,10 +133,12 @@ const ChartPanel = ({ symbol, tradeParams }) => {
   const fetchChart = async () => {
     setLoading(true); setError(null); setData(null);
     try {
-      const base = import.meta.env.VITE_API_URL || 'http://127.0.0.1:8000';
-      const res  = await fetch(`${base}/api/chart/${symbol}?interval=${interval}&period=${period}`);
-      if (!res.ok) throw new Error(`HTTP ${res.status}`);
-      setData(await res.json());
+      const data = await fetchJson(
+        `/api/chart/${symbol}?interval=${interval}&period=${period}`,
+        {},
+        { timeoutMs: 60000, retries: 2 },
+      );
+      setData(data);
     } catch (e) { setError(e.message); }
     setLoading(false);
   };
