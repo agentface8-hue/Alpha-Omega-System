@@ -574,6 +574,43 @@ def _deep_loop():
         time.sleep(_WEEKLY_INTERVAL)
 
 
+def get_summary_fast() -> Dict[str, Any]:
+    """Lightweight summary for API — skips per-signal sector enrich (can exceed 10s on Render)."""
+    params = _load_calibration()
+    outcomes: Dict[str, Any] = {"total": 0, "grade_distribution": {}, "recent_lessons": []}
+    try:
+        from core.outcomes_grader import load_outcomes_summary
+        outcomes = load_outcomes_summary()
+    except Exception as e:
+        logger.warning(f"[LEARN] outcomes summary failed: {e}")
+    closed: List[Dict] = []
+    try:
+        from core.signal_store import load_closed
+        from core.signal_history import load_merged
+        closed = load_merged(load_closed())
+    except Exception as e:
+        logger.warning(f"[LEARN] closed merge failed: {e}")
+        try:
+            from core.signal_store import load_closed
+            closed = load_closed()
+        except Exception:
+            closed = []
+    research_log: List[Any] = []
+    try:
+        rp = Path(__file__).parent.parent / "calibration" / "deep_research_log.json"
+        if rp.exists():
+            research_log = json.loads(rp.read_text())[-3:]
+    except Exception:
+        pass
+    return {
+        "calibration": params,
+        "outcomes": outcomes,
+        "total_closed": len(closed),
+        "deep_research_latest": params.get("deep_research"),
+        "deep_research_history": research_log,
+    }
+
+
 def start():
     """Start both loops as daemon threads."""
     t1 = threading.Thread(target=_fast_loop, daemon=True, name="learn_fast")

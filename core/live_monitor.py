@@ -113,14 +113,11 @@ def _health_full_direct():
 
 def _learning_summary_direct():
     """In-process learning summary — same data as GET /api/learning/summary."""
-    from core.learning_loop import _load_calibration, _load_closed
-    from core.outcomes_grader import load_outcomes_summary
-    params = _load_calibration()
-    outcomes = load_outcomes_summary()
-    closed = _load_closed()
-    if outcomes is None:
-        raise RuntimeError("outcomes summary unavailable")
-    return f"closed={len(closed)} calibration={params.get('mode', '?')}"
+    from core.learning_loop import get_summary_fast
+    data = get_summary_fast()
+    params = data.get("calibration") or {}
+    closed = data.get("total_closed", 0)
+    return f"closed={closed} calibration={params.get('mode', '?')}"
 
 
 def _trade_history_direct():

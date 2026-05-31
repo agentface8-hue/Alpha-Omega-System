@@ -948,6 +948,8 @@ export default function PortfolioTab({ compact = false, isOwner = false, backend
   const maxPositions    = data?.state?.max_positions ?? MAX_SLOTS_FALLBACK;
   const slots           = Math.max(0, maxPositions - openPositions.length);
   const totalPnl = s.total_pnl || 0;
+  const startingCapital = data?.state?.starting_capital || 25000;
+  const equity = s.equity ?? s.total_value ?? (startingCapital + totalPnl);
 
   return (
     <div style={{ padding: compact ? '10px 12px' : '28px 24px', fontFamily:"'Inter',sans-serif", color:'#e0e0e0', maxWidth:1200, margin:'0 auto' }}>
@@ -997,7 +999,7 @@ export default function PortfolioTab({ compact = false, isOwner = false, backend
 
       {/* ── Stats row ── */}
       <div style={{ display:'flex', gap: compact ? 6 : 10, marginBottom: compact ? 10 : 24, flexWrap:'wrap' }}>
-        <KStatCard label='TOTAL VALUE'   value={usd(s.total_value)}  color='#00d4ff' accent='#00d4ff' compact={compact} />
+        <KStatCard label='TOTAL VALUE'   value={usd(equity)}  color='#00d4ff' accent='#00d4ff' compact={compact} />
         <KStatCard label='CASH'          value={usd(s.cash)}          color='#7ee8ff' sub={`${slots} slot${slots!==1?'s':''} open`} compact={compact} />
         <KStatCard label='TOTAL P&L'     value={`${totalPnl>=0?'+':''}${fmt(totalPnl,0)}`} color={clr(totalPnl)} sub={pct(s.total_pnl_pct||0)} accent={clr(totalPnl)} compact={compact} />
         <KStatCard label='UNREALIZED'    value={`${(s.total_unrealized_pnl||0)>=0?'+':''}${fmt(s.total_unrealized_pnl||0,0)}`} color={clr(s.total_unrealized_pnl||0)} compact={compact} />

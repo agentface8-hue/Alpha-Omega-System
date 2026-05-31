@@ -121,18 +121,27 @@ def check_telegram() -> Dict:
 def check_portfolio_state() -> Dict:
     try:
         from core import portfolio_store as store
+        from core.portfolio_manager import reconcile_portfolio_state
         state     = store.load_state()
         positions = store.load_positions("open")
+        closed    = store.load_positions("closed")
         cash  = float(state.get("cash", 0))
         total = float(state.get("total_value", 0))
         if cash < 0:
             return _fail("Portfolio State", f"Negative cash: ${cash:.2f}")
         if total < 0:
             return _fail("Portfolio State", f"Negative total: ${total:.2f}")
+        recon = reconcile_portfolio_state(state, positions, closed, save=False)
+        drift = abs(recon.get("cash_drift", 0))
+        if drift > 1.0:
+            return _warn(
+                "Portfolio State",
+                f"Cash drift ${drift:.0f} — will auto-fix on next portfolio load",
+            )
         corrupted = [p["ticker"] for p in positions if not p.get("entry_price") or p.get("entry_price", 0) <= 0]
         if corrupted:
             return _warn("Portfolio State", f"Missing entry price: {corrupted}")
-        return _ok("Portfolio State", f"{len(positions)} open | Cash: ${cash:.0f} | Total: ${total:.0f}")
+        return _ok("Portfolio State", f"{len(positions)} open | Cash: ${cash:.0f} | Equity: ${recon.get('equity', total):.0f}")
     except Exception as e:
         return _fail("Portfolio State", f"{type(e).__name__}: {str(e)[:80]}")
 

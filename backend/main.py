@@ -1553,6 +1553,15 @@ async def reset_portfolio_endpoint():
     clear_all_positions()
     return {"reset":True,"message":"Portfolio reset to $25,000"}
 
+@app.post("/api/portfolio/reconcile")
+async def reconcile_portfolio_endpoint():
+    """Fix cash/total_value drift against P&L invariant."""
+    import asyncio, concurrent.futures
+    loop = asyncio.get_event_loop()
+    with concurrent.futures.ThreadPoolExecutor(max_workers=1) as ex:
+        from core.portfolio_manager import get_portfolio
+        return await asyncio.wait_for(loop.run_in_executor(ex, get_portfolio), timeout=30.0)
+
 @app.get("/api/portfolio/status")
 async def portfolio_storage_status_endpoint():
     from core.portfolio_store import supabase_ready
@@ -1968,36 +1977,24 @@ async def executor_test(request: Request):
 
 @app.get("/api/learning/summary")
 async def learning_summary():
-    """Current calibration params + outcomes summary. Hard cap: 10s."""
+    """Current calibration params + outcomes summary. Hard cap: 25s."""
     import asyncio, concurrent.futures
     def _get_summary():
-        import json as _json
-        from core.learning_loop import _load_calibration, _load_closed
-        from core.outcomes_grader import load_outcomes_summary
-        params   = _load_calibration()
-        outcomes = load_outcomes_summary()
-        closed   = _load_closed()
-        research_log = []
-        try:
-            from pathlib import Path
-            rp = Path(__file__).parent.parent / "calibration" / "deep_research_log.json"
-            if rp.exists():
-                research_log = _json.loads(rp.read_text())[-3:]
-        except Exception:
-            pass
-        return {
-            "calibration": params,
-            "outcomes": outcomes,
-            "total_closed": len(closed),
-            "deep_research_latest": params.get("deep_research"),
-            "deep_research_history": research_log,
-        }
+        from core.learning_loop import get_summary_fast
+        return get_summary_fast()
     loop = asyncio.get_event_loop()
     with concurrent.futures.ThreadPoolExecutor() as ex:
         try:
-            return await asyncio.wait_for(loop.run_in_executor(ex, _get_summary), timeout=10.0)
+            return await asyncio.wait_for(loop.run_in_executor(ex, _get_summary), timeout=25.0)
         except asyncio.TimeoutError:
-            return {"error": "Summary timed out", "calibration": {}, "outcomes": {}, "total_closed": 0}
+            from core.learning_loop import _load_calibration
+            params = _load_calibration()
+            return {
+                "error": "Summary timed out",
+                "calibration": params,
+                "outcomes": {"total": 0},
+                "total_closed": 0,
+            }
 
 @app.post("/api/learning/run-fast")
 async def run_fast_learning():

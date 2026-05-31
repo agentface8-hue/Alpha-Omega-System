@@ -362,7 +362,11 @@ def _check_portfolio_inner() -> Dict:
             pos["realized_pnl"] = round(pos.get("realized_pnl",0)+pnl, 2)
             state["cash"]       = round(state["cash"]+shares*sl, 2)
             pos["shares_remaining"] = 0; pos["status"] = "closed"; pos["closed_at"] = now
-            pos["close_reason"] = f"Stop-loss hit @ ${sl:.2f} (entry ${entry:.2f}, loss ${abs(pnl):.0f})"
+            _pnl_lbl = "profit" if pnl >= 0 else "loss"
+            pos["close_reason"] = (
+                f"Stop-loss hit @ ${sl:.2f} (entry ${entry:.2f}, {_pnl_lbl} "
+                f"{'+' if pnl >= 0 else ''}{pnl:.0f})"
+            )
             pos["unrealized_pnl"] = 0; action = f"SL hit @ ${sl}"; closed_count += 1
 
         # -- Momentum fade AUTO-CLOSE -----------------------------------------
@@ -443,8 +447,8 @@ def _check_portfolio_inner() -> Dict:
             except Exception as e: print(f"  [TradeLog] warning: {e}")
 
     open_after = store.load_positions("open")
-    positions_value = sum(p["shares_remaining"]*p.get("current_price",p["entry_price"]) for p in open_after)
-    state["total_value"] = round(state["cash"]+positions_value, 2)
+    closed_all = store.load_positions("closed")
+    reconcile_portfolio_state(state, open_after, closed_all, save=True)
     store.save_state(state)
     return {"updates":updates,"closed_this_check":closed_count,"portfolio":get_portfolio()}
 
@@ -469,8 +473,8 @@ def close_position(position_id: str, reason: str = "MANUAL") -> Dict:
         alert_signal_closed(pos, reason, price)
     except Exception: pass
     open_after = [p for p in open_pos if p["id"]!=position_id]
-    positions_value = sum(p["shares_remaining"]*p.get("current_price",p["entry_price"]) for p in open_after)
-    state["total_value"] = round(state["cash"]+positions_value, 2)
+    closed_all = store.load_positions("closed")
+    reconcile_portfolio_state(state, open_after, closed_all, save=True)
     store.save_state(state)
     try:
         from core.trade_log import log_closed_position; log_closed_position(pos)
@@ -478,18 +482,71 @@ def close_position(position_id: str, reason: str = "MANUAL") -> Dict:
     return {"closed":True,"ticker":pos["ticker"],"pnl":pos["realized_pnl"]}
 
 
+def reconcile_portfolio_state(
+    state: Dict,
+    open_pos: List[Dict],
+    closed_pos: List[Dict],
+    *,
+    save: bool = False,
+    tolerance: float = 0.02,
+) -> Dict:
+    """
+    Fix cash/total_value drift. Invariant:
+      equity = starting_capital + sum(realized) + sum(unrealized)
+      cash   = equity - open_positions_market_value
+    """
+    starting = float(state.get("starting_capital") or STARTING_CASH)
+    total_realized = round(sum(float(p.get("realized_pnl") or 0) for p in closed_pos), 2)
+    total_unrealized = round(sum(float(p.get("unrealized_pnl") or 0) for p in open_pos), 2)
+    equity = round(starting + total_realized + total_unrealized, 2)
+    pos_value = round(sum(
+        float(p.get("shares_remaining") or 0)
+        * float(p.get("current_price") or p.get("entry_price") or 0)
+        for p in open_pos
+    ), 2)
+    cash_correct = round(equity - pos_value, 2)
+
+    old_cash = float(state.get("cash") or 0)
+    old_total = float(state.get("total_value") or 0)
+    cash_drift = round(old_cash - cash_correct, 2)
+    total_drift = round(old_total - equity, 2)
+    needs_fix = abs(cash_drift) > tolerance or abs(total_drift) > tolerance
+
+    if needs_fix:
+        state["cash"] = cash_correct
+        state["total_value"] = equity
+        if save:
+            store.save_state(state)
+            if abs(cash_drift) > 1:
+                print(f"  [RECONCILE] cash ${old_cash:.2f} -> ${cash_correct:.2f} (drift ${cash_drift:.2f})")
+
+    return {
+        "corrected": needs_fix,
+        "equity": equity,
+        "cash": cash_correct,
+        "positions_value": pos_value,
+        "cash_drift": cash_drift,
+        "total_drift": total_drift,
+        "total_realized_pnl": total_realized,
+        "total_unrealized_pnl": total_unrealized,
+    }
+
+
 def get_portfolio() -> Dict:
     state      = store.load_state() or {}
     open_pos   = store.load_positions("open")
     closed_pos = store.load_positions("closed")
+    recon      = reconcile_portfolio_state(state, open_pos, closed_pos, save=True)
     winning    = [p for p in closed_pos if p.get("realized_pnl", 0) > 0]
-    total_realized   = round(sum(p.get("realized_pnl", 0) for p in closed_pos), 2)
-    total_unrealized = round(sum(p.get("unrealized_pnl", 0) for p in open_pos), 2)
+    total_realized   = recon["total_realized_pnl"]
+    total_unrealized = recon["total_unrealized_pnl"]
     total_pnl = round(total_realized + total_unrealized, 2)
     win_rate  = round(len(winning) / len(closed_pos) * 100, 1) if closed_pos else 0
     starting_capital = state.get("starting_capital") or 25000.0
+    equity = recon["equity"]
     return {
         "state": state, "open_positions": open_pos, "closed_positions": closed_pos[-20:],
+        "reconcile": recon,
         "stats": {
             "open_count":          len(open_pos),
             "slots_available":     MAX_POSITIONS - len(open_pos),
@@ -499,8 +556,11 @@ def get_portfolio() -> Dict:
             "total_unrealized_pnl": total_unrealized,
             "total_pnl":           total_pnl,
             "total_pnl_pct":       round(total_pnl / starting_capital * 100, 2),
-            "cash":                state.get("cash", 25000.0),
-            "total_value":         state.get("total_value", 25000.0),
+            "cash":                state.get("cash", recon["cash"]),
+            "total_value":         equity,
+            "equity":              equity,
+            "cash_reconciled":     recon["corrected"],
+            "cash_drift_fixed":    recon["cash_drift"] if recon["corrected"] else 0,
         }
     }
 

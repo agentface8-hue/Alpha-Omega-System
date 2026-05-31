@@ -625,8 +625,31 @@ def create_turbo_signal(symbol: str, asset_type: str = "stock", scan_data: Dict 
 # SIGNAL MONITORING
 # ══════════════════════════════════════════════════════════════
 
+STALE_ORPHAN_DAYS = 21
+
+
+def _close_stale_orphans(active: List[Dict]) -> List[Dict]:
+    """Auto-close long-idle signals that never hit TP1 (e.g. orphaned turbo launches)."""
+    closed_tickers = []
+    for s in list(active):
+        if s.get("tp1_hit") or s.get("tp2_hit"):
+            continue
+        try:
+            days = (datetime.datetime.utcnow() - datetime.datetime.fromisoformat(s["entry_time"])).days
+        except Exception:
+            days = 0
+        if days >= STALE_ORPHAN_DAYS:
+            close_signal(s["id"], "STALE_ORPHAN")
+            closed_tickers.append(s.get("ticker", "?"))
+    if closed_tickers:
+        print(f"  [STALE] Auto-closed orphan signals ({STALE_ORPHAN_DAYS}d+): {closed_tickers}")
+        return store.load_active()
+    return active
+
+
 def check_signals() -> Dict[str, Any]:
-    active=store.load_active(); closed=store.load_closed()
+    active = _close_stale_orphans(store.load_active())
+    closed = store.load_closed()
     if not active:
         return {"active":[],"closed":closed,"stats":_calc_stats(closed),
                 "market_status":_is_us_market_open()}
