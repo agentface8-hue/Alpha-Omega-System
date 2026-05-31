@@ -1,5 +1,5 @@
 from typing import Dict, Any, List, Optional
-from concurrent.futures import ThreadPoolExecutor, TimeoutError as FutTimeout
+from concurrent.futures import ThreadPoolExecutor
 from agents.historian import HistorianAgent
 from agents.newsroom import NewsroomAgent
 from agents.macro_strategist import MacroStrategistAgent
@@ -12,6 +12,7 @@ from agents.portfolio_architect import PortfolioArchitectAgent
 from agents.base_agent import AgentVote, SignalDirection, AgentClass
 from core.decision_matrix import DecisionMatrix, build_default_scenarios
 from core.decision_ledger import record_decision
+from core.timeout_utils import run_with_timeout
 from langchain_core.messages import HumanMessage, SystemMessage
 from langchain_google_genai import ChatGoogleGenerativeAI
 from config.settings import settings
@@ -42,14 +43,7 @@ class Orchestrator:
         )
 
     def _run_timed(self, fn, timeout: float = 40.0, fallback: str = "Unavailable"):
-        with ThreadPoolExecutor(max_workers=1) as ex:
-            fut = ex.submit(fn)
-            try:
-                return fut.result(timeout=timeout)
-            except FutTimeout:
-                return f"{fallback} (timed out)"
-            except Exception as e:
-                return f"{fallback}: {str(e)[:120]}"
+        return run_with_timeout(fn, timeout_s=timeout, fallback=fallback)
 
     def _build_executioner_decision(
         self,

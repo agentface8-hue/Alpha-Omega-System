@@ -54,6 +54,19 @@ def test_orchestrator_has_run_cycle_v2():
     assert callable(getattr(o, "run_cycle_v2"))
 
 
+def test_timeout_helper_returns_without_waiting_for_hung_worker():
+    """Timed fallback must return quickly even if the worker keeps sleeping."""
+    import time
+    from core.timeout_utils import run_with_timeout
+
+    started = time.time()
+    result = run_with_timeout(lambda: time.sleep(2) or "late", timeout_s=0.1, fallback="fallback")
+    elapsed = time.time() - started
+
+    assert result == "fallback"
+    assert elapsed < 0.8
+
+
 def test_decision_ledger_has_outcome_helpers():
     """Ledger has update_decision_outcomes and get_decisions_pending_outcomes for attribution job."""
     from core.decision_ledger import update_decision_outcomes, get_decisions_pending_outcomes
