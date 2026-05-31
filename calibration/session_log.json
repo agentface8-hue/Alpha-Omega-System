@@ -201,5 +201,19 @@
       "fix: resolve action-log noise, sector learning, grader, and regime gates",
       "auto: session memory 2026-05-28 19:00"
     ]
+  },
+  {
+    "ts": "2026-05-31T19:00:02.477110",
+    "commits": 8,
+    "messages": [
+      "fix: isolate analyze timeout from saturated executors",
+      "fix: prevent analyze timeout from blocking fallback",
+      "fix: Telegram getUpdates 409 \u00e2\u20ac\u201d poll lock, backoff, deploy guard",
+      "fix: council analyze returns Executioner verdict without hanging",
+      "fix: harden learning summary timeouts and stale signal cleanup",
+      "fix: reconcile portfolio cash drift, learning timeout, stale signals",
+      "auto: session memory 2026-05-30 19:00",
+      "fix: resolve action-log noise, sector learning, grader, and regime gates"
+    ]
   }
 ]

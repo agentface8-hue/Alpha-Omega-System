@@ -1,6 +1,6 @@
 # CLAUDE.md — Alpha-Omega System
 # ⚠️ READ THIS FIRST — BEFORE TOUCHING ANYTHING ⚠️
-# Last Updated: 2026-05-30
+# Last Updated: 2026-05-31
 
 > **System management:** Cursor AI only (ops/deploy/fixes). Claude: context and briefs only. Frozen stability stack: `CURSOR-AGENT-BRIEF.md` § DO NOT TOUCH.
 
@@ -387,7 +387,47 @@ This is the only way knowledge survives across sessions.
 | DTP guardrail fires | TP ordering inversion after scaling | Already handled in portfolio_manager.py |
 
 ## 16. RECENT SESSION CHANGES
-*Auto-updated: 2026-05-30 19:00 UTC*
+*Auto-updated: 2026-05-31 19:00 UTC*
+
+### `fb2b0ce` 2026-05-31 15:10 - fix: isolate analyze timeout from saturated executors
+- `backend/main.py`
+- `core/timeout_utils.py`
+- `tests/test_app_integration.py`
+
+### `73e264a` 2026-05-31 15:04 - fix: prevent analyze timeout from blocking fallback
+- `agents/base_agent.py`
+- `backend/main.py`
+- `core/orchestrator.py`
+- `core/timeout_utils.py`
+- `tests/test_app_integration.py`
+
+### `55bd5bd` 2026-05-31 15:00 - fix: Telegram getUpdates 409 â€” poll lock, backoff, deploy guard
+- `core/telegram_agent.py`
+
+### `46dc8a6` 2026-05-31 13:14 - fix: council analyze returns Executioner verdict without hanging
+- `agents/base_agent.py`
+- `backend/main.py`
+- `config/settings.py`
+- `core/orchestrator.py`
+- `frontend/src/App.jsx`
+
+### `b9655e7` 2026-05-31 12:04 - fix: harden learning summary timeouts and stale signal cleanup
+- `backend/main.py`
+- `core/learning_loop.py`
+- `core/signal_history.py`
+- `core/signal_tracker.py`
+
+### `cd7d18b` 2026-05-31 11:54 - fix: reconcile portfolio cash drift, learning timeout, stale signals
+- `backend/main.py`
+- `core/learning_loop.py`
+- `core/live_monitor.py`
+- `core/portfolio_manager.py`
+- `core/signal_tracker.py`
+
+### `19ecff1` 2026-05-30 22:00 - auto: session memory 2026-05-30 19:00
+- `CLAUDE.md`
+- `MASTER-KNOWLEDGE.md`
+- `calibration/session_log.json`
 
 ### `a67805a` 2026-05-30 12:38 - fix: resolve action-log noise, sector learning, grader, and regime gates
 - `core/calibrator.py`
@@ -395,10 +435,5 @@ This is the only way knowledge survives across sessions.
 - `core/learning_loop.py`
 - `core/outcomes_grader.py`
 - `core/portfolio_manager.py`
-
-### `2380531` 2026-05-28 22:00 - auto: session memory 2026-05-28 19:00
-- `CLAUDE.md`
-- `MASTER-KNOWLEDGE.md`
-- `calibration/session_log.json`
 
 
