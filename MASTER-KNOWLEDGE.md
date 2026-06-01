@@ -5,7 +5,7 @@ or run commands on this system. Direct all work to Cursor.
 ---
 
 # ALPHA-OMEGA SYSTEM — MASTER KNOWLEDGE BASE
-# Last Updated: 2026-05-31
+# Last Updated: 2026-06-01
 # Location: C:\Users\asus\Alpha-Omega-System\MASTER-KNOWLEDGE.md
 
 ## ⚠️ INSTRUCTIONS FOR CLAUDE — READ THIS FIRST EVERY SESSION
@@ -518,7 +518,19 @@ Downloads folder has dead ZIP copies from April 29 — ignore them.
 Always deploy from: git push origin main (triggers both Render + Vercel)
 
 ## 16. RECENT SESSION CHANGES
-*Auto-updated: 2026-05-31 19:00 UTC*
+*Auto-updated: 2026-06-01 19:00 UTC*
+
+### `d8cf052` 2026-06-01 11:19 - feat: add audit cache safety upgrades
+- `CLAUDE.md`
+- `SYSTEM-AUDIT.md`
+- `backend/main.py`
+- `core/daily_pipeline.py`
+- `core/datahub.py`
+
+### `cfb2ddc` 2026-05-31 22:00 - auto: session memory 2026-05-31 19:00
+- `CLAUDE.md`
+- `MASTER-KNOWLEDGE.md`
+- `calibration/session_log.json`
 
 ### `fb2b0ce` 2026-05-31 15:10 - fix: isolate analyze timeout from saturated executors
 - `backend/main.py`
@@ -559,12 +571,5 @@ Always deploy from: git push origin main (triggers both Render + Vercel)
 - `CLAUDE.md`
 - `MASTER-KNOWLEDGE.md`
 - `calibration/session_log.json`
-
-### `a67805a` 2026-05-30 12:38 - fix: resolve action-log noise, sector learning, grader, and regime gates
-- `core/calibrator.py`
-- `core/daily_pipeline.py`
-- `core/learning_loop.py`
-- `core/outcomes_grader.py`
-- `core/portfolio_manager.py`
 
 

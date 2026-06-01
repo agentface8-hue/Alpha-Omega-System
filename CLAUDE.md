@@ -1,6 +1,6 @@
 # CLAUDE.md — Alpha-Omega System
 # ⚠️ READ THIS FIRST — BEFORE TOUCHING ANYTHING ⚠️
-# Last Updated: 2026-05-31
+# Last Updated: 2026-06-01
 
 > **System management:** Cursor AI only (ops/deploy/fixes). Claude: context and briefs only. Frozen stability stack: `CURSOR-AGENT-BRIEF.md` § DO NOT TOUCH.
 
@@ -408,20 +408,19 @@ This is the only way knowledge survives across sessions.
 | DTP guardrail fires | TP ordering inversion after scaling | Already handled in portfolio_manager.py |
 
 ## 16. RECENT SESSION CHANGES
-*Auto-updated: 2026-06-01 07:50 UTC*
+*Auto-updated: 2026-06-01 19:00 UTC*
 
-### pending 2026-06-01 - add Fincept-inspired audit, DataHub-lite, and safety gates
-- `core/decision_audit.py`
-- `core/datahub.py`
-- `core/trading_safety.py`
+### `d8cf052` 2026-06-01 11:19 - feat: add audit cache safety upgrades
+- `CLAUDE.md`
+- `SYSTEM-AUDIT.md`
 - `backend/main.py`
-- `core/orchestrator.py`
-- `core/portfolio_manager.py`
-- `core/signal_tracker.py`
 - `core/daily_pipeline.py`
-- `core/order_executor.py`
-- `frontend/src/components/AuditTrail.jsx`
-- `frontend/src/components/SafetyControls.jsx`
+- `core/datahub.py`
+
+### `cfb2ddc` 2026-05-31 22:00 - auto: session memory 2026-05-31 19:00
+- `CLAUDE.md`
+- `MASTER-KNOWLEDGE.md`
+- `calibration/session_log.json`
 
 ### `fb2b0ce` 2026-05-31 15:10 - fix: isolate analyze timeout from saturated executors
 - `backend/main.py`
@@ -462,12 +461,5 @@ This is the only way knowledge survives across sessions.
 - `CLAUDE.md`
 - `MASTER-KNOWLEDGE.md`
 - `calibration/session_log.json`
-
-### `a67805a` 2026-05-30 12:38 - fix: resolve action-log noise, sector learning, grader, and regime gates
-- `core/calibrator.py`
-- `core/daily_pipeline.py`
-- `core/learning_loop.py`
-- `core/outcomes_grader.py`
-- `core/portfolio_manager.py`
 
 

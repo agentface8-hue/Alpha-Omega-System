@@ -215,5 +215,20 @@
       "auto: session memory 2026-05-30 19:00",
       "fix: resolve action-log noise, sector learning, grader, and regime gates"
     ]
+  },
+  {
+    "ts": "2026-06-01T19:00:02.459994",
+    "commits": 9,
+    "messages": [
+      "feat: add audit cache safety upgrades",
+      "auto: session memory 2026-05-31 19:00",
+      "fix: isolate analyze timeout from saturated executors",
+      "fix: prevent analyze timeout from blocking fallback",
+      "fix: Telegram getUpdates 409 \u00e2\u20ac\u201d poll lock, backoff, deploy guard",
+      "fix: council analyze returns Executioner verdict without hanging",
+      "fix: harden learning summary timeouts and stale signal cleanup",
+      "fix: reconcile portfolio cash drift, learning timeout, stale signals",
+      "auto: session memory 2026-05-30 19:00"
+    ]
   }
 ]
