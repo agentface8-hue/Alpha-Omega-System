@@ -16,6 +16,7 @@ uvicorn
 supabase
 requests
 anthropic
+pytest
 
 matplotlib
 pillow

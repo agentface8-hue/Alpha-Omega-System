@@ -594,6 +594,47 @@ body::before {
   color: var(--accent-red);
 }
 
+.top-stocks-compact {
+  padding: 0;
+  border: none;
+  background: transparent;
+  border-radius: 0;
+}
+
+.top-stocks-compact .widget-header {
+  display: none;
+}
+
+.top-stocks-compact .stocks-grid {
+  display: grid;
+  grid-auto-flow: column;
+  grid-auto-columns: minmax(112px, 1fr);
+  grid-template-rows: 1fr;
+  gap: 6px;
+  overflow-x: auto;
+  overflow-y: hidden;
+  padding-bottom: 2px;
+}
+
+.top-stocks-compact .stock-card {
+  grid-template-columns: 42px 1fr auto;
+  gap: 6px;
+  padding: 6px 8px;
+  min-height: 30px;
+  white-space: nowrap;
+  background: rgba(255, 255, 255, 0.015);
+  border-color: rgba(255, 255, 255, 0.04);
+}
+
+.top-stocks-compact .stock-price {
+  font-size: 10px;
+}
+
+.top-stocks-compact .stock-change {
+  font-size: 9px;
+  min-width: 42px;
+}
+
 /* ===== ANIMATIONS ===== */
 @keyframes slide-up {
   from {

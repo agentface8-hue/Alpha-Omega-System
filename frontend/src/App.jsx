@@ -18,6 +18,7 @@ import SystemMonitor      from './components/SystemMonitor';
 import LoginScreen        from './components/LoginScreen';
 import AmaStatus          from './components/AmaStatus';
 import PipelineBar        from './components/PipelineBar';
+import AuditTrail         from './components/AuditTrail';
 import { playThinkingSound, playSuccessSound, playErrorSound } from './utils/sounds';
 import { warmupBackend, fetchJson } from './utils/api';
 
@@ -243,11 +244,11 @@ const App = () => {
       const panel = PANELS.find(p => p.id === mobilePanel) || PANELS[0];
       return (
         <div style={{ display:'flex', flexDirection:'column', height:'calc(100vh - 110px)' }}>
-          <div style={{ padding:'8px 10px', background:'#0a0f18', borderBottom:'1px solid #1a2535', overflow:'auto' }}>
+        <div style={{ padding:'6px 10px', background:'#0a0f18', borderBottom:'1px solid #1a2535', overflow:'hidden', flexShrink:0 }}>
             <div style={{ color:'#00d4ff', fontFamily:'monospace', fontSize:9, letterSpacing:2, marginBottom:6 }}>
               TOP STOCKS (NEWSROOM CONTEXT)
             </div>
-            <TopStocks onSelectTicker={setSymbol} />
+            <TopStocks onSelectTicker={setSymbol} compact />
           </div>
           {/* Panel content */}
           <div style={{ flex:1, overflow:'auto', background:'#050810' }}>
@@ -292,16 +293,16 @@ const App = () => {
             />
           </div>
         )}
-      <div style={{ padding:'8px 10px 0', flexShrink:0 }}>
-        <div style={{ background:'#0a0f18', border:'1px solid #1a2535', borderRadius:10, padding:'8px 12px' }}>
-          <div style={{ color:'#00d4ff', fontFamily:'monospace', fontSize:10, letterSpacing:2, marginBottom:6 }}>
+      <div style={{ padding:'6px 10px 0', flexShrink:0 }}>
+        <div style={{ background:'#0a0f18', border:'1px solid #1a2535', borderRadius:10, padding:'6px 10px' }}>
+          <div style={{ color:'#00d4ff', fontFamily:'monospace', fontSize:10, letterSpacing:2, marginBottom:4 }}>
             TOP STOCKS + NEWSROOM CONTEXT
           </div>
-          <TopStocks onSelectTicker={setSymbol} />
+          <TopStocks onSelectTicker={setSymbol} compact />
         </div>
       </div>
       <div style={{ display:'grid', gridTemplateColumns:'1fr 1fr', gridTemplateRows:'1fr 1fr',
-        flex:1, minHeight:0, gap:2, marginTop:8 }}>
+        flex:1, minHeight:0, gap:2, marginTop:6 }}>
         {PANELS.map(panel => (
           <div key={panel.id} style={{ display:'flex', flexDirection:'column',
             background:'#050810', overflow:'hidden', minHeight:0 }}>
@@ -406,6 +407,7 @@ const App = () => {
           <div className="dashboard-sidebar">
             <div style={{ color:'#00d4ff', fontFamily:'monospace', fontSize:10, letterSpacing:2, marginBottom:6 }}>NEWSROOM + TOP STOCKS</div>
             <TopStocks onSelectTicker={setSymbol} />
+            <AuditTrail compact limit={8} />
           </div>
         </div>
       </main>

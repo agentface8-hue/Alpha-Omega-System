@@ -1,4 +1,6 @@
 import { useState, useEffect, useRef } from "react";
+import AuditTrail from "./AuditTrail";
+import SafetyControls from "./SafetyControls";
 
 const API = "https://alpha-omega-system.onrender.com";
 const REFRESH = 30000;
@@ -318,6 +320,10 @@ export default function SystemMonitor() {
 
       <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 12 }}>
 
+        <div style={{ gridColumn: "1 / -1" }}>
+          <SafetyControls />
+        </div>
+
         <Card title="background agents (render)">
           {agentStatus ? (
             <>
@@ -396,6 +402,8 @@ export default function SystemMonitor() {
           {renderLog()}
         </div>
       </Card>
+
+      <AuditTrail limit={15} />
 
     </div>
   );

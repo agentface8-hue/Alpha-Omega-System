@@ -83,6 +83,85 @@ def test_async_timeout_helper_uses_fresh_executor():
     assert elapsed < 0.8
 
 
+def test_decision_audit_json_roundtrip():
+    """Decision audit stores compact replay records and can query by id/symbol."""
+    import tempfile
+    from pathlib import Path
+    from core import decision_audit
+
+    old_file = decision_audit.AUDIT_FILE
+    old_remote = decision_audit._REMOTE_DISABLED
+    with tempfile.TemporaryDirectory() as td:
+        decision_audit.AUDIT_FILE = Path(td) / "audit.json"
+        decision_audit._REMOTE_DISABLED = True
+        rec = decision_audit.record_audit(
+            event_type="test_decision",
+            symbol="AMZN",
+            source="unit_test",
+            action="BUY",
+            verdict="BUY",
+            confidence=0.66,
+            inputs={"ticker": "AMZN"},
+            agent_outputs={"executioner": "BUY cautiously"},
+            market_snapshot={"regime": "Trending Bull"},
+            metadata={"reason": "roundtrip"},
+        )
+        loaded = decision_audit.get_audit(rec["id"])
+        by_symbol = decision_audit.get_audits_for_symbol("amzn")
+
+        assert loaded["id"] == rec["id"]
+        assert loaded["symbol"] == "AMZN"
+        assert loaded["inputs"]["ticker"] == "AMZN"
+        assert by_symbol and by_symbol[0]["id"] == rec["id"]
+
+    decision_audit.AUDIT_FILE = old_file
+    decision_audit._REMOTE_DISABLED = old_remote
+
+
+def test_datahub_reuses_cached_topic():
+    """DataHub-lite returns cache metadata and avoids duplicate fetches."""
+    import tempfile
+    from pathlib import Path
+    from core import datahub
+
+    calls = {"n": 0}
+
+    def fetcher():
+        calls["n"] += 1
+        return {"value": calls["n"]}
+
+    with tempfile.TemporaryDirectory() as td:
+        datahub._MEMORY.clear()
+        cache_path = Path(td) / "topic.json"
+        first = datahub.get_topic("unit:datahub", fetcher, 60, cache_path=cache_path)
+        second = datahub.get_topic("unit:datahub", fetcher, 60, cache_path=cache_path)
+
+        assert calls["n"] == 1
+        assert first["cached"] is False
+        assert second["cached"] is True
+        assert second["source"] == "memory"
+        assert second["data"]["value"] == 1
+
+
+def test_trading_safety_blocks_global_halt():
+    """Safety layer blocks new trades while global halt is active."""
+    import tempfile
+    from pathlib import Path
+    from core import trading_safety
+
+    old_file = trading_safety.SAFETY_FILE
+    with tempfile.TemporaryDirectory() as td:
+        trading_safety.SAFETY_FILE = Path(td) / "safety.json"
+        trading_safety.halt_all("unit test halt")
+        check = trading_safety.check_trade_allowed(ticker="NVDA")
+        assert check["allowed"] is False
+        assert check["code"] == "GLOBAL_HALT"
+        trading_safety.resume()
+        assert trading_safety.check_trade_allowed(ticker="NVDA")["allowed"] is True
+
+    trading_safety.SAFETY_FILE = old_file
+
+
 def test_decision_ledger_has_outcome_helpers():
     """Ledger has update_decision_outcomes and get_decisions_pending_outcomes for attribution job."""
     from core.decision_ledger import update_decision_outcomes, get_decisions_pending_outcomes

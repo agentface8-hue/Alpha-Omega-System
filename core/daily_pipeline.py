@@ -99,7 +99,11 @@ def run_daily_pipeline(
     if run_autopilot:
         def autopilot():
             nonlocal autopilot_result
+            from core.trading_safety import check_trade_allowed
             from core.portfolio_manager import get_portfolio, autopilot_fill
+            safety = check_trade_allowed(ticker="SYSTEM", mode="paper", new_position=True)
+            if not safety.get("allowed", True):
+                return {"skipped": True, "reason": f"safety: {safety.get('reason', safety.get('code'))}", "safety": safety}
             slots = get_portfolio().get("stats", {}).get("slots_available", 0)
             if slots <= 0:
                 return {"skipped": True, "reason": "portfolio full"}
@@ -155,6 +159,23 @@ def run_daily_pipeline(
         "dream_ticker": (dream_result or {}).get("top_ticker") if dream_result else None,
         "autopilot_opened": len((autopilot_result or {}).get("opened") or []) if autopilot_result else 0,
     }
+
+    try:
+        from core.decision_audit import record_audit
+        record_audit(
+            event_type="daily_pipeline",
+            symbol="SYSTEM",
+            source="daily_pipeline.run_daily_pipeline",
+            action="PIPELINE",
+            status=summary.get("status") or ("ok" if fail == 0 else "partial"),
+            verdict=f"{ok} ok / {fail} fail",
+            inputs={"run_dream": run_dream, "run_autopilot": run_autopilot, "run_learning": run_learning},
+            agent_outputs={"steps": steps},
+            market_snapshot={"regime": summary.get("regime"), "active_themes": active_themes},
+            outcome=summary,
+        )
+    except Exception as e:
+        logger.warning(f"[PIPELINE] audit skipped: {e}")
 
     try:
         from core.telegram_alerts import _send

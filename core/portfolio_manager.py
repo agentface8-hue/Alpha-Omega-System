@@ -87,6 +87,18 @@ def open_position(ticker: str, entry_price: float, sl: float,
                   entry_market_context: dict = None) -> Dict:
     state    = store.load_state()
     open_pos = store.load_positions("open")
+    try:
+        from core.trading_safety import check_trade_allowed
+        safety = check_trade_allowed(
+            ticker=ticker,
+            mode="paper",
+            new_position=True,
+            open_risk=sum(float(p.get("risk_actual") or 0) for p in open_pos),
+        )
+        if not safety.get("allowed", True):
+            return {"error": f"Safety blocked: {safety.get('reason', safety.get('code'))}", "safety": safety}
+    except Exception as e:
+        print(f"  [SAFETY] check skipped: {e}")
     if len(open_pos) >= MAX_POSITIONS:
         return {"error": f"Max {MAX_POSITIONS} positions reached"}
 
@@ -231,6 +243,27 @@ def open_position(ticker: str, entry_price: float, sl: float,
         alert_signal_created({**pos, "regime": entry_market_context.get("regime","") if entry_market_context else "",
                                "target_method": "atr"})
     except Exception: pass
+    try:
+        from core.decision_audit import record_audit
+        record_audit(
+            event_type="portfolio_open",
+            symbol=pos["ticker"],
+            source="portfolio_manager.open_position",
+            action="OPEN",
+            status="opened",
+            verdict=f"OPEN {pos['ticker']}",
+            confidence=conviction / 100 if conviction else None,
+            decision_id=signal_id or pos["id"],
+            inputs={
+                "entry_price": entry_price, "sl": sl, "tp1": tp1, "tp2": tp2,
+                "tp3": tp3, "conviction": conviction, "asset_type": asset_type,
+            },
+            market_snapshot={"sector": _sector, "entry_market_context": entry_market_context or {}},
+            order={"position_id": pos["id"], "shares": pos["shares"], "position_size": pos["position_size"], "risk_actual": pos["risk_actual"]},
+            metadata={"dtp_note": dtp_note, "pillar_scores": pillar_scores or {}, "tas": tas or ""},
+        )
+    except Exception as e:
+        print(f"[AUDIT] portfolio_open skipped: {e}")
     return pos
 
 
@@ -445,6 +478,22 @@ def _check_portfolio_inner() -> Dict:
             try:
                 from core.trade_log import log_closed_position; log_closed_position(pos)
             except Exception as e: print(f"  [TradeLog] warning: {e}")
+            try:
+                from core.decision_audit import record_audit
+                record_audit(
+                    event_type="portfolio_auto_close",
+                    symbol=pos["ticker"],
+                    source="portfolio_manager.check_portfolio",
+                    action="AUTO_CLOSE",
+                    status="closed",
+                    verdict=pos.get("close_reason", action or "auto close"),
+                    decision_id=pos.get("signal_id") or pos["id"],
+                    inputs={"trigger": action, "entry_price": entry, "last_price": price},
+                    order={"position_id": pos["id"], "shares": shares, "price": price},
+                    outcome={"realized_pnl": pos.get("realized_pnl", 0), "close_reason": pos.get("close_reason")},
+                )
+            except Exception as e:
+                print(f"[AUDIT] portfolio_auto_close skipped: {e}")
 
     open_after = store.load_positions("open")
     closed_all = store.load_positions("closed")
@@ -479,6 +528,23 @@ def close_position(position_id: str, reason: str = "MANUAL") -> Dict:
     try:
         from core.trade_log import log_closed_position; log_closed_position(pos)
     except Exception as e: print(f"  [TradeLog] warning: {e}")
+    try:
+        from core.decision_audit import record_audit
+        record_audit(
+            event_type="portfolio_close",
+            symbol=pos["ticker"],
+            source="portfolio_manager.close_position",
+            action="CLOSE",
+            status="closed",
+            verdict=pos.get("close_reason", ""),
+            confidence=None,
+            decision_id=pos.get("signal_id") or pos["id"],
+            inputs={"reason": reason, "entry_price": entry, "close_price": price},
+            order={"position_id": pos["id"], "shares": shares, "price": price, "pnl": pnl},
+            outcome={"realized_pnl": pos.get("realized_pnl", 0), "close_reason": pos.get("close_reason")},
+        )
+    except Exception as e:
+        print(f"[AUDIT] portfolio_close skipped: {e}")
     return {"closed":True,"ticker":pos["ticker"],"pnl":pos["realized_pnl"]}
 
 
@@ -760,4 +826,20 @@ def autopilot_fill(watchlist_name: str = "full_scan", symbols_override: list = N
     }
     if session_note:
         result["session_note"] = session_note
+    try:
+        from core.decision_audit import record_audit
+        record_audit(
+            event_type="portfolio_autopilot",
+            symbol="MULTI",
+            source="portfolio_manager.autopilot_fill",
+            action="AUTOPILOT",
+            status="opened" if opened else "no_open",
+            verdict=f"Opened {len(opened)} position(s)",
+            inputs={"watchlist": watchlist_name, "symbols_override": bool(symbols_override), "slots": slots},
+            agent_outputs={"opened": opened, "bench_candidates": result.get("bench_candidates", [])},
+            market_snapshot={"regime": regime, "universe": universe_source, "conviction_threshold": conv_threshold},
+            metadata={"sector_gate_blocked": sector_gate_blocked, "vol_blocked": vol_blocked[:20]},
+        )
+    except Exception as e:
+        print(f"[AUDIT] portfolio_autopilot skipped: {e}")
     return result

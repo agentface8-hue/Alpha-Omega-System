@@ -372,6 +372,25 @@ class Orchestrator:
             symbol, recommendation, position_size_pct, vetoed, veto_reason,
             consensus_view, confidence_score, agent_votes,
         )
+        try:
+            from core.decision_audit import record_audit
+            audit = record_audit(
+                event_type="council_decision",
+                symbol=symbol,
+                source="orchestrator.run_cycle_v2",
+                action=recommendation,
+                status="vetoed" if vetoed else "decided",
+                verdict=executioner_decision,
+                confidence=confidence_score,
+                decision_id=decision_id,
+                inputs={"symbol": symbol, "portfolio": portfolio},
+                agent_outputs={"reports": reports, "votes": agent_votes_serialized},
+                market_snapshot={"regime": regime, "macro_data": macro_data},
+                metadata={"decision_matrix": decision_matrix.to_dict(), "risk_assessment": risk_assessment},
+            )
+            decision_data["audit_id"] = audit["id"]
+        except Exception as e:
+            print(f"[AUDIT] council_decision skipped: {e}")
         print(f"4. Executioner: {executioner_decision[:80]}...")
         print(f"5. Decision recorded (id={decision_id}). Recommendation: {recommendation}.")
         print("--- Cycle V2 Complete ---\n")

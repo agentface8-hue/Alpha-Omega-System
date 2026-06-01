@@ -618,6 +618,26 @@ def create_turbo_signal(symbol: str, asset_type: str = "stock", scan_data: Dict 
         alert_signal_created(signal)
     except: pass
 
+    try:
+        from core.decision_audit import record_audit
+        record_audit(
+            event_type="signal_open",
+            symbol=sym,
+            source="signal_tracker.launch_signal",
+            action="OPEN_SIGNAL",
+            status="opened",
+            verdict=advisor_result.get("verdict", "APPROVE"),
+            confidence=conviction / 100 if conviction else None,
+            decision_id=signal["id"],
+            inputs={"ticker": sym, "price": price, "conviction": conviction, "asset_type": asset_type},
+            agent_outputs={"advisor": advisor_result, "council": council_result or {}},
+            market_snapshot=market_ctx,
+            order={"signal_id": signal["id"], "sl": sl, "tp1": tp1, "tp2": tp2, "tp3": tp3, "rr": rr},
+            metadata={"pillar_scores": pillar_scores, "sector_gate": sector_gate_info, "tas": tas},
+        )
+    except Exception as e:
+        print(f"[AUDIT] signal_open skipped: {e}")
+
     return signal
 
 
@@ -998,6 +1018,23 @@ def check_signals() -> Dict[str, Any]:
             try:
                 from core.trade_log import log_closed_signal; log_closed_signal(s)
             except Exception as e: print(f"  [TradeLog] warning: {e}")
+            try:
+                from core.decision_audit import record_audit
+                record_audit(
+                    event_type="signal_auto_close",
+                    symbol=s["ticker"],
+                    source="signal_tracker.check_signals",
+                    action=close_status,
+                    status="closed",
+                    verdict=close_reason,
+                    decision_id=s["id"],
+                    inputs={"entry_price": entry, "close_price": s.get("close_price"), "trigger": close_status},
+                    market_snapshot=s.get("close_market_context", {}),
+                    order={"signal_id": s["id"], "close_price": s.get("close_price")},
+                    outcome={"pnl_pct": s.get("pnl_pct"), "mae_pct": s.get("mae_pct"), "mfe_pct": s.get("mfe_pct")},
+                )
+            except Exception as e:
+                print(f"[AUDIT] signal_auto_close skipped: {e}")
             newly_closed.append(s)
         else:
             still_active.append(s)
@@ -1159,6 +1196,24 @@ def close_signal(signal_id: str, reason: str = "manual") -> Optional[Dict]:
             grade_outcome(target)  # non-blocking daemon thread
         except Exception as _ge:
             print(f"  [GRADER] could not launch grader for {target.get('ticker','?')}: {_ge}")
+    if target:
+        try:
+            from core.decision_audit import record_audit
+            record_audit(
+                event_type="signal_manual_close",
+                symbol=target["ticker"],
+                source="signal_tracker.close_signal",
+                action="MANUAL_CLOSE",
+                status="closed",
+                verdict=reason,
+                decision_id=target["id"],
+                inputs={"reason": reason, "entry_price": target.get("entry_price"), "close_price": target.get("close_price")},
+                market_snapshot=target.get("close_market_context", {}),
+                order={"signal_id": target["id"], "close_price": target.get("close_price")},
+                outcome={"pnl_pct": target.get("pnl_pct"), "close_reason": target.get("close_reason")},
+            )
+        except Exception as e:
+            print(f"[AUDIT] signal_manual_close skipped: {e}")
     return target
 
 

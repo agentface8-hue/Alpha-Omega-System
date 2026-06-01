@@ -50,6 +50,9 @@
 | `conviction_engine.py` | Scores signals 0–100% across 5 pillars; drives position sizing |
 | `decision_matrix.py` | Final go/no-go gate: regime × conviction × risk checks |
 | `decision_ledger.py` | Records every decision with reasoning for the learning loop |
+| `decision_audit.py` | Replay-grade audit snapshots for council decisions, signal/portfolio actions, pipeline and safety events |
+| `datahub.py` | Shared cache layer for high-traffic API reads with cached/age/source metadata |
+| `trading_safety.py` | Global halt, per-symbol halt, live-mode acknowledgement, and execution guardrails |
 | `kelly_sizer.py` | Kelly Criterion position sizing capped at $500 risk/trade |
 | `portfolio_manager.py` | Manages paper positions: entry, TP1/TP2/TP3 splits (50/30/20), trailing SL, close. Hooks into trade_log on every close. |
 | `portfolio_store.py` | Supabase persistence layer for portfolio positions and state |
@@ -103,6 +106,7 @@
 | `signal_reports` | Per-signal detailed case reports and analysis | `signal_store.py` |
 | `portfolio_positions` | Open paper positions (JSON blob per position) | `portfolio_store.py`, `portfolio_manager.py` |
 | `portfolio_state` | Single-row portfolio-level state (capital, drawdown, etc.) | `portfolio_store.py` |
+| `portfolio_state/id=decision_audit_recent` | Compact replay audit document store | `decision_audit.py` |
 | `printing_positions` | Open printing profits positions | `printing_store.py` |
 | `printing_state` | Printing profits portfolio state | `printing_store.py` |
 

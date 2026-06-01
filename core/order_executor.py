@@ -294,6 +294,15 @@ def execute_signal(signal: Dict) -> Dict:
     if tp1 <= entry:
         return {"status": "failed", "error": f"TP1 ${tp1} must be above entry ${entry}"}
 
+    try:
+        from core.trading_safety import check_trade_allowed
+        mode = "ibkr_live" if EXECUTOR_MODE == "ibkr" and IBKR_PORT == 7496 else EXECUTOR_MODE
+        safety = check_trade_allowed(ticker=ticker, mode=mode, new_position=True)
+        if not safety.get("allowed", True):
+            return {"status": "blocked", "error": safety.get("reason"), "safety": safety}
+    except Exception as e:
+        logger.warning(f"[EXECUTOR] Safety check skipped: {e}")
+
     logger.info(f"[EXECUTOR] Routing {ticker} x{shares} via mode={EXECUTOR_MODE}")
 
     if EXECUTOR_MODE == "ibkr":

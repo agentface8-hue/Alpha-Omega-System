@@ -140,6 +140,9 @@ C:\Users\asus\Alpha-Omega-System\
 │   ├── signal_store.py          ← Supabase + JSON signal persistence
 │   ├── portfolio_manager.py     ⭐ Portfolio engine v1.4 (DTP Phase 2)
 │   ├── portfolio_store.py       ← Supabase + JSON portfolio persistence
+│   ├── decision_audit.py        ⭐ Replay-grade audit trail (Supabase portfolio_state + JSON fallback)
+│   ├── datahub.py               ⭐ DataHub-lite shared cache with response metadata
+│   ├── trading_safety.py        ⭐ Halt switches, symbol halts, live-mode acknowledgement
 │   ├── printing_portfolio.py    ← Printing Profits engine
 │   ├── printing_scanner.py      ← Scanner for short-duration trades
 │   ├── printing_store.py        ← Printing persistence
@@ -197,6 +200,8 @@ C:\Users\asus\Alpha-Omega-System\
 │       ├── PrintingProfits.jsx ← Tab 8: Printing Profits
 │       ├── BacktestDashboard.jsx ← Tab 9: Backtester
 │       ├── ResultCard.jsx      ← Analysis result display
+│       ├── AuditTrail.jsx      ← Recent replay audit records in Decisions/System
+│       ├── SafetyControls.jsx  ← System-tab HALT ALL / resume safety controls
 │       ├── LiveTicker.jsx      ← Top price ticker bar
 │       ├── ChartPanel.jsx      ← Chart display panel
 │       └── TopStocks.jsx       ← Top movers widget
@@ -216,6 +221,8 @@ C:\Users\asus\Alpha-Omega-System\
 │   ├── printing_state.json
 │   ├── dream_log.json           ← Dream cycle log (JSON fallback)
 │   ├── outcomes_log.json        ← Trade grades log (JSON fallback)
+│   ├── safety_state.json        ← Trading safety halt/live-mode state
+│   ├── audit/decision_audit.json ← Replay audit JSON fallback/cache
 │   └── reports/*.json           ← Per-signal case reports
 │
 ├── data/
@@ -278,6 +285,18 @@ C:\Users\asus\Alpha-Omega-System\
 - `POST /api/executor/execute/{signal_id}` — execute signal
 - `POST /api/executor/test` — test with custom payload
 
+### Decision Audit
+- `GET /api/audit/recent` — recent replay-grade decision/trade audit records
+- `GET /api/audit/{decision_id}` — fetch one audit record
+- `GET /api/audit/symbol/{ticker}` — audit trail for a ticker
+
+### Trading Safety
+- `GET /api/safety/status` — halt/live-mode safety status
+- `POST /api/safety/halt-all` — global trading halt
+- `POST /api/safety/resume` — resume after global halt
+- `POST /api/safety/halt-symbol/{ticker}` — per-symbol halt
+- `POST /api/safety/confirm-live-mode` — typed acknowledgement before live execution
+
 ---
 
 ## 9. FRONTEND STYLE GUIDE
@@ -312,6 +331,7 @@ All inline styles — no external CSS files
 | `signal_reports` | Per-signal case reports |
 | `portfolio_positions` | Open paper positions |
 | `portfolio_state` | Portfolio-level state |
+| `portfolio_state/id=decision_audit_recent` | Replay audit snapshots (compact Supabase document store) |
 | `printing_positions` | Printing profits positions |
 | `printing_state` | Printing portfolio state |
 | `outcomes` | Trade grades from Outcomes Grader |
@@ -324,6 +344,7 @@ All inline styles — no external CSS files
 | Item | Priority | Notes |
 |---|---|---|
 | IBKR live execution | 🔴 High | Waiting for IBKR account approval (address doc being processed) |
+| Safety layer tuning | 🟡 Medium | Core halt gates built; tune limits before real IBKR live mode |
 | Claude Finance plugins | 🟡 Medium | Free on GitHub (anthropics/financial-services-plugins) |
 | Claude Routines | 🟡 Medium | Upgrade scheduled tasks to cloud (laptop-independent) |
 | Claude Design UI upgrade | 🟡 Medium | Use claude.ai/design to redesign Portfolio + Signal Tracker |
@@ -387,7 +408,20 @@ This is the only way knowledge survives across sessions.
 | DTP guardrail fires | TP ordering inversion after scaling | Already handled in portfolio_manager.py |
 
 ## 16. RECENT SESSION CHANGES
-*Auto-updated: 2026-05-31 19:00 UTC*
+*Auto-updated: 2026-06-01 07:50 UTC*
+
+### pending 2026-06-01 - add Fincept-inspired audit, DataHub-lite, and safety gates
+- `core/decision_audit.py`
+- `core/datahub.py`
+- `core/trading_safety.py`
+- `backend/main.py`
+- `core/orchestrator.py`
+- `core/portfolio_manager.py`
+- `core/signal_tracker.py`
+- `core/daily_pipeline.py`
+- `core/order_executor.py`
+- `frontend/src/components/AuditTrail.jsx`
+- `frontend/src/components/SafetyControls.jsx`
 
 ### `fb2b0ce` 2026-05-31 15:10 - fix: isolate analyze timeout from saturated executors
 - `backend/main.py`

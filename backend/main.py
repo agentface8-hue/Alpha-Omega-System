@@ -261,6 +261,23 @@ async def analyze_stock(request: AnalysisRequest):
         result = run_with_timeout(_run_smart, timeout_s=20.0, fallback=None)
         if not result or "error" in result:
             return get_demo_response(symbol)
+        try:
+            from core.decision_audit import record_audit
+            record_audit(
+                event_type="smart_analyze_decision",
+                symbol=symbol,
+                source="backend.api.analyze.fallback",
+                action=result.get("executioner_decision", "HOLD").split(" ")[0],
+                status="fallback",
+                verdict=result.get("executioner_decision", ""),
+                confidence=result.get("confidence_score"),
+                inputs={"symbol": symbol},
+                agent_outputs=result.get("full_report", {}),
+                market_snapshot={"mtf": result.get("mtf_analysis") or {}},
+                metadata={"fallback": "smart_analyze"},
+            )
+        except Exception:
+            pass
         return AnalysisResponse(**result)
 
     try:
@@ -287,6 +304,29 @@ async def analyze_stock(request: AnalysisRequest):
     except Exception as sa_err:
         print(f"[SMART FAILED] {sa_err}, using demo data.")
         return get_demo_response(symbol)
+
+
+@app.get("/api/audit/recent")
+async def audit_recent(limit: int = 25):
+    from core.decision_audit import recent_audits
+    rows = recent_audits(limit)
+    return {"records": rows, "count": len(rows)}
+
+
+@app.get("/api/audit/symbol/{ticker}")
+async def audit_symbol(ticker: str, limit: int = 25):
+    from core.decision_audit import get_audits_for_symbol
+    rows = get_audits_for_symbol(ticker, limit)
+    return {"symbol": ticker.upper(), "records": rows, "count": len(rows)}
+
+
+@app.get("/api/audit/{audit_id}")
+async def audit_detail(audit_id: str):
+    from core.decision_audit import get_audit
+    rec = get_audit(audit_id)
+    if not rec:
+        raise HTTPException(status_code=404, detail="Audit record not found")
+    return rec
 
 
 @app.post("/api/scan")
@@ -611,12 +651,14 @@ async def scan_candidates(exclude: str = "", force: bool = False):
         raw        = []
         regime     = "Unknown"
         source     = "cache"
+        cache_age  = None
 
         # ── Try shared cache first ────────────────────────────────────────────
         if not force and SCAN_CACHE.exists():
             try:
                 cached = _json.loads(SCAN_CACHE.read_text())
-                if _time.time() - cached.get("ts", 0) < CACHE_TTL:
+                cache_age = round(_time.time() - cached.get("ts", 0), 2)
+                if cache_age < CACHE_TTL:
                     raw    = cached.get("results", [])
                     regime = cached.get("regime", "Unknown")
             except Exception:
@@ -625,11 +667,19 @@ async def scan_candidates(exclude: str = "", force: bool = False):
         # ── Cache miss → fresh momentum-screened scan (top 30, all sectors) ───
         if not raw:
             source = "fresh_scan"
-            from core.momentum_screener import get_momentum_scan_universe
-            from core.conviction_engine import run_scan
-            symbols = get_momentum_scan_universe(top_n=30)
-            symbols = [s for s in symbols if s not in excluded]
-            result  = run_scan(symbols)
+            from core.datahub import get_topic
+
+            def _fresh_candidates():
+                from core.momentum_screener import get_momentum_scan_universe
+                from core.conviction_engine import run_scan
+                symbols = get_momentum_scan_universe(top_n=30)
+                symbols = [s for s in symbols if s not in excluded]
+                return run_scan(symbols)
+
+            hub     = get_topic(f"scan_candidates:{exclude or 'none'}", _fresh_candidates, 1800, force=force)
+            result  = hub["data"]
+            cache_age = hub.get("age_seconds")
+            source  = hub.get("source", source)
             raw     = result.get("results", [])
             regime  = result.get("market_regime", "Unknown")
             # Save for next call
@@ -676,6 +726,8 @@ async def scan_candidates(exclude: str = "", force: bool = False):
             "scanned":       len(raw),
             "excluded":      list(excluded),
             "source":        source,
+            "cached":        source in ("cache", "memory", "file"),
+            "age_seconds":   cache_age,
         }
     except Exception as e:
         traceback.print_exc()
@@ -883,7 +935,15 @@ async def get_chart_data(symbol: str, interval: str = "1d", period: str = "6M"):
     import concurrent.futures
 
     def _build():
-        return _build_chart_payload(symbol, interval, period)
+        from core.datahub import get_topic
+        topic = f"chart:{symbol.upper()}:{interval}:{period}"
+        hub = get_topic(topic, lambda: _build_chart_payload(symbol, interval, period), 900)
+        data = hub.pop("data")
+        data["cache"] = hub
+        data["cached"] = hub.get("cached")
+        data["age_seconds"] = hub.get("age_seconds")
+        data["source"] = hub.get("source")
+        return data
 
     loop = asyncio.get_event_loop()
     with concurrent.futures.ThreadPoolExecutor(max_workers=1) as ex:
@@ -1010,14 +1070,28 @@ async def momentum_screen(top_n: int = 30, force: bool = False):
     with sector bias applied. Cached 2h.
     """
     import asyncio
+    from core.datahub import get_topic
     from core.momentum_screener import screen_universe
     loop = asyncio.get_event_loop()
-    results = await loop.run_in_executor(None, lambda: screen_universe(top_n=top_n, force=force))
+    topic = f"momentum_screen:{top_n}"
+    hub = await loop.run_in_executor(
+        None,
+        lambda: get_topic(
+            topic,
+            lambda: screen_universe(top_n=top_n, force=force),
+            7200,
+            force=force,
+        ),
+    )
+    results = hub.pop("data")
     return {
         "tickers": [r["ticker"] for r in results],
         "results": results,
         "count":   len(results),
         "top_n":   top_n,
+        "cached": hub.get("cached"),
+        "age_seconds": hub.get("age_seconds"),
+        "source": hub.get("source"),
     }
 
 # ── Sector Heat (legacy — now backed by momentum ranker) ─────
@@ -1506,8 +1580,15 @@ async def get_portfolio_endpoint():
     loop = asyncio.get_event_loop()
     with concurrent.futures.ThreadPoolExecutor(max_workers=1) as ex:
         try:
+            from core.datahub import get_topic
             from core.portfolio_manager import get_portfolio
-            return await asyncio.wait_for(loop.run_in_executor(ex, get_portfolio), timeout=25.0)
+            hub = await asyncio.wait_for(
+                loop.run_in_executor(ex, lambda: get_topic("portfolio:main", get_portfolio, 20)),
+                timeout=25.0,
+            )
+            data = hub.pop("data")
+            data["cache"] = hub
+            return data
         except asyncio.TimeoutError:
             raise HTTPException(status_code=504, detail="Portfolio load timed out after 25s")
 
@@ -1520,10 +1601,16 @@ async def check_portfolio_endpoint():
     with concurrent.futures.ThreadPoolExecutor(max_workers=1) as ex:
         try:
             from core.portfolio_manager import check_portfolio
-            return await asyncio.wait_for(
+            result = await asyncio.wait_for(
                 loop.run_in_executor(ex, check_portfolio),
                 timeout=120.0,
             )
+            try:
+                from core.datahub import invalidate_topic
+                invalidate_topic("portfolio:")
+            except Exception:
+                pass
+            return result
         except asyncio.TimeoutError:
             raise HTTPException(status_code=504, detail="Portfolio check timed out after 120s")
 
@@ -1540,13 +1627,25 @@ async def open_position_endpoint(body: dict):
     entry_market_context=body.get("entry_market_context") or {}
     if not ticker or not entry or not sl or not tp1:
         raise HTTPException(status_code=400, detail="ticker, entry_price, sl, tp1 required")
-    return open_position(ticker,entry,sl,tp1,tp2,tp3,conviction,asset_type,signal_id,
-                         pillar_scores=pillar_scores,tas=tas,entry_market_context=entry_market_context)
+    result = open_position(ticker,entry,sl,tp1,tp2,tp3,conviction,asset_type,signal_id,
+                           pillar_scores=pillar_scores,tas=tas,entry_market_context=entry_market_context)
+    try:
+        from core.datahub import invalidate_topic
+        invalidate_topic("portfolio:")
+    except Exception:
+        pass
+    return result
 
 @app.post("/api/portfolio/close/{position_id}")
 async def close_position_endpoint(position_id: str, body: dict = {}):
     from core.portfolio_manager import close_position
-    return close_position(position_id, (body or {}).get("reason","MANUAL"))
+    result = close_position(position_id, (body or {}).get("reason","MANUAL"))
+    try:
+        from core.datahub import invalidate_topic
+        invalidate_topic("portfolio:")
+    except Exception:
+        pass
+    return result
 
 @app.post("/api/portfolio/autopilot")
 async def portfolio_autopilot_endpoint(body: dict = {}):
@@ -1570,7 +1669,13 @@ async def portfolio_autopilot_endpoint(body: dict = {}):
     loop = asyncio.get_event_loop()
     with concurrent.futures.ThreadPoolExecutor(max_workers=1) as ex:
         try:
-            return await asyncio.wait_for(loop.run_in_executor(ex, _run), timeout=120.0)
+            result = await asyncio.wait_for(loop.run_in_executor(ex, _run), timeout=120.0)
+            try:
+                from core.datahub import invalidate_topic
+                invalidate_topic("portfolio:")
+            except Exception:
+                pass
+            return result
         except asyncio.TimeoutError:
             raise HTTPException(status_code=504, detail="Autopilot timed out after 120s")
 
@@ -1578,7 +1683,46 @@ async def portfolio_autopilot_endpoint(body: dict = {}):
 async def reset_portfolio_endpoint():
     from core.portfolio_store import clear_all_positions
     clear_all_positions()
+    try:
+        from core.datahub import invalidate_topic
+        invalidate_topic("portfolio:")
+    except Exception:
+        pass
     return {"reset":True,"message":"Portfolio reset to $25,000"}
+
+
+@app.get("/api/safety/status")
+async def safety_status():
+    from core.trading_safety import status
+    return status()
+
+
+@app.post("/api/safety/halt-all")
+async def safety_halt_all(body: dict = {}):
+    from core.trading_safety import halt_all
+    return halt_all((body or {}).get("reason", "manual halt"))
+
+
+@app.post("/api/safety/resume")
+async def safety_resume():
+    from core.trading_safety import resume
+    return resume()
+
+
+@app.post("/api/safety/halt-symbol/{ticker}")
+async def safety_halt_symbol(ticker: str, body: dict = {}):
+    from core.trading_safety import halt_symbol
+    return halt_symbol(ticker, (body or {}).get("reason", "manual symbol halt"))
+
+
+@app.post("/api/safety/confirm-live-mode")
+async def safety_confirm_live_mode(body: dict = {}):
+    from core.trading_safety import confirm_live_mode
+    result = confirm_live_mode((body or {}).get("ack", ""))
+    if not result.get("ok"):
+        raise HTTPException(status_code=400, detail=result.get("error", "acknowledgement required"))
+    return result
+
 
 @app.post("/api/portfolio/reconcile")
 async def reconcile_portfolio_endpoint():

@@ -2,7 +2,7 @@ import React, { useState, useEffect } from 'react';
 
 const TICKERS = ['NVDA','AAPL','MSFT','GOOGL','AMZN','META','TSLA','PLTR'];
 
-const TopStocks = ({ onSelectTicker }) => {
+const TopStocks = ({ onSelectTicker, compact = false }) => {
     const [stocks, setStocks] = useState(
         TICKERS.map(s => ({ symbol: s, price: null, change: null, loading: true }))
     );
@@ -30,7 +30,7 @@ const TopStocks = ({ onSelectTicker }) => {
     }, []);
 
     return (
-        <div className="top-stocks">
+        <div className={`top-stocks ${compact ? 'top-stocks-compact' : ''}`}>
             <div className="widget-header">
                 <span className="widget-icon">🔥</span>
                 <span className="widget-title">TOP MOVERS</span>
