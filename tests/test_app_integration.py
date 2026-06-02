@@ -186,9 +186,32 @@ def test_ai_radar_scores_and_persists_findings():
 
         assert brief["count"] == 1
         assert recent[0]["top_findings"][0]["title"] == finding["title"]
-        assert recent[0]["top_findings"][0]["recommended_action"] in ("watch", "test", "adopt", "ignore")
+        assert recent[0]["top_findings"][0]["recommended_action"] in ("watch", "test", "benchmark", "study", "adopt", "ignore")
 
     ai_radar.RADAR_FILE = old_file
+
+
+def test_ai_radar_compares_financialdata_against_alpha_omega_stack():
+    """AI Radar should compare candidates before recommending any adoption."""
+    from core import ai_radar
+
+    finding = ai_radar.make_finding(
+        source="Hacker News AI",
+        title="Show HN: Build AI Trading Agents in Cursor/Claude with an MCP Server",
+        url="https://financialdata.net/mcp-server",
+        summary=(
+            "FinancialData.Net MCP offers real-time stock prices, fundamentals, "
+            "institutional trading insights, income statements, ETF data, and MCP tools."
+        ),
+        tags=["mcp", "financial", "institutional trading"],
+    )
+
+    comparison = finding["alpha_omega_comparison"]
+    assert comparison["decision"] == "benchmark"
+    assert comparison["overlap"] == "partial"
+    assert "data breadth" in " ".join(comparison["potential_advantages"]).lower()
+    assert "professional" in " ".join(comparison["risks"]).lower()
+    assert finding["recommended_action"] == "benchmark"
 
 
 def test_market_flow_scores_accumulation_distribution():

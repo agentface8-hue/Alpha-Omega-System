@@ -143,7 +143,7 @@ C:\Users\asus\Alpha-Omega-System\
 │   ├── decision_audit.py        ⭐ Replay-grade audit trail (Supabase portfolio_state + JSON fallback)
 │   ├── datahub.py               ⭐ DataHub-lite shared cache with response metadata
 │   ├── trading_safety.py        ⭐ Halt switches, symbol halts, live-mode acknowledgement
-│   ├── ai_radar.py              ⭐ Observer-only scout for useful new AI/platform upgrades
+│   ├── ai_radar.py              ⭐ Observer-only scout + Alpha-Omega comparison layer for AI/platform upgrades
 │   ├── market_flow_agent.py     ⭐ Additive institutional-flow score from existing OHLCV data
 │   ├── printing_portfolio.py    ← Printing Profits engine
 │   ├── printing_scanner.py      ← Scanner for short-duration trades
@@ -282,7 +282,7 @@ C:\Users\asus\Alpha-Omega-System\
 
 ### AI Radar
 - `GET /api/radar/status` — observer-only radar status
-- `GET /api/radar/latest` — recent AI/tooling upgrade briefs
+- `GET /api/radar/latest` — recent AI/tooling upgrade briefs with Alpha-Omega comparison verdicts
 - `POST /api/radar/run` — manually scan public AI/platform sources
 
 ### Learning
@@ -390,7 +390,7 @@ Use Cowork to read actual files, not just memory.
 
 New AI features, GitHub repos, social media ideas, MCPs, and platform updates must be compared against the current Alpha-Omega stack before any action.
 Do not duplicate existing modules, reset runtime state, or weaken trading guardrails to adopt something new.
-AI Radar can discover, score, summarize, and recommend, but it must not auto-install packages, auto-change production, auto-deploy, or change trading behavior without Avi's explicit approval.
+AI Radar can discover, score, summarize, compare, and recommend benchmark/study/watch actions, but it must not auto-install packages, auto-change production, auto-deploy, or change trading behavior without Avi's explicit approval.
 Every adoption needs a short plan, platform-fit check, rollback path, and verification.
 
 ### ⚠️ Update this file at the end of every session

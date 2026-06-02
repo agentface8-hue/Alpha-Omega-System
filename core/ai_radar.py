@@ -83,6 +83,77 @@ def _recommended_action(score: int) -> str:
     return "ignore"
 
 
+def _compare_to_alpha_omega_stack(
+    *,
+    title: str,
+    url: str,
+    summary: str = "",
+    tags: Optional[List[str]] = None,
+    score: int = 0,
+) -> Dict[str, Any]:
+    """Explain whether a candidate is duplicate, additive, or worth benchmarking."""
+    text = " ".join([title or "", url or "", summary or "", " ".join(tags or [])]).lower()
+
+    comparison = {
+        "overlap": "unknown",
+        "decision": "watch",
+        "local_baseline": [
+            "Alpha-Omega already has council agents, scanner, signal tracker, portfolio manager, safety gates, audit trail, learning loop, and paper execution.",
+        ],
+        "potential_advantages": [],
+        "risks": [],
+        "benchmark_plan": [],
+    }
+
+    is_financialdata = "financialdata.net" in text or "financialdata" in text
+    is_market_data = any(term in text for term in [
+        "stock price", "stock prices", "latest prices", "real-time", "realtime",
+        "fundamental", "income statement", "balance sheet", "cash flow",
+        "institutional", "insider", "etf", "mcp",
+    ])
+    is_agent_framework = any(term in text for term in ["multi-agent", "agent framework", "agents", "orchestration"])
+
+    if is_financialdata or is_market_data:
+        comparison["overlap"] = "partial"
+        comparison["decision"] = "benchmark" if score >= 75 else "watch"
+        comparison["local_baseline"].append(
+            "Current market data is mainly yfinance/Finnhub/Alpha Vantage-style coverage with internal OHLCV-derived scoring."
+        )
+        comparison["potential_advantages"].extend([
+            "May improve data breadth with fundamentals, statements, ETF data, insider/institutional holdings, and international coverage.",
+            "MCP interface could let research agents request structured financial data without custom endpoint code.",
+        ])
+        comparison["risks"].extend([
+            "FinancialData MCP requires a Professional or Enterprise subscription/API key before live verification.",
+            "Provider quality, latency, coverage, rate limits, and cost must be benchmarked against existing sources before adoption.",
+        ])
+        comparison["benchmark_plan"].extend([
+            "Run both providers on the same ticker set and timestamp.",
+            "Compare price freshness, OHLCV completeness, fundamentals coverage, response time, failure rate, and cost.",
+            "Keep results observer-only until the benchmark clearly beats the current source.",
+        ])
+    elif is_agent_framework:
+        comparison["overlap"] = "high"
+        comparison["decision"] = "study"
+        comparison["potential_advantages"].append(
+            "May contain useful orchestration or report-quality ideas."
+        )
+        comparison["risks"].append(
+            "High duplication risk because Alpha-Omega already has specialized agents and trading guardrails."
+        )
+        comparison["benchmark_plan"].append(
+            "Compare report quality on the same tickers before adopting any pattern."
+        )
+    elif score >= 85:
+        comparison["overlap"] = "unknown"
+        comparison["decision"] = "test"
+        comparison["benchmark_plan"].append(
+            "Do a sandbox review before any production change."
+        )
+
+    return comparison
+
+
 def make_finding(
     *,
     source: str,
@@ -93,6 +164,16 @@ def make_finding(
 ) -> Dict[str, Any]:
     text = " ".join([title or "", summary or "", " ".join(tags or [])])
     score = _score_text(text)
+    comparison = _compare_to_alpha_omega_stack(
+        title=title,
+        url=url,
+        summary=summary,
+        tags=tags,
+        score=score,
+    )
+    action = _recommended_action(score)
+    if comparison.get("decision") in {"benchmark", "study"}:
+        action = comparison["decision"]
     return {
         "id": re.sub(r"[^a-zA-Z0-9]+", "-", f"{source}-{title}")[:90].strip("-").lower(),
         "source": source,
@@ -101,8 +182,9 @@ def make_finding(
         "summary": (summary or "")[:500],
         "tags": tags or [],
         "relevance_score": score,
-        "recommended_action": _recommended_action(score),
+        "recommended_action": action,
         "status": "watch" if score >= 40 else "ignore",
+        "alpha_omega_comparison": comparison,
         "captured_at": _now(),
     }
 

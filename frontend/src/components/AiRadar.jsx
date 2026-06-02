@@ -72,6 +72,13 @@ export default function AiRadar() {
         </div>
         {findings.slice(0, 5).map((f) => (
           <div key={`${f.source}-${f.title}`} style={{ borderTop: '1px solid #1a2535', padding: '8px 0' }}>
+            {(() => {
+              const comparison = f.alpha_omega_comparison || {};
+              const advantages = comparison.potential_advantages || [];
+              const risks = comparison.risks || [];
+              const plan = comparison.benchmark_plan || [];
+              return (
+                <>
             <div style={{ display: 'flex', justifyContent: 'space-between', gap: 10 }}>
               <a href={f.url} target="_blank" rel="noreferrer" style={{ color: '#e5e7eb', fontSize: 12, textDecoration: 'none', fontWeight: 600 }}>
                 {f.title}
@@ -84,6 +91,19 @@ export default function AiRadar() {
               {f.source} · {f.recommended_action?.toUpperCase()} · {f.status}
             </div>
             {f.summary && <div style={{ color: '#9fb3c8', fontSize: 11, marginTop: 3, lineHeight: 1.35 }}>{f.summary}</div>}
+            {comparison.decision && (
+              <div style={{ marginTop: 6, padding: 8, border: '1px solid #26364a', borderRadius: 8, background: '#07111c' }}>
+                <div style={{ color: '#00d4ff', fontFamily: 'monospace', fontSize: 10, letterSpacing: 1.4 }}>
+                  AO COMPARE: {comparison.decision?.toUpperCase()} · OVERLAP {comparison.overlap?.toUpperCase()}
+                </div>
+                {advantages[0] && <div style={{ color: '#b8c7d9', fontSize: 10, marginTop: 4 }}>Upside: {advantages[0]}</div>}
+                {risks[0] && <div style={{ color: '#fbbf24', fontSize: 10, marginTop: 3 }}>Risk: {risks[0]}</div>}
+                {plan[0] && <div style={{ color: '#8899aa', fontSize: 10, marginTop: 3 }}>Next: {plan[0]}</div>}
+              </div>
+            )}
+                </>
+              );
+            })()}
           </div>
         ))}
       </div>
