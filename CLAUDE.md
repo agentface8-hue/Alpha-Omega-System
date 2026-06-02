@@ -1,6 +1,6 @@
 # CLAUDE.md — Alpha-Omega System
 # ⚠️ READ THIS FIRST — BEFORE TOUCHING ANYTHING ⚠️
-# Last Updated: 2026-06-01
+# Last Updated: 2026-06-02
 
 > **System management:** Cursor AI only (ops/deploy/fixes). Claude: context and briefs only. Frozen stability stack: `CURSOR-AGENT-BRIEF.md` § DO NOT TOUCH.
 
@@ -432,7 +432,37 @@ This is the only way knowledge survives across sessions.
 | DTP guardrail fires | TP ordering inversion after scaling | Already handled in portfolio_manager.py |
 
 ## 16. RECENT SESSION CHANGES
-*Auto-updated: 2026-06-01 19:00 UTC*
+*Auto-updated: 2026-06-02 19:00 UTC*
+
+### `c9c1d63` 2026-06-02 15:16 - fix: run Tinker SDK calls outside FastAPI event loop
+- `core/thinking_machines_benchmark.py`
+- `tests/test_app_integration.py`
+
+### `7e61492` 2026-06-02 14:31 - feat: add Thinking Machines benchmark adapter
+- `CLAUDE.md`
+- `SYSTEM-AUDIT.md`
+- `backend/main.py`
+- `core/thinking_machines_benchmark.py`
+- `requirements.txt`
+
+### `a23195f` 2026-06-02 11:30 - feat: compare AI Radar findings against Alpha-Omega
+- `CLAUDE.md`
+- `SYSTEM-AUDIT.md`
+- `core/ai_radar.py`
+- `frontend/src/components/AiRadar.jsx`
+- `tests/test_app_integration.py`
+
+### `0ba1027` 2026-06-02 10:14 - feat: add ai radar and market flow signals
+- `.cursor/rules/alpha-omega-upgrade-guardrails.mdc`
+- `CLAUDE.md`
+- `SYSTEM-AUDIT.md`
+- `backend/main.py`
+- `core/ai_radar.py`
+
+### `11d0222` 2026-06-01 22:00 - auto: session memory 2026-06-01 19:00
+- `CLAUDE.md`
+- `MASTER-KNOWLEDGE.md`
+- `calibration/session_log.json`
 
 ### `d8cf052` 2026-06-01 11:19 - feat: add audit cache safety upgrades
 - `CLAUDE.md`
@@ -442,46 +472,6 @@ This is the only way knowledge survives across sessions.
 - `core/datahub.py`
 
 ### `cfb2ddc` 2026-05-31 22:00 - auto: session memory 2026-05-31 19:00
-- `CLAUDE.md`
-- `MASTER-KNOWLEDGE.md`
-- `calibration/session_log.json`
-
-### `fb2b0ce` 2026-05-31 15:10 - fix: isolate analyze timeout from saturated executors
-- `backend/main.py`
-- `core/timeout_utils.py`
-- `tests/test_app_integration.py`
-
-### `73e264a` 2026-05-31 15:04 - fix: prevent analyze timeout from blocking fallback
-- `agents/base_agent.py`
-- `backend/main.py`
-- `core/orchestrator.py`
-- `core/timeout_utils.py`
-- `tests/test_app_integration.py`
-
-### `55bd5bd` 2026-05-31 15:00 - fix: Telegram getUpdates 409 â€” poll lock, backoff, deploy guard
-- `core/telegram_agent.py`
-
-### `46dc8a6` 2026-05-31 13:14 - fix: council analyze returns Executioner verdict without hanging
-- `agents/base_agent.py`
-- `backend/main.py`
-- `config/settings.py`
-- `core/orchestrator.py`
-- `frontend/src/App.jsx`
-
-### `b9655e7` 2026-05-31 12:04 - fix: harden learning summary timeouts and stale signal cleanup
-- `backend/main.py`
-- `core/learning_loop.py`
-- `core/signal_history.py`
-- `core/signal_tracker.py`
-
-### `cd7d18b` 2026-05-31 11:54 - fix: reconcile portfolio cash drift, learning timeout, stale signals
-- `backend/main.py`
-- `core/learning_loop.py`
-- `core/live_monitor.py`
-- `core/portfolio_manager.py`
-- `core/signal_tracker.py`
-
-### `19ecff1` 2026-05-30 22:00 - auto: session memory 2026-05-30 19:00
 - `CLAUDE.md`
 - `MASTER-KNOWLEDGE.md`
 - `calibration/session_log.json`

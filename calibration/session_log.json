@@ -230,5 +230,18 @@
       "fix: reconcile portfolio cash drift, learning timeout, stale signals",
       "auto: session memory 2026-05-30 19:00"
     ]
+  },
+  {
+    "ts": "2026-06-02T19:00:02.468184",
+    "commits": 7,
+    "messages": [
+      "fix: run Tinker SDK calls outside FastAPI event loop",
+      "feat: add Thinking Machines benchmark adapter",
+      "feat: compare AI Radar findings against Alpha-Omega",
+      "feat: add ai radar and market flow signals",
+      "auto: session memory 2026-06-01 19:00",
+      "feat: add audit cache safety upgrades",
+      "auto: session memory 2026-05-31 19:00"
+    ]
   }
 ]
