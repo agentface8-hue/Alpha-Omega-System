@@ -1,6 +1,7 @@
 import { useState, useEffect, useRef } from "react";
 import AuditTrail from "./AuditTrail";
 import SafetyControls from "./SafetyControls";
+import AiRadar from "./AiRadar";
 
 const API = "https://alpha-omega-system.onrender.com";
 const REFRESH = 30000;
@@ -322,6 +323,7 @@ export default function SystemMonitor() {
 
         <div style={{ gridColumn: "1 / -1" }}>
           <SafetyControls />
+          <AiRadar />
         </div>
 
         <Card title="background agents (render)">

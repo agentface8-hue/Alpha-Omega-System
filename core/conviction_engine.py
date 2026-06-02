@@ -320,6 +320,11 @@ def _build_result(data: Dict, regime: Dict, conviction: int, pillars: Dict,
     tf = data.get("tf_breakdown", {})
     bulls = sum(1 for v in tf.values() if v == "BULL")
     trend = "BULL" if bulls >= 3 else "BEAR" if bulls <= 1 else "MIXED"
+    try:
+        from core.market_flow_agent import analyze_flow_snapshot
+        market_flow = analyze_flow_snapshot(data)
+    except Exception:
+        market_flow = {}
 
     return {
         "ticker": data.get("symbol", "?"),
@@ -344,6 +349,9 @@ def _build_result(data: Dict, regime: Dict, conviction: int, pillars: Dict,
         "qty": data.get("qty", 0),
         "vol_ratio": data.get("vol_ratio", 0),
         "vol_direction": data.get("vol_direction", "NEUTRAL"),
+        "market_flow": market_flow,
+        "flow_score": market_flow.get("flow_score", 0),
+        "flow_signal": market_flow.get("flow_signal", "UNKNOWN"),
         "earnings_warning": data.get("earnings_warning", "Clear"),
         "hard_fail": hard_fail,
         "hard_fail_reason": hard_fail_reason,

@@ -162,6 +162,64 @@ def test_trading_safety_blocks_global_halt():
     trading_safety.SAFETY_FILE = old_file
 
 
+def test_ai_radar_scores_and_persists_findings():
+    """AI Radar ranks relevant discoveries and stores an observer-only brief."""
+    import tempfile
+    from pathlib import Path
+    from core import ai_radar
+
+    old_file = ai_radar.RADAR_FILE
+    with tempfile.TemporaryDirectory() as td:
+        ai_radar.RADAR_FILE = Path(td) / "radar.json"
+        finding = ai_radar.make_finding(
+            source="unit",
+            title="New agent framework for financial research",
+            url="https://example.com/agent",
+            summary="Adds autonomous agent research workflows for market analysis.",
+            tags=["agents", "financial research"],
+        )
+        assert finding["relevance_score"] >= 70
+        assert finding["status"] == "watch"
+
+        brief = ai_radar.save_radar_brief([finding], source="unit")
+        recent = ai_radar.load_radar_log(limit=1)
+
+        assert brief["count"] == 1
+        assert recent[0]["top_findings"][0]["title"] == finding["title"]
+        assert recent[0]["top_findings"][0]["recommended_action"] in ("watch", "test", "adopt", "ignore")
+
+    ai_radar.RADAR_FILE = old_file
+
+
+def test_market_flow_scores_accumulation_distribution():
+    """Market Flow Agent converts existing OHLCV fields into an additive flow signal."""
+    from core.market_flow_agent import analyze_flow_snapshot
+
+    accumulation = analyze_flow_snapshot({
+        "symbol": "OKTA",
+        "vol_ratio": 2.2,
+        "vol_direction": "ACCUMULATION",
+        "body_pct": 0.62,
+        "bull_body": True,
+        "tas": "4/4",
+        "rsi": 58,
+    })
+    distribution = analyze_flow_snapshot({
+        "symbol": "D",
+        "vol_ratio": 2.4,
+        "vol_direction": "DISTRIBUTION",
+        "body_pct": 0.7,
+        "bull_body": False,
+        "tas": "1/4",
+        "rsi": 42,
+    })
+
+    assert accumulation["flow_signal"] == "ACCUMULATION"
+    assert accumulation["flow_score"] > distribution["flow_score"]
+    assert distribution["flow_signal"] == "DISTRIBUTION"
+    assert "market_flow" in accumulation["summary"].lower()
+
+
 def test_decision_ledger_has_outcome_helpers():
     """Ledger has update_decision_outcomes and get_decisions_pending_outcomes for attribution job."""
     from core.decision_ledger import update_decision_outcomes, get_decisions_pending_outcomes

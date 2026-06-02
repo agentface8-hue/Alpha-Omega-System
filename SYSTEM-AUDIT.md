@@ -53,6 +53,8 @@
 | `decision_audit.py` | Replay-grade audit snapshots for council decisions, signal/portfolio actions, pipeline and safety events |
 | `datahub.py` | Shared cache layer for high-traffic API reads with cached/age/source metadata |
 | `trading_safety.py` | Global halt, per-symbol halt, live-mode acknowledgement, and execution guardrails |
+| `ai_radar.py` | Observer-only scout that scans public AI/platform sources and ranks relevant upgrades |
+| `market_flow_agent.py` | Additive accumulation/distribution score using existing OHLCV metrics |
 | `kelly_sizer.py` | Kelly Criterion position sizing capped at $500 risk/trade |
 | `portfolio_manager.py` | Manages paper positions: entry, TP1/TP2/TP3 splits (50/30/20), trailing SL, close. Hooks into trade_log on every close. |
 | `portfolio_store.py` | Supabase persistence layer for portfolio positions and state |

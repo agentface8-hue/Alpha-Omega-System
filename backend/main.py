@@ -1536,6 +1536,13 @@ async def get_data_source():
             "delay_min":0 if alpaca_key else 15,"label":"LIVE" if alpaca_key else "DELAYED ~15min"}
 
 
+@app.get("/api/flow/{ticker}")
+async def get_market_flow(ticker: str):
+    """Read-only institutional-flow interpretation for one ticker."""
+    from core.market_flow_agent import analyze_ticker_flow
+    return analyze_ticker_flow(ticker)
+
+
 # ═══════════════════════════════════════════════════════════════════
 # SECTOR FLIP ALERTS
 # ═══════════════════════════════════════════════════════════════════
@@ -1829,6 +1836,7 @@ async def agent_status():
         "agent_running": threads.get("telegram_agent", False),
         "learning_running": learn_on,
         "monitor_running": any(threads.get(n) for n in ("monitor_l1", "monitor_l2", "monitor_l3")),
+        "radar_running": True,
         "active_threads": list(threads.keys()),
     }
 
@@ -1845,6 +1853,34 @@ async def trigger_dream_cycle(request: Request):
     force = body.get("force", False)
     from core.dreaming_agent import run_dream_cycle
     return run_dream_cycle(force=force)
+
+
+# ── AI Radar Agent ────────────────────────────────────────────────────────────
+@app.get("/api/radar/latest")
+async def get_ai_radar_log(limit: int = 5):
+    from core.ai_radar import load_radar_log
+    rows = load_radar_log(limit=limit)
+    return {"briefs": rows, "count": len(rows)}
+
+
+@app.get("/api/radar/status")
+async def get_ai_radar_status():
+    from core.ai_radar import load_radar_log
+    latest = (load_radar_log(limit=1) or [None])[0]
+    return {
+        "running": True,
+        "observer_only": True,
+        "latest_ts": latest.get("ts") if latest else None,
+        "latest_count": latest.get("count") if latest else 0,
+        "latest_summary": latest.get("summary") if latest else "No radar brief yet",
+    }
+
+
+@app.post("/api/radar/run")
+async def run_ai_radar(request: Request):
+    body = await request.json() if request.headers.get("content-type","").startswith("application/json") else {}
+    from core.ai_radar import run_radar_cycle
+    return run_radar_cycle(force=bool(body.get("force", True)))
 
 
 # ── Outcomes Grader ───────────────────────────────────────────────────────────

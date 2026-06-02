@@ -143,6 +143,8 @@ C:\Users\asus\Alpha-Omega-System\
 │   ├── decision_audit.py        ⭐ Replay-grade audit trail (Supabase portfolio_state + JSON fallback)
 │   ├── datahub.py               ⭐ DataHub-lite shared cache with response metadata
 │   ├── trading_safety.py        ⭐ Halt switches, symbol halts, live-mode acknowledgement
+│   ├── ai_radar.py              ⭐ Observer-only scout for useful new AI/platform upgrades
+│   ├── market_flow_agent.py     ⭐ Additive institutional-flow score from existing OHLCV data
 │   ├── printing_portfolio.py    ← Printing Profits engine
 │   ├── printing_scanner.py      ← Scanner for short-duration trades
 │   ├── printing_store.py        ← Printing persistence
@@ -202,6 +204,7 @@ C:\Users\asus\Alpha-Omega-System\
 │       ├── ResultCard.jsx      ← Analysis result display
 │       ├── AuditTrail.jsx      ← Recent replay audit records in Decisions/System
 │       ├── SafetyControls.jsx  ← System-tab HALT ALL / resume safety controls
+│       ├── AiRadar.jsx         ← System-tab AI/tooling upgrade scout panel
 │       ├── LiveTicker.jsx      ← Top price ticker bar
 │       ├── ChartPanel.jsx      ← Chart display panel
 │       └── TopStocks.jsx       ← Top movers widget
@@ -221,6 +224,7 @@ C:\Users\asus\Alpha-Omega-System\
 │   ├── printing_state.json
 │   ├── dream_log.json           ← Dream cycle log (JSON fallback)
 │   ├── outcomes_log.json        ← Trade grades log (JSON fallback)
+│   ├── ai_radar_log.json        ← Observer-only AI Radar briefs
 │   ├── safety_state.json        ← Trading safety halt/live-mode state
 │   ├── audit/decision_audit.json ← Replay audit JSON fallback/cache
 │   └── reports/*.json           ← Per-signal case reports
@@ -270,10 +274,16 @@ C:\Users\asus\Alpha-Omega-System\
 - `GET /api/sectors/momentum-screen` — momentum pre-screen
 - `GET /api/sectors/watchlist/{sector}` — sector stocks by momentum
 - `GET /api/scan/candidates` — bench candidates from last scan
+- `GET /api/flow/{ticker}` — read-only Market Flow score for one ticker
 
 ### Dream Log
 - `POST /api/dreams/run` — trigger dream cycle
 - `GET /api/dreams/latest` — get recent dreams
+
+### AI Radar
+- `GET /api/radar/status` — observer-only radar status
+- `GET /api/radar/latest` — recent AI/tooling upgrade briefs
+- `POST /api/radar/run` — manually scan public AI/platform sources
 
 ### Learning
 - `GET /api/learning/summary` — calibration + outcomes summary
@@ -375,6 +385,13 @@ The Google Sheet was empty for months because no health check tested it.
 The Gemini 429 happened because no monitoring caught the quota exhaustion.
 Before recommending "install X" or "build Y" — check SYSTEM-AUDIT.md and CLAUDE.md first.
 Use Cowork to read actual files, not just memory.
+
+### ⚠️ AI Radar / new platform upgrades are observer-first
+
+New AI features, GitHub repos, social media ideas, MCPs, and platform updates must be compared against the current Alpha-Omega stack before any action.
+Do not duplicate existing modules, reset runtime state, or weaken trading guardrails to adopt something new.
+AI Radar can discover, score, summarize, and recommend, but it must not auto-install packages, auto-change production, auto-deploy, or change trading behavior without Avi's explicit approval.
+Every adoption needs a short plan, platform-fit check, rollback path, and verification.
 
 ### ⚠️ Update this file at the end of every session
 

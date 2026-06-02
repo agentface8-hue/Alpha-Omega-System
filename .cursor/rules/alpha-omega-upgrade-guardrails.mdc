@@ -1,0 +1,17 @@
+---
+description: Guardrails for AI Radar findings and Alpha-Omega system upgrades
+alwaysApply: true
+---
+
+# Alpha-Omega Upgrade Guardrails
+
+Before any new feature, AI Radar recommendation, platform integration, dependency, or system behavior change:
+
+1. **Plan before action.** Present the intended change, why it matters, expected benefit, risks, and verification path before implementation.
+2. **Compare before adopting.** Check the existing Alpha-Omega implementation first, compare the new idea against current modules, and explain why it is better or complementary.
+3. **Do not duplicate systems.** Reuse existing modules, stores, endpoints, UI patterns, scheduled loops, and safety gates before creating parallel functionality.
+4. **Never reset or wipe runtime state.** Do not clear signals, portfolio state, calibration, Supabase data, logs, or caches unless Avi explicitly requests that exact reset.
+5. **Protect production.** AI Radar and research agents are observer-only by default. They may recommend, score, and plan, but must not auto-install, auto-code, auto-deploy, or change trading behavior.
+6. **Preserve trading safety.** Keep paper mode unless Avi explicitly confirms live execution readiness. Do not weaken risk, sector, safety, or portfolio gates without a plan and rollback criteria.
+7. **Check platform fit.** Any proposed tool must support Alpha-Omega's current stack: FastAPI/Render, React/Vercel, Supabase/JSON fallback, Telegram, Windows dev, and low-memory Render constraints.
+8. **Verify before completion.** Run focused tests/builds and relevant production smoke checks before claiming success or recommending deploy.
