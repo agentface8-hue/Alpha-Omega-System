@@ -10,6 +10,7 @@ from __future__ import annotations
 import datetime
 import os
 import time
+from concurrent.futures import ThreadPoolExecutor
 from typing import Any, Callable, Dict, List, Optional
 
 import requests
@@ -186,7 +187,7 @@ def _call_tinker_sdk(symbol: str, baseline: Dict[str, Any], timeout_s: int = 35)
         }
 
     try:
-        return asyncio.run(_run())
+        return _run_async_tinker(_run, timeout_s=timeout_s)
     except Exception as e:
         return {
             "ok": False,
@@ -195,6 +196,22 @@ def _call_tinker_sdk(symbol: str, baseline: Dict[str, Any], timeout_s: int = 35)
             "text": "",
             "latency_ms": 0,
         }
+
+
+def _run_async_tinker(async_fn: Callable[[], Any], timeout_s: int) -> Any:
+    """Run Tinker's async SDK from sync code, including inside FastAPI's event loop."""
+    import asyncio
+
+    try:
+        asyncio.get_running_loop()
+    except RuntimeError:
+        return asyncio.run(async_fn())
+
+    # FastAPI endpoints already run in an event loop; run the SDK coroutine in
+    # a short-lived worker thread so asyncio.run owns its own loop.
+    with ThreadPoolExecutor(max_workers=1) as executor:
+        future = executor.submit(lambda: asyncio.run(async_fn()))
+        return future.result(timeout=timeout_s + 5)
 
 
 def _score_tml_output(text: str) -> Dict[str, Any]:

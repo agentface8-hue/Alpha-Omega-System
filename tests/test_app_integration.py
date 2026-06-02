@@ -307,6 +307,21 @@ def test_thinking_machines_benchmark_compares_outputs_observer_only():
     assert result["results"][0]["tml"]["model"] == "unit-tinker"
 
 
+def test_thinking_machines_async_runner_works_inside_running_loop():
+    """SDK coroutine runner works when called from an already-running FastAPI loop."""
+    import asyncio
+
+    from core.thinking_machines_benchmark import _run_async_tinker
+
+    async def sample():
+        return {"ok": True}
+
+    async def outer():
+        return _run_async_tinker(sample, timeout_s=2)
+
+    assert asyncio.run(outer()) == {"ok": True}
+
+
 def test_decision_ledger_has_outcome_helpers():
     """Ledger has update_decision_outcomes and get_decisions_pending_outcomes for attribution job."""
     from core.decision_ledger import update_decision_outcomes, get_decisions_pending_outcomes
