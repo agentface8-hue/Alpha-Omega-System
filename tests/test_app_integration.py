@@ -243,6 +243,70 @@ def test_market_flow_scores_accumulation_distribution():
     assert "market_flow" in accumulation["summary"].lower()
 
 
+def test_thinking_machines_status_does_not_expose_secret(monkeypatch):
+    """Thinking Machines adapter reports readiness without leaking API keys."""
+    from core import thinking_machines_benchmark as tml
+
+    monkeypatch.setenv("TML_API_KEY", "secret-value")
+    monkeypatch.delenv("TML_MODEL", raising=False)
+    monkeypatch.delenv("TML_BASE_MODEL", raising=False)
+    status = tml.status()
+
+    assert status["observer_only"] is True
+    assert status["api_key_present"] is True
+    assert status["model_present"] is False
+    assert status["base_model_present"] is True
+    assert status["base_model"] == "moonshotai/Kimi-K2.6"
+    assert status["configured"] is True
+    assert status["base_url"].endswith("/oai/api/v1")
+    assert "moonshotai/Kimi-K2.6" in status["model_note"]
+    assert "secret-value" not in str(status)
+
+
+def test_thinking_machines_status_accepts_base_model(monkeypatch):
+    """Tinker can benchmark from a base model without creating a checkpoint."""
+    from core import thinking_machines_benchmark as tml
+
+    monkeypatch.setenv("TML_API_KEY", "secret-value")
+    monkeypatch.setenv("TML_BASE_MODEL", "Qwen/Qwen3-4B-Instruct-2507")
+    monkeypatch.delenv("TML_MODEL", raising=False)
+    status = tml.status()
+
+    assert status["configured"] is True
+    assert status["base_model_present"] is True
+    assert status["base_model"] == "Qwen/Qwen3-4B-Instruct-2507"
+    assert "secret-value" not in str(status)
+
+
+def test_thinking_machines_benchmark_compares_outputs_observer_only():
+    """Benchmark runner compares TML output against Alpha-Omega without trade actions."""
+    from core.thinking_machines_benchmark import run_benchmark
+
+    def alpha_runner(symbol):
+        return {
+            "symbol": symbol,
+            "decision": "HOLD",
+            "analysis": "Risk: earnings soon. Entry needs confirmation. Stop-loss below support.",
+            "confidence": 0.55,
+        }
+
+    def tml_runner(symbol, baseline):
+        return {
+            "text": "Risk: earnings soon. Entry needs confirmation. Stop-loss below support. Also watch volume.",
+            "model": "unit-tinker",
+            "latency_ms": 12,
+        }
+
+    result = run_benchmark(["GOOGL"], alpha_runner=alpha_runner, tml_runner=tml_runner)
+
+    assert result["observer_only"] is True
+    assert result["symbols"] == ["GOOGL"]
+    assert result["summary"]["count"] == 1
+    assert result["summary"]["avg_tml_score"] > 0
+    assert result["results"][0]["trade_action"] == "none"
+    assert result["results"][0]["tml"]["model"] == "unit-tinker"
+
+
 def test_decision_ledger_has_outcome_helpers():
     """Ledger has update_decision_outcomes and get_decisions_pending_outcomes for attribution job."""
     from core.decision_ledger import update_decision_outcomes, get_decisions_pending_outcomes

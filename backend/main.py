@@ -1883,6 +1883,21 @@ async def run_ai_radar(request: Request):
     return run_radar_cycle(force=bool(body.get("force", True)))
 
 
+# ── Thinking Machines / Tinker Benchmark ─────────────────────────────────────
+@app.get("/api/thinking-machines/status")
+async def thinking_machines_status():
+    from core.thinking_machines_benchmark import status
+    return status()
+
+
+@app.post("/api/thinking-machines/benchmark")
+async def thinking_machines_benchmark(request: Request):
+    body = await request.json() if request.headers.get("content-type","").startswith("application/json") else {}
+    symbols = body.get("symbols") or ["GOOGL", "NVDA", "MSFT"]
+    from core.thinking_machines_benchmark import run_benchmark
+    return run_benchmark(symbols)
+
+
 # ── Outcomes Grader ───────────────────────────────────────────────────────────
 @app.get("/api/outcomes/summary")
 async def get_outcomes_summary():

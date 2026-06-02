@@ -54,6 +54,7 @@
 | `datahub.py` | Shared cache layer for high-traffic API reads with cached/age/source metadata |
 | `trading_safety.py` | Global halt, per-symbol halt, live-mode acknowledgement, and execution guardrails |
 | `ai_radar.py` | Observer-only scout that scans public AI/platform sources, compares candidates against Alpha-Omega, and marks benchmark/study/watch actions |
+| `thinking_machines_benchmark.py` | Observer-only Thinking Machines/Tinker benchmark adapter for comparing model output against Alpha-Omega |
 | `market_flow_agent.py` | Additive accumulation/distribution score using existing OHLCV metrics |
 | `kelly_sizer.py` | Kelly Criterion position sizing capped at $500 risk/trade |
 | `portfolio_manager.py` | Manages paper positions: entry, TP1/TP2/TP3 splits (50/30/20), trailing SL, close. Hooks into trade_log on every close. |

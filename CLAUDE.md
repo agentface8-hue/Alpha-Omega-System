@@ -108,6 +108,8 @@ git add frontend/src frontend/dist
 | `GITHUB_TOKEN` | ✅ Set | GitHub MCP direct push |
 | `GOOGLE_API_KEY` | ✅ Set on Render | Gemini for agents + dreaming agent |
 | `ALPHA_VANTAGE_API_KEY` | ✅ Set | Primary real-time price source |
+| `TML_API_KEY` | ✅ Set locally | Thinking Machines/Tinker benchmark adapter |
+| `TML_BASE_MODEL` | optional override | Default benchmark model: `moonshotai/Kimi-K2.6` (use `openai/gpt-oss-120b` for cheaper reasoning tests) |
 | `EXECUTOR_MODE` | paper (default) | Set to `ibkr` when IBKR ready |
 | `IBKR_HOST` | not set | Set when IB Gateway is running |
 | `IBKR_PORT` | 7497 (default) | 7497=paper, 7496=live |
@@ -144,6 +146,7 @@ C:\Users\asus\Alpha-Omega-System\
 │   ├── datahub.py               ⭐ DataHub-lite shared cache with response metadata
 │   ├── trading_safety.py        ⭐ Halt switches, symbol halts, live-mode acknowledgement
 │   ├── ai_radar.py              ⭐ Observer-only scout + Alpha-Omega comparison layer for AI/platform upgrades
+│   ├── thinking_machines_benchmark.py ⭐ Observer-only Tinker benchmark adapter
 │   ├── market_flow_agent.py     ⭐ Additive institutional-flow score from existing OHLCV data
 │   ├── printing_portfolio.py    ← Printing Profits engine
 │   ├── printing_scanner.py      ← Scanner for short-duration trades
@@ -284,6 +287,10 @@ C:\Users\asus\Alpha-Omega-System\
 - `GET /api/radar/status` — observer-only radar status
 - `GET /api/radar/latest` — recent AI/tooling upgrade briefs with Alpha-Omega comparison verdicts
 - `POST /api/radar/run` — manually scan public AI/platform sources
+
+### Thinking Machines / Tinker
+- `GET /api/thinking-machines/status` — safe config/readiness check, no secret values
+- `POST /api/thinking-machines/benchmark` — observer-only benchmark vs Alpha-Omega baseline
 
 ### Learning
 - `GET /api/learning/summary` — calibration + outcomes summary

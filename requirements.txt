@@ -16,6 +16,8 @@ uvicorn
 supabase
 requests
 anthropic
+tinker
+tiktoken
 pytest
 
 matplotlib
