@@ -243,5 +243,19 @@
       "feat: add audit cache safety upgrades",
       "auto: session memory 2026-05-31 19:00"
     ]
+  },
+  {
+    "ts": "2026-06-03T19:00:01.717171",
+    "commits": 8,
+    "messages": [
+      "fix: use full-width two-column layout on System tab",
+      "feat: add observer-only LangGraph and Vertex shadow adapters",
+      "auto: session memory 2026-06-02 19:00",
+      "fix: run Tinker SDK calls outside FastAPI event loop",
+      "feat: add Thinking Machines benchmark adapter",
+      "feat: compare AI Radar findings against Alpha-Omega",
+      "feat: add ai radar and market flow signals",
+      "auto: session memory 2026-06-01 19:00"
+    ]
   }
 ]
