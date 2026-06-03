@@ -294,9 +294,16 @@ export default function SystemMonitor() {
   }
 
   return (
-    <div style={{ padding: "1rem", fontFamily: "var(--font-sans)", maxWidth: 900 }}>
+    <div style={{
+      padding: 10,
+      background: "#050810",
+      minHeight: "calc(100vh - 152px)",
+      width: "100%",
+      boxSizing: "border-box",
+      fontFamily: "var(--font-sans)",
+    }}>
 
-      <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: 16 }}>
+      <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: 16, flexWrap: "wrap", gap: 10 }}>
         <div style={{ display: "flex", alignItems: "center", gap: 10 }}>
           <Dot status={overall} />
           <span style={{ fontSize: 18, fontWeight: 500, color: "var(--color-text-primary)" }}>System Monitor</span>
@@ -322,100 +329,105 @@ export default function SystemMonitor() {
         ))}
       </div>
 
-      <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 12 }}>
-
-        <div style={{ gridColumn: "1 / -1" }}>
+      <div style={{
+        display: "grid",
+        gridTemplateColumns: "repeat(auto-fit, minmax(420px, 1fr))",
+        gap: 12,
+        alignItems: "start",
+      }}>
+        <div>
           <SafetyControls />
-          <AiRadar />
+          <Card title="background agents (render)">
+            {agentStatus ? (
+              <>
+                <Row status={agentStatus.keepalive_running ? "GREEN" : "RED"} label="Keepalive" detail={agentStatus.keepalive_running ? "running" : "stopped"} />
+                <Row status={agentStatus.agent_running ? "GREEN" : "RED"} label="Telegram AI Agent" detail={agentStatus.agent_running ? "polling" : "stopped"} />
+                <Row status={agentStatus.active_threads?.includes("ai_health_agent") ? "GREEN" : "RED"} label="AI Health Monitor" detail="every 30 min" />
+                <Row status={agentStatus.learning_running || agentStatus.active_threads?.includes("learn_fast") ? "GREEN" : "YELLOW"} label="Learning Loop" detail="fast + deep" />
+                <Row status={agentStatus.monitor_running ? "GREEN" : "YELLOW"} label="Live Monitor" detail={agentStatus.monitor_running ? "L1/L2/L3" : "threads missing"} />
+                <Row status={agentStatus.active_threads?.includes("dreaming_agent") ? "GREEN" : "YELLOW"} label="Dreaming Agent" detail="every 4h" />
+              </>
+            ) : <div style={{ fontSize: 13, color: "var(--color-text-secondary)" }}>loading...</div>}
+          </Card>
+
+          <Card title="Autonomous Agent (AMA)">
+            {amaStatus ? (
+              <>
+                <Row status={amaStatus.running && !amaStatus.paused ? "GREEN" : "YELLOW"} label="AMA" detail={amaStatus.paused ? "paused" : amaStatus.running ? "active" : "off"} />
+                <Row status="GREEN" label="Cycle" detail={`#${amaStatus.cycle_number || 0}`} />
+                <Row status="GREEN" label="Actions today" detail={amaStatus.actions_today ?? 0} />
+                <button onClick={runAmaNow} style={{ marginTop: 10, fontSize: 12, padding: "4px 12px", cursor: "pointer", width: "100%" }}>Run AMA cycle now</button>
+              </>
+            ) : <div style={{ fontSize: 13, color: "var(--color-text-secondary)" }}>loading...</div>}
+          </Card>
+
+          <Card title="Agent Platform Adaptation">
+            {platformStatus ? (
+              <>
+                <Row status={platformStatus.no_cost_default ? "GREEN" : "YELLOW"} label="Cost guard" detail={platformStatus.no_cost_default ? "no new cost by default" : "review budget"} />
+                <Row status={platformStatus.observer_only ? "GREEN" : "RED"} label="Mode" detail={platformStatus.observer_only ? "observer-only" : "can mutate"} />
+                <Row status={platformStatus.trading_mutation_allowed ? "RED" : "GREEN"} label="Trading control" detail={platformStatus.trading_mutation_allowed ? "enabled" : "blocked"} />
+                <Row status={(platformStatus.runtime_enabled || []).length ? "YELLOW" : "GREEN"} label="Paid runtimes" detail={(platformStatus.runtime_enabled || []).length ? platformStatus.runtime_enabled.join(", ") : "none enabled"} />
+                <Row status={platformStatus.langgraph_shadow?.enabled ? "YELLOW" : "GREEN"} label="LangGraph shadow" detail={platformStatus.langgraph_shadow?.enabled ? "enabled" : "disabled"} />
+                <Row status={platformStatus.vertex_research?.enabled ? "YELLOW" : "GREEN"} label="Vertex research" detail={platformStatus.vertex_research?.enabled ? "enabled" : "disabled"} />
+                <div style={{ marginTop: 8, fontSize: 11, color: "var(--color-text-secondary)", lineHeight: 1.4 }}>
+                  Next: {platformStatus.next_step}
+                </div>
+              </>
+            ) : <div style={{ fontSize: 13, color: "var(--color-text-secondary)" }}>loading...</div>}
+          </Card>
+
+          <Card title="integrations">
+            {checks.map(c => (
+              <Row key={c.name} status={c.status} label={c.name} detail={c.detail?.slice(0, 45)} />
+            ))}
+          </Card>
         </div>
 
-        <Card title="background agents (render)">
-          {agentStatus ? (
-            <>
-              <Row status={agentStatus.keepalive_running ? "GREEN" : "RED"} label="Keepalive" detail={agentStatus.keepalive_running ? "running" : "stopped"} />
-              <Row status={agentStatus.agent_running ? "GREEN" : "RED"} label="Telegram AI Agent" detail={agentStatus.agent_running ? "polling" : "stopped"} />
-              <Row status={agentStatus.active_threads?.includes("ai_health_agent") ? "GREEN" : "RED"} label="AI Health Monitor" detail="every 30 min" />
-              <Row status={agentStatus.learning_running || agentStatus.active_threads?.includes("learn_fast") ? "GREEN" : "YELLOW"} label="Learning Loop" detail="fast + deep" />
-              <Row status={agentStatus.monitor_running ? "GREEN" : "YELLOW"} label="Live Monitor" detail={agentStatus.monitor_running ? "L1/L2/L3" : "threads missing"} />
-              <Row status={agentStatus.active_threads?.includes("dreaming_agent") ? "GREEN" : "YELLOW"} label="Dreaming Agent" detail="every 4h" />
-            </>
-          ) : <div style={{ fontSize: 13, color: "var(--color-text-secondary)" }}>loading...</div>}
-        </Card>
+        <div>
+          <AiRadar />
 
-        <Card title="Autonomous Agent (AMA)">
-          {amaStatus ? (
-            <>
-              <Row status={amaStatus.running && !amaStatus.paused ? "GREEN" : "YELLOW"} label="AMA" detail={amaStatus.paused ? "paused" : amaStatus.running ? "active" : "off"} />
-              <Row status="GREEN" label="Cycle" detail={`#${amaStatus.cycle_number || 0}`} />
-              <Row status="GREEN" label="Actions today" detail={amaStatus.actions_today ?? 0} />
-              <button onClick={runAmaNow} style={{ marginTop: 10, fontSize: 12, padding: "4px 12px", cursor: "pointer", width: "100%" }}>Run AMA cycle now</button>
-            </>
-          ) : <div style={{ fontSize: 13, color: "var(--color-text-secondary)" }}>loading...</div>}
-        </Card>
-
-        <Card title="Agent Platform Adaptation">
-          {platformStatus ? (
-            <>
-              <Row status={platformStatus.no_cost_default ? "GREEN" : "YELLOW"} label="Cost guard" detail={platformStatus.no_cost_default ? "no new cost by default" : "review budget"} />
-              <Row status={platformStatus.observer_only ? "GREEN" : "RED"} label="Mode" detail={platformStatus.observer_only ? "observer-only" : "can mutate"} />
-              <Row status={platformStatus.trading_mutation_allowed ? "RED" : "GREEN"} label="Trading control" detail={platformStatus.trading_mutation_allowed ? "enabled" : "blocked"} />
-              <Row status={(platformStatus.runtime_enabled || []).length ? "YELLOW" : "GREEN"} label="Paid runtimes" detail={(platformStatus.runtime_enabled || []).length ? platformStatus.runtime_enabled.join(", ") : "none enabled"} />
-              <Row status={platformStatus.langgraph_shadow?.enabled ? "YELLOW" : "GREEN"} label="LangGraph shadow" detail={platformStatus.langgraph_shadow?.enabled ? "enabled" : "disabled"} />
-              <Row status={platformStatus.vertex_research?.enabled ? "YELLOW" : "GREEN"} label="Vertex research" detail={platformStatus.vertex_research?.enabled ? "enabled" : "disabled"} />
-              <div style={{ marginTop: 8, fontSize: 11, color: "var(--color-text-secondary)", lineHeight: 1.4 }}>
-                Next: {platformStatus.next_step}
-              </div>
-            </>
-          ) : <div style={{ fontSize: 13, color: "var(--color-text-secondary)" }}>loading...</div>}
-        </Card>
-
-        <Card title="integrations">
-          {checks.map(c => (
-            <Row key={c.name} status={c.status} label={c.name} detail={c.detail?.slice(0, 45)} />
-          ))}
-        </Card>
-
-        <Card title="AI health agent — last check">
-          {aiHealth ? (
-            <>
-              <div style={{ display: "flex", alignItems: "center", gap: 8, marginBottom: 10 }}>
-                <Badge status={aiHealth.severity} label={aiHealth.severity} />
-                <span style={{ fontSize: 13, color: "var(--color-text-secondary)" }}>{aiHealth.headline}</span>
-              </div>
-              {(aiHealth.issues || []).map((i, idx) => (
-                <Row key={idx} status={i.severity === "HIGH" ? "RED" : "YELLOW"} label={i.issue} detail={i.data} />
-              ))}
-              {aiHealth.applied_fixes?.length > 0 && (
-                <div style={{ marginTop: 8, fontSize: 12, color: "#27500A", background: "#EAF3DE", padding: "6px 10px", borderRadius: 6 }}>
-                  Auto-fixed: {aiHealth.applied_fixes.map(f => f.action).join(", ")}
+          <Card title="AI health agent — last check">
+            {aiHealth ? (
+              <>
+                <div style={{ display: "flex", alignItems: "center", gap: 8, marginBottom: 10 }}>
+                  <Badge status={aiHealth.severity} label={aiHealth.severity} />
+                  <span style={{ fontSize: 13, color: "var(--color-text-secondary)" }}>{aiHealth.headline}</span>
                 </div>
-              )}
-              <button onClick={runAgentNow} style={{ marginTop: 10, fontSize: 12, padding: "4px 12px", cursor: "pointer", width: "100%" }}>Force run now</button>
-            </>
-          ) : <div style={{ fontSize: 13, color: "var(--color-text-secondary)" }}>loading...</div>}
-        </Card>
+                {(aiHealth.issues || []).map((i, idx) => (
+                  <Row key={idx} status={i.severity === "HIGH" ? "RED" : "YELLOW"} label={i.issue} detail={i.data} />
+                ))}
+                {aiHealth.applied_fixes?.length > 0 && (
+                  <div style={{ marginTop: 8, fontSize: 12, color: "#27500A", background: "#EAF3DE", padding: "6px 10px", borderRadius: 6 }}>
+                    Auto-fixed: {aiHealth.applied_fixes.map(f => f.action).join(", ")}
+                  </div>
+                )}
+                <button onClick={runAgentNow} style={{ marginTop: 10, fontSize: 12, padding: "4px 12px", cursor: "pointer", width: "100%" }}>Force run now</button>
+              </>
+            ) : <div style={{ fontSize: 13, color: "var(--color-text-secondary)" }}>loading...</div>}
+          </Card>
 
-        <Card title="performance">
-          {perf && (perf.total_trades > 0 || perf.total > 0) ? (
-            <>
-              <Row status="GREEN" label="Total trades" detail={perf.total_trades ?? perf.total} />
-              <Row status="GREEN" label="Avg win"      detail={perf.avg_win_pct  != null ? `+${perf.avg_win_pct}%`  : "-"} />
-              <Row status="GREEN" label="Avg loss"     detail={perf.avg_loss_pct != null ? `${perf.avg_loss_pct}%`  : "-"} />
-              <Row status="GREEN" label="TP1 hit rate" detail={perf.tp1_hit_rate != null ? `${perf.tp1_hit_rate}%`  : "-"} />
-              <Row status={(perf.stopped_out_rate ?? 0) > 60 ? "YELLOW" : "GREEN"} label="Stopped out" detail={perf.stopped_out_rate != null ? `${perf.stopped_out_rate}%` : "-"} />
-              <button onClick={runLearning} style={{ marginTop: 10, fontSize: 12, padding: "4px 12px", cursor: "pointer", width: "100%" }}>Run fast learning</button>
-              <button onClick={runDeepLearning} disabled={deepRunning} style={{ marginTop: 6, fontSize: 12, padding: "4px 12px", cursor: deepRunning ? "wait" : "pointer", width: "100%" }}>
-                {deepRunning ? "Deep research running…" : "Run deep research (Opus)"}
-              </button>
-              {learningSummary?.deep_research_latest?.headline && (
-                <div style={{ marginTop: 8, fontSize: 11, color: "var(--color-text-secondary)", lineHeight: 1.4 }}>
-                  Last research: {learningSummary.deep_research_latest.headline}
-                </div>
-              )}
-            </>
-          ) : <div style={{ fontSize: 13, color: "var(--color-text-secondary)" }}>loading performance...</div>}
-        </Card>
-
+          <Card title="performance">
+            {perf && (perf.total_trades > 0 || perf.total > 0) ? (
+              <>
+                <Row status="GREEN" label="Total trades" detail={perf.total_trades ?? perf.total} />
+                <Row status="GREEN" label="Avg win"      detail={perf.avg_win_pct  != null ? `+${perf.avg_win_pct}%`  : "-"} />
+                <Row status="GREEN" label="Avg loss"     detail={perf.avg_loss_pct != null ? `${perf.avg_loss_pct}%`  : "-"} />
+                <Row status="GREEN" label="TP1 hit rate" detail={perf.tp1_hit_rate != null ? `${perf.tp1_hit_rate}%`  : "-"} />
+                <Row status={(perf.stopped_out_rate ?? 0) > 60 ? "YELLOW" : "GREEN"} label="Stopped out" detail={perf.stopped_out_rate != null ? `${perf.stopped_out_rate}%` : "-"} />
+                <button onClick={runLearning} style={{ marginTop: 10, fontSize: 12, padding: "4px 12px", cursor: "pointer", width: "100%" }}>Run fast learning</button>
+                <button onClick={runDeepLearning} disabled={deepRunning} style={{ marginTop: 6, fontSize: 12, padding: "4px 12px", cursor: deepRunning ? "wait" : "pointer", width: "100%" }}>
+                  {deepRunning ? "Deep research running…" : "Run deep research (Opus)"}
+                </button>
+                {learningSummary?.deep_research_latest?.headline && (
+                  <div style={{ marginTop: 8, fontSize: 11, color: "var(--color-text-secondary)", lineHeight: 1.4 }}>
+                    Last research: {learningSummary.deep_research_latest.headline}
+                  </div>
+                )}
+              </>
+            ) : <div style={{ fontSize: 13, color: "var(--color-text-secondary)" }}>loading performance...</div>}
+          </Card>
+        </div>
       </div>
 
       <Card title="live activity log">
