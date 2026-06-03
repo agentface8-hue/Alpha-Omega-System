@@ -322,6 +322,126 @@ def test_thinking_machines_async_runner_works_inside_running_loop():
     assert asyncio.run(outer()) == {"ok": True}
 
 
+def test_agent_platform_evaluator_is_no_cost_and_observer_only(monkeypatch):
+    """Agent platform adaptation must not create paid calls or trading authority by default."""
+    monkeypatch.delenv("VERTEX_SHADOW_ENABLED", raising=False)
+    monkeypatch.delenv("LANGGRAPH_SHADOW_ENABLED", raising=False)
+    monkeypatch.delenv("CURSOR_AGENT_PLATFORM_ENABLED", raising=False)
+
+    from core.agent_platform_evaluator import compare_agent_platforms
+
+    report = compare_agent_platforms()
+
+    assert report["no_cost_default"] is True
+    assert report["observer_only"] is True
+    assert report["trading_mutation_allowed"] is False
+    assert report["recommended_architecture"][0]["platform"] == "cursor"
+    assert report["recommended_architecture"][1]["platform"] == "langgraph"
+    assert report["recommended_architecture"][2]["platform"] == "vertex"
+    assert "portfolio_manager" in report["protected_core"]
+
+
+def test_langgraph_shadow_is_disabled_by_default(monkeypatch):
+    """LangGraph shadow must stay off unless explicitly enabled."""
+    monkeypatch.delenv("LANGGRAPH_SHADOW_ENABLED", raising=False)
+
+    from core.langgraph_shadow import status
+
+    cfg = status()
+    assert cfg["observer_only"] is True
+    assert cfg["trading_mutation_allowed"] is False
+    assert cfg["enabled"] is False
+
+
+def test_langgraph_shadow_runs_read_only_research_when_enabled(monkeypatch):
+    """LangGraph shadow reuses existing scoring stack without portfolio mutation."""
+    monkeypatch.setenv("LANGGRAPH_SHADOW_ENABLED", "true")
+
+    from core.langgraph_shadow import run_shadow_research
+
+    def fake_regime():
+        return {"regime": "RISK_ON"}
+
+    def fake_data(symbol):
+        return {"symbol": symbol, "close": 100.0}
+
+    def fake_score(data, regime):
+        return {"symbol": data["symbol"], "decision": "WATCH", "confidence": 0.61}
+
+    monkeypatch.setattr("core.market_data.fetch_market_regime", fake_regime)
+    monkeypatch.setattr("core.market_data.fetch_ticker_data", fake_data)
+    monkeypatch.setattr("core.conviction_engine.score_ticker", fake_score)
+
+    result = run_shadow_research("NVDA")
+
+    assert result["observer_only"] is True
+    assert result["trade_action"] == "none"
+    assert result["symbol"] == "NVDA"
+    assert result["checkpoints"]
+    assert result["score"]["decision"] == "WATCH"
+
+
+def test_vertex_research_runtime_is_disabled_by_default(monkeypatch):
+    """Vertex research runtime must not call paid APIs unless explicitly enabled."""
+    monkeypatch.delenv("VERTEX_SHADOW_ENABLED", raising=False)
+    monkeypatch.delenv("GOOGLE_CLOUD_PROJECT", raising=False)
+
+    from core.vertex_research_runtime import status
+
+    cfg = status()
+    assert cfg["observer_only"] is True
+    assert cfg["trading_mutation_allowed"] is False
+    assert cfg["enabled"] is False
+    assert cfg["external_calls_made"] is False
+
+
+def test_vertex_research_shadow_dream_does_not_save_dream(monkeypatch):
+    """Vertex dream shadow builds context only; it must not duplicate dream persistence."""
+    monkeypatch.setenv("VERTEX_SHADOW_ENABLED", "true")
+    monkeypatch.setenv("GOOGLE_CLOUD_PROJECT", "alpha-omega-test")
+
+    from core import vertex_research_runtime as vr
+
+    monkeypatch.setattr(vr, "_vertex_generate", lambda prompt: {"text": "shadow-only", "provider": "vertex_stub"})
+    monkeypatch.setattr(
+        "core.dreaming_agent._quick_scan_top_tickers",
+        lambda tickers: [{"ticker": "NVDA", "conviction": 80}],
+    )
+    monkeypatch.setattr(
+        "core.dreaming_agent._build_dream_prompt",
+        lambda market_ctx, scan_results: "dream prompt",
+    )
+
+    saved = {"called": False}
+
+    def _block_save(_dream):
+        saved["called"] = True
+        return True
+
+    monkeypatch.setattr("core.dreaming_agent._save_dream", _block_save)
+
+    result = vr.run_shadow_task("dream", force=True)
+
+    assert result["observer_only"] is True
+    assert result["trade_action"] == "none"
+    assert saved["called"] is False
+    assert result["task"] == "dream"
+
+
+def test_platform_shadow_api_routes_are_read_only():
+    """Backend exposes read-only platform/shadow endpoints."""
+    from backend.main import app
+
+    routes = {(tuple(sorted(route.methods)), route.path) for route in app.routes if hasattr(route, "methods")}
+
+    assert (("GET",), "/api/agent-platforms/compare") in routes
+    assert (("GET",), "/api/agent-platforms/status") in routes
+    assert (("GET",), "/api/langgraph-shadow/status") in routes
+    assert (("POST",), "/api/langgraph-shadow/run") in routes
+    assert (("GET",), "/api/vertex-research/status") in routes
+    assert (("POST",), "/api/vertex-research/shadow") in routes
+
+
 def test_decision_ledger_has_outcome_helpers():
     """Ledger has update_decision_outcomes and get_decisions_pending_outcomes for attribution job."""
     from core.decision_ledger import update_decision_outcomes, get_decisions_pending_outcomes

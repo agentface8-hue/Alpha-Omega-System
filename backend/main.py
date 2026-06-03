@@ -129,6 +129,56 @@ async def memory_status():
     except Exception as e:
         return {"error": str(e)}
 
+
+@app.get("/api/agent-platforms/status")
+async def agent_platforms_status():
+    """No-cost status for agent platform adaptation readiness."""
+    from core.agent_platform_evaluator import status
+
+    return status()
+
+
+@app.get("/api/agent-platforms/compare")
+async def agent_platforms_compare():
+    """Compare agent platform options without granting trading authority."""
+    from core.agent_platform_evaluator import compare_agent_platforms
+
+    return compare_agent_platforms()
+
+
+@app.get("/api/langgraph-shadow/status")
+async def langgraph_shadow_status():
+    from core.langgraph_shadow import load_shadow_log, status
+
+    return {"config": status(), "recent": load_shadow_log(limit=5)}
+
+
+@app.post("/api/langgraph-shadow/run")
+async def langgraph_shadow_run(request: Request):
+    body = await request.json() if request.headers.get("content-type", "").startswith("application/json") else {}
+    symbol = body.get("symbol") or "NVDA"
+    from core.langgraph_shadow import run_shadow_research
+
+    return run_shadow_research(symbol)
+
+
+@app.get("/api/vertex-research/status")
+async def vertex_research_status():
+    from core.vertex_research_runtime import load_shadow_log, status
+
+    return {"config": status(), "recent": load_shadow_log(limit=5)}
+
+
+@app.post("/api/vertex-research/shadow")
+async def vertex_research_shadow(request: Request):
+    body = await request.json() if request.headers.get("content-type", "").startswith("application/json") else {}
+    task = body.get("task") or "eval"
+    force = bool(body.get("force", False))
+    symbols = body.get("symbols")
+    from core.vertex_research_runtime import run_shadow_task
+
+    return run_shadow_task(task, force=force, symbols=symbols)
+
 @app.on_event("startup")
 async def startup_all():
     """Single startup handler — auth seed + background services."""

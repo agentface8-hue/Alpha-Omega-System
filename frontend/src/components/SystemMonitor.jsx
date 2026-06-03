@@ -83,6 +83,7 @@ export default function SystemMonitor() {
   const [learningSummary, setLearningSummary] = useState(null);
   const [deepRunning, setDeepRunning] = useState(false);
   const [amaStatus, setAmaStatus] = useState(null);
+  const [platformStatus, setPlatformStatus] = useState(null);
 
   function addLog(msg, level = "info") {
     const now = new Date();
@@ -108,7 +109,7 @@ export default function SystemMonitor() {
     const runFull = forceFull || tickRef.current % 5 === 1;
     try {
       const healthPath = runFull ? "/api/health/full" : "/api/health/quick";
-      const [h, a, ai, p, m, mon, learn, ama] = await Promise.allSettled([
+      const [h, a, ai, p, m, mon, learn, ama, platforms] = await Promise.allSettled([
         fetchJson(healthPath, runFull ? 22000 : 12000),
         fetchJson("/api/agent/status", 10000),
         fetchJson("/api/health/agent", 10000),
@@ -117,6 +118,7 @@ export default function SystemMonitor() {
         fetchJson("/api/monitor/status", 10000),
         fetchJson("/api/learning/summary", 12000),
         fetchJson("/api/ama/status", 8000),
+        fetchJson("/api/agent-platforms/status", 8000),
       ]);
 
       if (h.status === "fulfilled") {
@@ -144,6 +146,7 @@ export default function SystemMonitor() {
       }
       if (learn.status === "fulfilled") setLearningSummary(learn.value);
       if (ama.status === "fulfilled") setAmaStatus(ama.value);
+      if (platforms.status === "fulfilled") setPlatformStatus(platforms.value);
 
       setLastRefresh(new Date());
       addLog(`Refresh OK (${runFull ? "full" : "quick"} health)`, "info");
@@ -346,6 +349,22 @@ export default function SystemMonitor() {
               <Row status="GREEN" label="Cycle" detail={`#${amaStatus.cycle_number || 0}`} />
               <Row status="GREEN" label="Actions today" detail={amaStatus.actions_today ?? 0} />
               <button onClick={runAmaNow} style={{ marginTop: 10, fontSize: 12, padding: "4px 12px", cursor: "pointer", width: "100%" }}>Run AMA cycle now</button>
+            </>
+          ) : <div style={{ fontSize: 13, color: "var(--color-text-secondary)" }}>loading...</div>}
+        </Card>
+
+        <Card title="Agent Platform Adaptation">
+          {platformStatus ? (
+            <>
+              <Row status={platformStatus.no_cost_default ? "GREEN" : "YELLOW"} label="Cost guard" detail={platformStatus.no_cost_default ? "no new cost by default" : "review budget"} />
+              <Row status={platformStatus.observer_only ? "GREEN" : "RED"} label="Mode" detail={platformStatus.observer_only ? "observer-only" : "can mutate"} />
+              <Row status={platformStatus.trading_mutation_allowed ? "RED" : "GREEN"} label="Trading control" detail={platformStatus.trading_mutation_allowed ? "enabled" : "blocked"} />
+              <Row status={(platformStatus.runtime_enabled || []).length ? "YELLOW" : "GREEN"} label="Paid runtimes" detail={(platformStatus.runtime_enabled || []).length ? platformStatus.runtime_enabled.join(", ") : "none enabled"} />
+              <Row status={platformStatus.langgraph_shadow?.enabled ? "YELLOW" : "GREEN"} label="LangGraph shadow" detail={platformStatus.langgraph_shadow?.enabled ? "enabled" : "disabled"} />
+              <Row status={platformStatus.vertex_research?.enabled ? "YELLOW" : "GREEN"} label="Vertex research" detail={platformStatus.vertex_research?.enabled ? "enabled" : "disabled"} />
+              <div style={{ marginTop: 8, fontSize: 11, color: "var(--color-text-secondary)", lineHeight: 1.4 }}>
+                Next: {platformStatus.next_step}
+              </div>
             </>
           ) : <div style={{ fontSize: 13, color: "var(--color-text-secondary)" }}>loading...</div>}
         </Card>

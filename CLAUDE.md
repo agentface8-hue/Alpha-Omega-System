@@ -110,6 +110,11 @@ git add frontend/src frontend/dist
 | `ALPHA_VANTAGE_API_KEY` | ✅ Set | Primary real-time price source |
 | `TML_API_KEY` | ✅ Set locally | Thinking Machines/Tinker benchmark adapter |
 | `TML_BASE_MODEL` | optional override | Default benchmark model: `moonshotai/Kimi-K2.6` (use `openai/gpt-oss-120b` for cheaper reasoning tests) |
+| `LANGGRAPH_SHADOW_ENABLED` | off by default | Enables read-only LangGraph research shadow workflow |
+| `VERTEX_SHADOW_ENABLED` | off by default | Enables Vertex research shadow runtime after GCP project approval |
+| `GOOGLE_CLOUD_PROJECT` | not set | Required only when Vertex shadow is enabled |
+| `VERTEX_LOCATION` | us-central1 (default) | Vertex region for shadow research runtime |
+| `VERTEX_MODEL` | gemini-2.0-flash (default) | Vertex model for shadow dream/eval tasks |
 | `EXECUTOR_MODE` | paper (default) | Set to `ibkr` when IBKR ready |
 | `IBKR_HOST` | not set | Set when IB Gateway is running |
 | `IBKR_PORT` | 7497 (default) | 7497=paper, 7496=live |
@@ -146,6 +151,9 @@ C:\Users\asus\Alpha-Omega-System\
 │   ├── datahub.py               ⭐ DataHub-lite shared cache with response metadata
 │   ├── trading_safety.py        ⭐ Halt switches, symbol halts, live-mode acknowledgement
 │   ├── ai_radar.py              ⭐ Observer-only scout + Alpha-Omega comparison layer for AI/platform upgrades
+│   ├── agent_platform_evaluator.py ⭐ No-cost platform adaptation evaluator + shadow status aggregation
+│   ├── langgraph_shadow.py      ⭐ Observer-only LangGraph research workflow shadow
+│   ├── vertex_research_runtime.py ⭐ Observer-only Vertex research shadow for dream/radar/eval
 │   ├── thinking_machines_benchmark.py ⭐ Observer-only Tinker benchmark adapter
 │   ├── market_flow_agent.py     ⭐ Additive institutional-flow score from existing OHLCV data
 │   ├── printing_portfolio.py    ← Printing Profits engine
@@ -287,6 +295,14 @@ C:\Users\asus\Alpha-Omega-System\
 - `GET /api/radar/status` — observer-only radar status
 - `GET /api/radar/latest` — recent AI/tooling upgrade briefs with Alpha-Omega comparison verdicts
 - `POST /api/radar/run` — manually scan public AI/platform sources
+
+### Agent Platform Adaptation
+- `GET /api/agent-platforms/status` — no-cost/observer-only adaptation readiness
+- `GET /api/agent-platforms/compare` — compares Cursor, LangGraph, Vertex, CrewAI, Microsoft Agent Framework
+- `GET /api/langgraph-shadow/status` — LangGraph shadow config + recent runs
+- `POST /api/langgraph-shadow/run` — read-only LangGraph research shadow for one symbol
+- `GET /api/vertex-research/status` — Vertex research shadow config + recent runs
+- `POST /api/vertex-research/shadow` — shadow dream/radar/eval tasks without trading mutation
 
 ### Thinking Machines / Tinker
 - `GET /api/thinking-machines/status` — safe config/readiness check, no secret values
