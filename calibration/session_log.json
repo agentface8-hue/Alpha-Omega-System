@@ -257,5 +257,15 @@
       "feat: add ai radar and market flow signals",
       "auto: session memory 2026-06-01 19:00"
     ]
+  },
+  {
+    "ts": "2026-06-04T19:00:01.542441",
+    "commits": 4,
+    "messages": [
+      "auto: session memory 2026-06-03 19:00",
+      "fix: use full-width two-column layout on System tab",
+      "feat: add observer-only LangGraph and Vertex shadow adapters",
+      "auto: session memory 2026-06-02 19:00"
+    ]
   }
 ]

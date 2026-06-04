@@ -1,6 +1,6 @@
 # CLAUDE.md — Alpha-Omega System
 # ⚠️ READ THIS FIRST — BEFORE TOUCHING ANYTHING ⚠️
-# Last Updated: 2026-06-03
+# Last Updated: 2026-06-04
 
 > **System management:** Cursor AI only (ops/deploy/fixes). Claude: context and briefs only. Frozen stability stack: `CURSOR-AGENT-BRIEF.md` § DO NOT TOUCH.
 
@@ -448,7 +448,12 @@ This is the only way knowledge survives across sessions.
 | DTP guardrail fires | TP ordering inversion after scaling | Already handled in portfolio_manager.py |
 
 ## 16. RECENT SESSION CHANGES
-*Auto-updated: 2026-06-03 19:00 UTC*
+*Auto-updated: 2026-06-04 19:00 UTC*
+
+### `28085da` 2026-06-03 22:00 - auto: session memory 2026-06-03 19:00
+- `CLAUDE.md`
+- `MASTER-KNOWLEDGE.md`
+- `calibration/session_log.json`
 
 ### `d371d49` 2026-06-03 11:32 - fix: use full-width two-column layout on System tab
 - `frontend/src/components/SystemMonitor.jsx`
@@ -461,36 +466,6 @@ This is the only way knowledge survives across sessions.
 - `core/langgraph_shadow.py`
 
 ### `e2407e8` 2026-06-02 22:00 - auto: session memory 2026-06-02 19:00
-- `CLAUDE.md`
-- `MASTER-KNOWLEDGE.md`
-- `calibration/session_log.json`
-
-### `c9c1d63` 2026-06-02 15:16 - fix: run Tinker SDK calls outside FastAPI event loop
-- `core/thinking_machines_benchmark.py`
-- `tests/test_app_integration.py`
-
-### `7e61492` 2026-06-02 14:31 - feat: add Thinking Machines benchmark adapter
-- `CLAUDE.md`
-- `SYSTEM-AUDIT.md`
-- `backend/main.py`
-- `core/thinking_machines_benchmark.py`
-- `requirements.txt`
-
-### `a23195f` 2026-06-02 11:30 - feat: compare AI Radar findings against Alpha-Omega
-- `CLAUDE.md`
-- `SYSTEM-AUDIT.md`
-- `core/ai_radar.py`
-- `frontend/src/components/AiRadar.jsx`
-- `tests/test_app_integration.py`
-
-### `0ba1027` 2026-06-02 10:14 - feat: add ai radar and market flow signals
-- `.cursor/rules/alpha-omega-upgrade-guardrails.mdc`
-- `CLAUDE.md`
-- `SYSTEM-AUDIT.md`
-- `backend/main.py`
-- `core/ai_radar.py`
-
-### `11d0222` 2026-06-01 22:00 - auto: session memory 2026-06-01 19:00
 - `CLAUDE.md`
 - `MASTER-KNOWLEDGE.md`
 - `calibration/session_log.json`
