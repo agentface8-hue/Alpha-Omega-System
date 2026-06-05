@@ -1,6 +1,6 @@
 # CLAUDE.md — Alpha-Omega System
 # ⚠️ READ THIS FIRST — BEFORE TOUCHING ANYTHING ⚠️
-# Last Updated: 2026-06-04
+# Last Updated: 2026-06-05
 
 > **System management:** Cursor AI only (ops/deploy/fixes). Claude: context and briefs only. Frozen stability stack: `CURSOR-AGENT-BRIEF.md` § DO NOT TOUCH.
 
@@ -448,24 +448,14 @@ This is the only way knowledge survives across sessions.
 | DTP guardrail fires | TP ordering inversion after scaling | Already handled in portfolio_manager.py |
 
 ## 16. RECENT SESSION CHANGES
-*Auto-updated: 2026-06-04 19:00 UTC*
+*Auto-updated: 2026-06-05 19:00 UTC*
 
-### `28085da` 2026-06-03 22:00 - auto: session memory 2026-06-03 19:00
+### `66a33fb` 2026-06-04 22:00 - auto: session memory 2026-06-04 19:00
 - `CLAUDE.md`
 - `MASTER-KNOWLEDGE.md`
 - `calibration/session_log.json`
 
-### `d371d49` 2026-06-03 11:32 - fix: use full-width two-column layout on System tab
-- `frontend/src/components/SystemMonitor.jsx`
-
-### `bdf0e93` 2026-06-03 11:14 - feat: add observer-only LangGraph and Vertex shadow adapters
-- `CLAUDE.md`
-- `SYSTEM-AUDIT.md`
-- `backend/main.py`
-- `core/agent_platform_evaluator.py`
-- `core/langgraph_shadow.py`
-
-### `e2407e8` 2026-06-02 22:00 - auto: session memory 2026-06-02 19:00
+### `28085da` 2026-06-03 22:00 - auto: session memory 2026-06-03 19:00
 - `CLAUDE.md`
 - `MASTER-KNOWLEDGE.md`
 - `calibration/session_log.json`
