@@ -4,53 +4,155 @@
   "offset": 0,
   "updated_at": "2026-02-26T17:32:58.989022",
   "conviction_offsets": {
-    "85-100": 1.9,
-    "75-84": -1.1,
-    "65-74": -4.9,
-    "60-64": -15.5
+    "85-100": -2.3,
+    "75-84": -10.5,
+    "65-74": -6.3,
+    "60-64": -15.5,
+    "50-59": 2.3
   },
   "conviction_stats": {
     "85-100": {
-      "win_rate": 100.0,
-      "samples": 1,
-      "offset": 1.9
+      "win_rate": 83.3,
+      "samples": 6,
+      "offset": -2.3
     },
     "75-84": {
-      "win_rate": 75.0,
-      "samples": 4,
-      "offset": -1.1
+      "win_rate": 37.5,
+      "samples": 16,
+      "offset": -10.5
     },
     "65-74": {
-      "win_rate": 50.0,
-      "samples": 4,
-      "offset": -4.9
+      "win_rate": 44.4,
+      "samples": 27,
+      "offset": -6.3
     },
     "60-64": {
       "win_rate": 0.0,
-      "samples": 1,
+      "samples": 2,
       "offset": -15.5
+    },
+    "50-59": {
+      "win_rate": 63.6,
+      "samples": 11,
+      "offset": 2.3
     }
   },
   "regime_thresholds": {
-    "Trending Bull": 72,
-    "Choppy / Range": 65,
-    "High-Vol Event": 70,
-    "Trending Bear": 75
+    "Trending Bull": 75,
+    "High-Vol Event": 60,
+    "Choppy / Range": 60,
+    "": 60
   },
   "regime_stats": {
     "Trending Bull": {
-      "win_rate": 83.3,
+      "win_rate": 34.4,
+      "samples": 61,
+      "min_conviction": 75
+    },
+    "High-Vol Event": {
+      "win_rate": 70.6,
+      "samples": 17,
+      "min_conviction": 60
+    },
+    "Choppy / Range": {
+      "win_rate": 100.0,
       "samples": 6,
+      "min_conviction": 60
+    },
+    "": {
+      "win_rate": 60.0,
+      "samples": 10,
       "min_conviction": 60
     }
   },
   "advisor_accuracy": {
-    "accuracy_pct": null,
-    "weight": 1.0
+    "accuracy_pct": 0.0,
+    "correct": 0,
+    "wrong": 2,
+    "veto_saved": 0,
+    "veto_wrong": 0,
+    "weight": 0.5
   },
-  "fast_run_count": 1,
-  "last_fast_run": "2026-05-14T13:10:28.389467",
-  "signals_analyzed": 10,
-  "last_updated": "2026-05-16T05:00:45.334587",
-  "march_fix_note": "March 2026 losses from loose initial settings (threshold=60). Fixed 2026-05-16: Trending Bull raised to 72, closed-session blocked."
+  "fast_run_count": 6,
+  "last_fast_run": "2026-06-08T23:34:33.330622",
+  "signals_analyzed": 94,
+  "last_updated": "2026-06-08T23:34:33.330622",
+  "march_fix_note": "March 2026 losses from loose initial settings (threshold=60). Fixed 2026-05-16: Trending Bull raised to 72, closed-session blocked.",
+  "sector_bias": {
+    "Other": "NEUTRAL",
+    "Energy": "COLD",
+    "Consumer Discretionary": "NEUTRAL",
+    "Technology": "HOT",
+    "Industrials": "COLD",
+    "Health Care": "COLD",
+    "Communication Services": "COLD",
+    "Consumer Staples": "COLD"
+  },
+  "sector_stats": {
+    "Other": {
+      "win_rate": 40.0,
+      "avg_pnl": 0.29,
+      "samples": 25,
+      "bias": "NEUTRAL"
+    },
+    "Energy": {
+      "win_rate": 0.0,
+      "avg_pnl": -2.53,
+      "samples": 4,
+      "bias": "COLD"
+    },
+    "Consumer Discretionary": {
+      "win_rate": 50.0,
+      "avg_pnl": 6.91,
+      "samples": 4,
+      "bias": "NEUTRAL"
+    },
+    "Technology": {
+      "win_rate": 65.0,
+      "avg_pnl": 6.72,
+      "samples": 40,
+      "bias": "HOT"
+    },
+    "Industrials": {
+      "win_rate": 33.3,
+      "avg_pnl": 2.3,
+      "samples": 3,
+      "bias": "COLD"
+    },
+    "Health Care": {
+      "win_rate": 33.3,
+      "avg_pnl": -0.16,
+      "samples": 3,
+      "bias": "COLD"
+    },
+    "Communication Services": {
+      "win_rate": 37.5,
+      "avg_pnl": 1.89,
+      "samples": 8,
+      "bias": "COLD"
+    },
+    "Consumer Staples": {
+      "win_rate": 25.0,
+      "avg_pnl": -0.79,
+      "samples": 4,
+      "bias": "COLD"
+    }
+  },
+  "theme_performance": {
+    "AI_CAPEX": {
+      "samples": 2,
+      "win_rate": 100.0,
+      "avg_pnl": 148.275
+    },
+    "MEMORY_HBM": {
+      "samples": 2,
+      "win_rate": 100.0,
+      "avg_pnl": 148.275
+    },
+    "CYBER_SECURITY": {
+      "samples": 2,
+      "win_rate": 100.0,
+      "avg_pnl": 148.275
+    }
+  }
 }

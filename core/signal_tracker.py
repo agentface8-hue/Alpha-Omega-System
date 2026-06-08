@@ -734,8 +734,11 @@ def check_signals() -> Dict[str, Any]:
 
         # ── Trailing SL (TSL) — ratchets up as highest_price rises ──────────
         # Activates once trade is TSL_TRIGGER_PCT% in profit.
-        # New SL = highest_price - (atr * regime_sl_mult), floored at entry.
+        # New SL = highest_price - (atr * regime_sl_mult).
         # SL ONLY moves up — never down.
+        # GUARD: Only advance TSL when the formula naturally stays above entry.
+        # Without this guard, a tiny gain (+0.5%) with large ATR would set
+        # SL = entry (floor trap) → immediate stop-out at 0% on any pullback.
         if s["pnl_pct"] >= TSL_TRIGGER_PCT:
             atr      = s.get("atr_at_entry", 0)
             highest  = s["highest_price"]
@@ -747,10 +750,10 @@ def check_signals() -> Dict[str, Any]:
                 new_tsl = round(highest - atr * sl_mult, 4)
             else:
                 new_tsl = round(highest * 0.98, 4)  # fallback: 2% below high
-            # Floor: never let a winner turn into a loser
-            new_tsl = max(new_tsl, entry)
-            # Only ratchet UP
-            if new_tsl > curr_sl:
+            # Only proceed if formula naturally stays above entry price.
+            # If new_tsl <= entry the trade hasn't moved far enough yet;
+            # keep the original SL and wait for a bigger move.
+            if new_tsl > entry and new_tsl > curr_sl:
                 if not s.get("trailing_sl_active"):
                     s["original_sl"] = s.get("original_sl", curr_sl)
                     s["trailing_sl_active"] = True
@@ -875,8 +878,11 @@ def check_signals() -> Dict[str, Any]:
                 elif _dtp_state == "PROTECTING":
                     # Tighten TSL to highest - 0.75×ATR
                     _tight_sl = round(s.get("highest_price", price) - _atr * 0.75, 4)
-                    _tight_sl = max(_tight_sl, s.get("entry_price", 0))
-                    if _tight_sl > s.get("sl", 0):
+                    _entry_p = s.get("entry_price", 0)
+                    # Guard: only tighten if formula stays above entry (prevents floor trap)
+                    if _tight_sl <= _entry_p:
+                        _tight_sl = _entry_p  # keep at entry minimum but don't advance
+                    if _tight_sl > s.get("sl", 0) and _tight_sl > _entry_p:
                         _old_sl_p = s["sl"]
                         s["sl"] = _tight_sl
                         s["trailing_sl_active"] = True
@@ -895,8 +901,10 @@ def check_signals() -> Dict[str, Any]:
                     if s.get("pnl_pct", 0) > 5.0:
                         # Profitable > 5% — tighten SL, let TSL handle exit
                         _exit_tight_sl = round(s.get("highest_price", price) - _atr * 0.5, 4)
-                        _exit_tight_sl = max(_exit_tight_sl, s.get("entry_price", 0))
-                        if _exit_tight_sl > s.get("sl", 0):
+                        _exit_entry = s.get("entry_price", 0)
+                        # Guard: only tighten if formula stays above entry (prevents floor trap)
+                        _exit_tight_sl = max(_exit_tight_sl, _exit_entry)
+                        if _exit_tight_sl > s.get("sl", 0) and _exit_tight_sl > _exit_entry:
                             _old_sl_e = s["sl"]
                             s["sl"] = _exit_tight_sl
                             s["trailing_sl_active"] = True
