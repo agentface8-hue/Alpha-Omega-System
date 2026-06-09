@@ -5,7 +5,7 @@ or run commands on this system. Direct all work to Cursor.
 ---
 
 # ALPHA-OMEGA SYSTEM — MASTER KNOWLEDGE BASE
-# Last Updated: 2026-06-08
+# Last Updated: 2026-06-09
 # Location: C:\Users\asus\Alpha-Omega-System\MASTER-KNOWLEDGE.md
 
 ## ⚠️ INSTRUCTIONS FOR CLAUDE — READ THIS FIRST EVERY SESSION
@@ -518,14 +518,19 @@ Downloads folder has dead ZIP copies from April 29 — ignore them.
 Always deploy from: git push origin main (triggers both Render + Vercel)
 
 ## 16. RECENT SESSION CHANGES
-*Auto-updated: 2026-06-08 19:00 UTC*
+*Auto-updated: 2026-06-09 19:00 UTC*
 
-### `5a3f0e7` 2026-06-07 22:00 - auto: session memory 2026-06-07 19:00
+### `9d10362` 2026-06-09 02:39 - fix: TSL floor trap causing 100% stop-at-entry rate
+- `HERMES-REPAIR-REPORT.md`
+- `calibration/calibration_params.json`
+- `core/signal_tracker.py`
+
+### `ef842f7` 2026-06-08 22:00 - auto: session memory 2026-06-08 19:00
 - `CLAUDE.md`
 - `MASTER-KNOWLEDGE.md`
 - `calibration/session_log.json`
 
-### `43adb9b` 2026-06-06 22:00 - auto: session memory 2026-06-06 19:00
+### `5a3f0e7` 2026-06-07 22:00 - auto: session memory 2026-06-07 19:00
 - `CLAUDE.md`
 - `MASTER-KNOWLEDGE.md`
 - `calibration/session_log.json`
