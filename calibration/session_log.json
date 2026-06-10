@@ -308,5 +308,16 @@
       "auto: session memory 2026-06-08 19:00",
       "auto: session memory 2026-06-07 19:00"
     ]
+  },
+  {
+    "ts": "2026-06-10T19:00:01.664159",
+    "commits": 5,
+    "messages": [
+      "feat: add GET /api/jarvis/summary for ATLAS JARVIS dashboard",
+      "fix: widen trend exits and HOT-sector cap for better swing capture",
+      "auto: session memory 2026-06-09 19:00",
+      "fix: TSL floor trap causing 100% stop-at-entry rate",
+      "auto: session memory 2026-06-08 19:00"
+    ]
   }
 ]
