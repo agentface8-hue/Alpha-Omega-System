@@ -82,9 +82,11 @@ app = FastAPI(title="Alpha-Omega API")
 from backend.ama_routes import router as ama_router
 from backend.pipeline_routes import router as pipeline_router
 from backend.theme_routes import router as theme_router
+from backend.jarvis_routes import router as jarvis_router
 app.include_router(ama_router, prefix="/api/ama", tags=["ama"])
 app.include_router(pipeline_router, prefix="/api/pipeline", tags=["pipeline"])
 app.include_router(theme_router, prefix="/api/themes", tags=["themes"])
+app.include_router(jarvis_router, prefix="/api/jarvis", tags=["jarvis"])
 
 # ── Seed owner account on startup ─────────────────────────────────────────────
 
