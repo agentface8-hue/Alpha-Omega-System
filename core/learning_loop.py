@@ -275,6 +275,25 @@ def _build_research_prompt(signals: List[Dict], conviction: Dict, regime: Dict,
     )
 
 
+def _parse_research_json(raw: str) -> Dict:
+    text = raw.strip()
+    if text.startswith("```"):
+        parts = text.split("```")
+        if len(parts) >= 2:
+            text = parts[1]
+            if text.startswith("json"):
+                text = text[4:]
+    text = text.strip()
+    try:
+        return json.loads(text)
+    except json.JSONDecodeError:
+        start = text.find("{")
+        end = text.rfind("}")
+        if start >= 0 and end > start:
+            return json.loads(text[start:end + 1])
+        raise
+
+
 def _call_opus_research(prompt: str) -> Dict:
     api_key = os.environ.get("ANTHROPIC_API_KEY", "").strip()
     if not api_key:
@@ -292,7 +311,7 @@ def _call_opus_research(prompt: str) -> Dict:
         raw = raw.split("```")[1]
         if raw.startswith("json"):
             raw = raw[4:]
-    return json.loads(raw.strip())
+    return _parse_research_json(raw)
 
 
 def _save_deep_research_log(entry: Dict):

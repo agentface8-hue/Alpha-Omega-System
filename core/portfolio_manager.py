@@ -1,6 +1,6 @@
 """
-portfolio_manager.py — Paper trading portfolio engine v1.5
-v1.5: Sector Momentum Gate — blocks new positions in bottom-ranked sectors
+portfolio_manager.py — Paper trading portfolio engine v1.6
+v1.6: Trend exit policy — wider TSL in bull trends, HOT-sector cap relief, softer fade
       Exit alert when open position's sector drops to bottom 3
 v1.4: Dynamic TP Phase 2 — conviction score scales TP distances at entry
 v1.3: Shared scan cache — autopilot saves all results; bench reads from same scan
@@ -120,13 +120,21 @@ def open_position(ticker: str, entry_price: float, sl: float,
         from core.universe_builder import get_ticker_sector as _gts
         _sector = _gts(ticker.upper())
 
-        # 1. Concentration: max 25% of portfolio per sector
+        # 1. Concentration: sector cap (25% default, 40% HOT + Trending Bull)
         _total_val  = state.get("total_value", STARTING_CASH) or STARTING_CASH
         _sector_val = sum(p.get("position_size", 0) for p in open_pos
                           if _gts(p["ticker"]) == _sector)
         _sector_pct = (_sector_val / _total_val * 100) if _total_val > 0 else 0
-        if _sector_pct >= 25.0:
-            return {"error": f"Sector limit: {_sector} already at {_sector_pct:.0f}% (max 25%)"}
+        _regime = ""
+        try:
+            from core.market_data import fetch_market_regime
+            _regime = fetch_market_regime().get("regime", "")
+        except Exception:
+            pass
+        from core.trend_exit_policy import sector_cap_pct
+        _cap_pct = sector_cap_pct(_sector, _regime)
+        if _sector_pct >= _cap_pct:
+            return {"error": f"Sector limit: {_sector} already at {_sector_pct:.0f}% (max {_cap_pct:.0f}%)"}
 
         # 2. Sector Momentum Gate: live ranking from Sector Momentum Universe
         try:
@@ -359,16 +367,22 @@ def _check_portfolio_inner() -> Dict:
         _atr = pos.get("atr_at_entry", 0)
         if _atr > 0 and price > entry and shares > 0:
             _multiple = (price - entry) / _atr
-            _new_sl = None; _sl_note = ""
-            if   _multiple >= 2.0:
-                _cand = round(entry + _atr * 1.0, 4)
-                if _cand > pos["sl"]: _new_sl = _cand; _sl_note = "TSL 2xATR -> entry+1xATR"
-            elif _multiple >= 1.5:
-                _cand = round(entry + _atr * 0.5, 4)
-                if _cand > pos["sl"]: _new_sl = _cand; _sl_note = "TSL 1.5xATR -> entry+0.5xATR"
-            elif _multiple >= 1.0:
-                _cand = round(entry, 4)
-                if _cand > pos["sl"]: _new_sl = _cand; _sl_note = "TSL 1xATR -> break-even"
+            _pos_sector = pos.get("sector") or "Unknown"
+            try:
+                from core.universe_builder import get_ticker_sector as _gts_tsl
+                _pos_sector = _gts_tsl(ticker.upper())
+            except Exception:
+                pass
+            _regime = ""
+            try:
+                from core.market_data import fetch_market_regime
+                _regime = fetch_market_regime().get("regime", "")
+            except Exception:
+                pass
+            from core.trend_exit_policy import portfolio_tsl_candidate
+            _new_sl, _sl_note = portfolio_tsl_candidate(
+                entry, _atr, _multiple, pos["sl"], pos.get("tp1_hit"), _pos_sector, _regime,
+            )
             if _new_sl:
                 _old_sl = pos["sl"]; pos["sl"] = _new_sl
                 if "sl_history" not in pos: pos["sl_history"] = []
@@ -384,7 +398,16 @@ def _check_portfolio_inner() -> Dict:
             mfe_pct     = pos["mfe"] / entry * 100 if entry > 0 else 0
             curr_pnl    = pos["unrealized_pnl_pct"]
             giving_back = mfe_pct - curr_pnl
-            if pos.get("momentum_down_count",0) >= FADE_CHECKS_NEEDED and giving_back >= FADE_GIVEBACK_PCT and not pos.get("fade_alert_sent"):
+            _pos_sector = pos.get("sector") or "Unknown"
+            _regime = ""
+            try:
+                from core.market_data import fetch_market_regime
+                _regime = fetch_market_regime().get("regime", "")
+            except Exception:
+                pass
+            from core.trend_exit_policy import fade_giveback_threshold
+            _fade_pct = fade_giveback_threshold(_pos_sector, _regime, pos.get("tp2_hit"))
+            if pos.get("momentum_down_count",0) >= FADE_CHECKS_NEEDED and giving_back >= _fade_pct and not pos.get("fade_alert_sent"):
                 pos["fade_alert_sent"] = True; pos["momentum_fade_close"] = True
                 print(f"  [FADE-CLOSE] {ticker}: gave back {giving_back:.1f}% from MFE +{mfe_pct:.1f}%")
 
@@ -786,14 +809,15 @@ def autopilot_fill(watchlist_name: str = "full_scan", symbols_override: list = N
         already_held_sectors[s] = already_held_sectors.get(s, 0) + 1
 
     _portfolio_val    = state.get("total_value", STARTING_CASH) or STARTING_CASH
-    _max_sector_slots = max(1, int(_portfolio_val * 0.25 / (MAX_POS_SIZE or 3340)))
+    from core.trend_exit_policy import max_sector_slots
 
     final_candidates = []
     for c in candidates:
         sector = get_ticker_sector(c["ticker"])
         held   = already_held_sectors.get(sector, 0)
         in_q   = sector_counts.get(sector, 0)
-        if held + in_q < _max_sector_slots:
+        _sector_limit = max_sector_slots(_portfolio_val, MAX_POS_SIZE, sector, regime)
+        if held + in_q < _sector_limit:
             sector_counts[sector] = in_q + 1
             final_candidates.append(c)
         if len(final_candidates) >= slots:

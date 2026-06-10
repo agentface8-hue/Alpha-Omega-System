@@ -115,7 +115,13 @@ def check_telegram() -> Dict:
             return _ok("Telegram", f"Bot @{resp.get('result',{}).get('username','?')} reachable")
         return _fail("Telegram", "API returned ok=false")
     except Exception as e:
-        return _fail("Telegram", f"{type(e).__name__}: {str(e)[:80]}")
+        err = str(e)
+        if "401" in err or "Unauthorized" in err:
+            return _fail(
+                "Telegram",
+                "Token invalid (401) — regenerate via @BotFather and update TELEGRAM_TOKEN on Render",
+            )
+        return _fail("Telegram", f"{type(e).__name__}: {err[:80]}")
 
 
 def check_portfolio_state() -> Dict:

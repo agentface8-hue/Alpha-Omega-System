@@ -452,6 +452,47 @@ def test_decision_ledger_has_outcome_helpers():
     assert isinstance(pending, list)
 
 
+def test_trend_exit_policy_hot_sector_wider_cap(monkeypatch):
+    """HOT + Trending Bull allows higher sector concentration."""
+    from core import trend_exit_policy as tep
+
+    monkeypatch.setattr(
+        tep,
+        "_sector_bias",
+        lambda sector: "HOT" if sector == "Technology" else "NEUTRAL",
+    )
+    assert tep.sector_cap_pct("Technology", "Trending Bull") == 40.0
+    assert tep.sector_cap_pct("Energy", "Trending Bull") == 25.0
+    assert tep.max_sector_slots(25000, 3340, "Technology", "Trending Bull") >= 3
+
+
+def test_trend_exit_policy_delays_hot_breakeven_until_tp1(monkeypatch):
+    """HOT trend should not move SL to breakeven before TP1."""
+    from core import trend_exit_policy as tep
+
+    monkeypatch.setattr(tep, "_sector_bias", lambda sector: "HOT")
+    sl, note = tep.portfolio_tsl_candidate(
+        entry=100.0, atr=10.0, multiple=1.5, current_sl=90.0,
+        tp1_hit=False, sector="Technology", regime="Trending Bull",
+    )
+    assert sl is None
+    sl, note = tep.portfolio_tsl_candidate(
+        entry=100.0, atr=10.0, multiple=1.5, current_sl=90.0,
+        tp1_hit=True, sector="Technology", regime="Trending Bull",
+    )
+    assert sl == 100.0
+    assert "TP1" in (note or "")
+
+
+def test_tinker_default_model_not_retiring():
+    from core.thinking_machines_benchmark import DEFAULT_BASE_MODEL, RETIRING_MODELS, status
+
+    assert DEFAULT_BASE_MODEL not in RETIRING_MODELS
+    cfg = status()
+    assert cfg["base_model"] == "moonshotai/Kimi-K2.6"
+    assert cfg.get("model_retiring_june_12") is False
+
+
 def test_api_root_if_running():
     """If backend is running on 8000, GET / returns status."""
     import urllib.request

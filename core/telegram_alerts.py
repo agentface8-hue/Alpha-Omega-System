@@ -5,20 +5,39 @@ Sends to the alphaomega group chat only.
 import os, json, logging
 from datetime import datetime
 
-logger = logging.getLogger(__name__)
+from dotenv import load_dotenv
 
-TELEGRAM_TOKEN   = os.environ.get("TELEGRAM_TOKEN", "8246500243:AAFXsq94Fia3RimL4_Q-AM6sdDJpZNoxTYM")
-PERSONAL_CHAT_ID = os.environ.get("TELEGRAM_PERSONAL_CHAT_ID", "5812682751")
-GROUP_CHAT_ID    = os.environ.get("TELEGRAM_GROUP_CHAT_ID", "-5228475615")
-CHAT_IDS         = [GROUP_CHAT_ID]
+load_dotenv()
+
+logger = logging.getLogger(__name__)
 
 import urllib.request
 
+
+def _telegram_token() -> str:
+    return (os.environ.get("TELEGRAM_TOKEN") or "").strip()
+
+
+def _chat_ids() -> list:
+    ids = []
+    for key in ("TELEGRAM_GROUP_CHAT_ID", "TELEGRAM_PERSONAL_CHAT_ID"):
+        val = (os.environ.get(key) or "").strip()
+        if val and val not in ids:
+            ids.append(val)
+    return ids
+
+
 def _send(text: str, parse_mode: str = "HTML") -> bool:
+    token = _telegram_token()
+    if not token:
+        logger.error("Telegram send skipped: TELEGRAM_TOKEN missing")
+        return False
     success = False
-    for chat_id in CHAT_IDS:
+    for chat_id in _chat_ids():
+        if not chat_id:
+            continue
         try:
-            url  = f"https://api.telegram.org/bot{TELEGRAM_TOKEN}/sendMessage"
+            url  = f"https://api.telegram.org/bot{token}/sendMessage"
             body = json.dumps({"chat_id": chat_id, "text": text,
                                "parse_mode": parse_mode,
                                "disable_web_page_preview": True}).encode()

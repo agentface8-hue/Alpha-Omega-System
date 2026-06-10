@@ -21,6 +21,33 @@ load_dotenv()
 DEFAULT_BASE_URL = "https://tinker.thinkingmachines.dev/services/tinker-prod/oai/api/v1"
 DEFAULT_MODEL = ""
 DEFAULT_BASE_MODEL = "moonshotai/Kimi-K2.6"
+
+# Retiring 2026-06-12 per Thinking Machines email — switch before that date.
+RETIRING_MODELS = {
+    "moonshotai/Kimi-K2-Thinking",
+    "Kimi-K2-Thinking",
+    "Qwen/Qwen3-4B-Instruct-2507",
+    "Qwen/Qwen3-8B-Base",
+    "Qwen/Qwen3-30B-A3B",
+    "Qwen/Qwen3-30B-A3B-Base",
+    "Qwen/Qwen3-30B-A3B-Instruct-2507",
+    "Qwen/Qwen3-32B",
+    "meta-llama/Llama-3.1-8B",
+    "meta-llama/Llama-3.1-8B-Instruct",
+    "meta-llama/Llama-3.1-70B",
+    "meta-llama/Llama-3.3-70B-Instruct",
+}
+
+RECOMMENDED_REPLACEMENTS = {
+    "moonshotai/Kimi-K2-Thinking": "moonshotai/Kimi-K2.6",
+    "Kimi-K2-Thinking": "moonshotai/Kimi-K2.6",
+    "Qwen/Qwen3-4B-Instruct-2507": "Qwen/Qwen3.5-4B",
+    "Qwen/Qwen3-8B-Base": "Qwen/Qwen3-8B",
+    "Qwen/Qwen3-30B-A3B": "Qwen/Qwen3.5-35B-A3B-Base",
+    "Qwen/Qwen3-30B-A3B-Base": "Qwen/Qwen3.5-35B-A3B-Base",
+    "Qwen/Qwen3-30B-A3B-Instruct-2507": "Qwen/Qwen3.5-35B-A3B",
+    "Qwen/Qwen3-32B": "Qwen/Qwen3.5-27B",
+}
 MAX_SYMBOLS = 10
 
 
@@ -39,6 +66,8 @@ def status() -> Dict[str, Any]:
     base_model = _env("TML_BASE_MODEL") or _env("TINKER_BASE_MODEL") or DEFAULT_BASE_MODEL
     base_url = _env("TML_BASE_URL") or _env("TINKER_BASE_URL") or DEFAULT_BASE_URL
     has_model_target = bool(model or base_model)
+    retiring = base_model in RETIRING_MODELS or model in RETIRING_MODELS
+    replacement = RECOMMENDED_REPLACEMENTS.get(base_model) or RECOMMENDED_REPLACEMENTS.get(model)
     return {
         "provider": "thinking_machines_tinker",
         "observer_only": True,
@@ -49,6 +78,8 @@ def status() -> Dict[str, Any]:
         "base_url": base_url,
         "model": model if model else None,
         "base_model": base_model if base_model else None,
+        "model_retiring_june_12": retiring,
+        "recommended_replacement": replacement,
         "missing": [
             name for name, ok in (
                 ("TML_API_KEY", key_present),
@@ -58,6 +89,7 @@ def status() -> Dict[str, Any]:
         ],
         "model_note": (
             "Use TML_BASE_MODEL for direct SDK sampling. Default benchmark model is moonshotai/Kimi-K2.6. "
+            "Several older models retire 2026-06-12 — see model_retiring_june_12 and recommended_replacement. "
             "Use TML_MODEL only for a Tinker sampler checkpoint path such as tinker://.../sampler_weights/..."
         ),
         "allowed_uses": [

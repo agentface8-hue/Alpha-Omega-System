@@ -733,19 +733,17 @@ def check_signals() -> Dict[str, Any]:
             s["mfe_pct"]=round((s["highest_price"]-entry)/entry*100,2)
 
         # ── Trailing SL (TSL) — ratchets up as highest_price rises ──────────
-        # Activates once trade is TSL_TRIGGER_PCT% in profit.
-        # New SL = highest_price - (atr * regime_sl_mult).
-        # SL ONLY moves up — never down.
-        # GUARD: Only advance TSL when the formula naturally stays above entry.
-        # Without this guard, a tiny gain (+0.5%) with large ATR would set
-        # SL = entry (floor trap) → immediate stop-out at 0% on any pullback.
-        if s["pnl_pct"] >= TSL_TRIGGER_PCT:
+        # Activates once trade crosses regime-aware profit threshold.
+        _regime = s.get("regime") or ""
+        _sector = s.get("sector") or _ticker_sector(sym)
+        from core.trend_exit_policy import signal_tsl_trigger_pct, signal_tsl_sl_mult
+        _tsl_trigger = signal_tsl_trigger_pct(_regime)
+        if s["pnl_pct"] >= _tsl_trigger:
             atr      = s.get("atr_at_entry", 0)
             highest  = s["highest_price"]
             curr_sl  = s["sl"]
-            # Use same ATR multiplier that set the initial SL for this regime
             mults    = s.get("regime_multipliers", _DEFAULT_MULTS)
-            sl_mult  = mults.get("sl", 1.5)
+            sl_mult  = signal_tsl_sl_mult(_regime, _sector, mults.get("sl", 1.5))
             if atr > 0:
                 new_tsl = round(highest - atr * sl_mult, 4)
             else:
@@ -805,8 +803,12 @@ def check_signals() -> Dict[str, Any]:
 
             mfe=s.get("mfe_pct",0); pnl=s.get("pnl_pct",0)
             giving_back=mfe-pnl; fade_count=s.get("momentum_down_count",0)
+            _regime = s.get("regime") or ""
+            _sector = s.get("sector") or _ticker_sector(sym)
+            from core.trend_exit_policy import fade_giveback_threshold
+            _fade_pct = fade_giveback_threshold(_sector, _regime, s.get("tp2_hit"))
 
-            if fade_count>=FADE_CHECKS_NEEDED and giving_back>=FADE_GIVEBACK_PCT and not s.get("fade_alert_sent"):
+            if fade_count>=FADE_CHECKS_NEEDED and giving_back>=_fade_pct and not s.get("fade_alert_sent"):
                 s["fade_alert_sent"]=True
                 s["momentum_fade_close"]=True  # triggers close below
                 print(f"  [FADE-CLOSE] {sym}: auto-closing — gave back {giving_back:.1f}% from MFE +{mfe:.1f}%")
