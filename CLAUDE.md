@@ -1,6 +1,6 @@
 # CLAUDE.md — Alpha-Omega System
 # ⚠️ READ THIS FIRST — BEFORE TOUCHING ANYTHING ⚠️
-# Last Updated: 2026-06-10
+# Last Updated: 2026-06-11
 
 > **System management:** Cursor AI only (ops/deploy/fixes). Claude: context and briefs only. Frozen stability stack: `CURSOR-AGENT-BRIEF.md` § DO NOT TOUCH.
 
@@ -448,7 +448,12 @@ This is the only way knowledge survives across sessions.
 | DTP guardrail fires | TP ordering inversion after scaling | Already handled in portfolio_manager.py |
 
 ## 16. RECENT SESSION CHANGES
-*Auto-updated: 2026-06-10 19:00 UTC*
+*Auto-updated: 2026-06-11 19:00 UTC*
+
+### `f5581ee` 2026-06-10 22:00 - auto: session memory 2026-06-10 19:00
+- `CLAUDE.md`
+- `MASTER-KNOWLEDGE.md`
+- `calibration/session_log.json`
 
 ### `c7e72ea` 2026-06-10 14:22 - feat: add GET /api/jarvis/summary for ATLAS JARVIS dashboard
 - `backend/jarvis_routes.py`
@@ -462,16 +467,6 @@ This is the only way knowledge survives across sessions.
 - `core/telegram_alerts.py`
 
 ### `1435112` 2026-06-09 22:00 - auto: session memory 2026-06-09 19:00
-- `CLAUDE.md`
-- `MASTER-KNOWLEDGE.md`
-- `calibration/session_log.json`
-
-### `9d10362` 2026-06-09 02:39 - fix: TSL floor trap causing 100% stop-at-entry rate
-- `HERMES-REPAIR-REPORT.md`
-- `calibration/calibration_params.json`
-- `core/signal_tracker.py`
-
-### `ef842f7` 2026-06-08 22:00 - auto: session memory 2026-06-08 19:00
 - `CLAUDE.md`
 - `MASTER-KNOWLEDGE.md`
 - `calibration/session_log.json`
