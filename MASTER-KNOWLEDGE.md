@@ -5,7 +5,7 @@ or run commands on this system. Direct all work to Cursor.
 ---
 
 # ALPHA-OMEGA SYSTEM — MASTER KNOWLEDGE BASE
-# Last Updated: 2026-06-11
+# Last Updated: 2026-06-13
 # Location: C:\Users\asus\Alpha-Omega-System\MASTER-KNOWLEDGE.md
 
 ## ⚠️ INSTRUCTIONS FOR CLAUDE — READ THIS FIRST EVERY SESSION
@@ -518,25 +518,9 @@ Downloads folder has dead ZIP copies from April 29 — ignore them.
 Always deploy from: git push origin main (triggers both Render + Vercel)
 
 ## 16. RECENT SESSION CHANGES
-*Auto-updated: 2026-06-11 19:00 UTC*
+*Auto-updated: 2026-06-13 19:00 UTC*
 
-### `f5581ee` 2026-06-10 22:00 - auto: session memory 2026-06-10 19:00
-- `CLAUDE.md`
-- `MASTER-KNOWLEDGE.md`
-- `calibration/session_log.json`
-
-### `c7e72ea` 2026-06-10 14:22 - feat: add GET /api/jarvis/summary for ATLAS JARVIS dashboard
-- `backend/jarvis_routes.py`
-- `backend/main.py`
-
-### `a4f6870` 2026-06-10 07:40 - fix: widen trend exits and HOT-sector cap for better swing capture
-- `core/learning_loop.py`
-- `core/portfolio_manager.py`
-- `core/signal_tracker.py`
-- `core/system_health.py`
-- `core/telegram_alerts.py`
-
-### `1435112` 2026-06-09 22:00 - auto: session memory 2026-06-09 19:00
+### `c8b34f5` 2026-06-11 22:00 - auto: session memory 2026-06-11 19:00
 - `CLAUDE.md`
 - `MASTER-KNOWLEDGE.md`
 - `calibration/session_log.json`
