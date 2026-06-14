@@ -168,6 +168,7 @@ def register(username: str, password: str, display_name: str = "") -> dict:
     if username in OWNER_USERNAMES:
         raise ValueError("Username not available")
 
+    supabase_down = False
     try:
         existing = _sb("ao_users", params=f"username=eq.{username}&select=username")
         if existing:
@@ -176,11 +177,12 @@ def register(username: str, password: str, display_name: str = "") -> dict:
         raise
     except RuntimeError as e:
         if _is_supabase_quota_error(e):
-            raise ValueError(
-                "Registration paused: Supabase egress quota exceeded. "
-                "Reactivate Supabase or ask the owner to restore the database."
-            )
-        raise ValueError(f"Registration failed: {e}")
+            supabase_down = True
+            local = _load_local_users()
+            if any(u.get("username") == username for u in local):
+                raise ValueError("Username already taken")
+        else:
+            raise ValueError(f"Registration failed: {e}")
 
     new_user = {
         "username":      username,
@@ -190,6 +192,13 @@ def register(username: str, password: str, display_name: str = "") -> dict:
         "login_count":   0,
         "created_at":    datetime.datetime.utcnow().isoformat(),
     }
+    if supabase_down:
+        users = _load_local_users()
+        users.append(new_user)
+        _save_local_users(users)
+        logger.warning("[AUTH] Supabase quota exceeded — registered user locally")
+        return {"username": username, "display_name": new_user["display_name"], "role": "visitor"}
+
     try:
         _sb("ao_users", method="POST", data=new_user, prefer="return=minimal")
     except RuntimeError as e:
