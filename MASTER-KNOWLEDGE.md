@@ -5,7 +5,7 @@ or run commands on this system. Direct all work to Cursor.
 ---
 
 # ALPHA-OMEGA SYSTEM — MASTER KNOWLEDGE BASE
-# Last Updated: 2026-06-13
+# Last Updated: 2026-06-14
 # Location: C:\Users\asus\Alpha-Omega-System\MASTER-KNOWLEDGE.md
 
 ## ⚠️ INSTRUCTIONS FOR CLAUDE — READ THIS FIRST EVERY SESSION
@@ -518,9 +518,19 @@ Downloads folder has dead ZIP copies from April 29 — ignore them.
 Always deploy from: git push origin main (triggers both Render + Vercel)
 
 ## 16. RECENT SESSION CHANGES
-*Auto-updated: 2026-06-13 19:00 UTC*
+*Auto-updated: 2026-06-14 19:00 UTC*
 
-### `c8b34f5` 2026-06-11 22:00 - auto: session memory 2026-06-11 19:00
+### `56ce7b4` 2026-06-14 19:57 - Allow local user registration when Supabase egress quota is exceeded.
+- `backend/auth.py`
+
+### `4fc57c1` 2026-06-14 19:52 - Fix auth when Supabase quota exceeded and unify frontend API base URL.
+- `backend/auth.py`
+- `backend/main.py`
+- `frontend/src/components/AlphaMegaDashboard.jsx`
+- `frontend/src/components/Analytics.jsx`
+- `frontend/src/components/BacktestDashboard.jsx`
+
+### `84d8359` 2026-06-13 22:00 - auto: session memory 2026-06-13 19:00
 - `CLAUDE.md`
 - `MASTER-KNOWLEDGE.md`
 - `calibration/session_log.json`
