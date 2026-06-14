@@ -1,7 +1,8 @@
 import React, { useState, useEffect, useCallback } from 'react';
 import { TrendingUp, TrendingDown, Zap, RefreshCw, RotateCcw, DollarSign, Target, Activity, BarChart2, Clock, Shield, ChevronDown, ChevronUp } from 'lucide-react';
+import { API_BASE } from '../utils/api';
 
-const API = () => import.meta.env.VITE_API_URL || 'http://127.0.0.1:8000';
+const API = () => API_BASE;
 const fmt  = (n, d=2) => n == null ? '—' : Number(n).toFixed(d);
 const usd  = n => `$${fmt(Math.abs(n), 0).replace(/\B(?=(\d{3})+(?!\d))/g,',')}`;
 const pct  = n => `${n>=0?'+':''}${fmt(n)}%`;

@@ -1,5 +1,6 @@
 import React, { useState } from 'react';
 import { Search, RefreshCw, Flame, BarChart2, Zap, TrendingUp } from 'lucide-react';
+import { API_BASE } from '../utils/api';
 
 // ── Color helpers (from SwingTrader v4.3) ──
 const convColor = p => p >= 75 ? "#00ff88" : p >= 60 ? "#fbbf24" : p >= 45 ? "#94a3b8" : "#ff4466";
@@ -65,7 +66,7 @@ const ScanDashboard = ({ autoScan = false }) => {
 
   // Fetch watchlists on mount
   React.useEffect(() => {
-    const apiUrl = import.meta.env.VITE_API_URL || 'http://127.0.0.1:8000';
+    const apiUrl = API_BASE;
     fetch(`${apiUrl}/api/watchlists`).then(r => r.json()).then(d => setWatchlists(d.watchlists)).catch(() => {});
   }, []);
 
@@ -79,7 +80,7 @@ const ScanDashboard = ({ autoScan = false }) => {
 
   const fetchSectorHeat = async () => {
     setHeatLoading(true);
-    const apiUrl = import.meta.env.VITE_API_URL || 'http://127.0.0.1:8000';
+    const apiUrl = API_BASE;
     try {
       const res = await fetch(`${apiUrl}/api/sectors/heat`);
       const d = await res.json();
@@ -90,7 +91,7 @@ const ScanDashboard = ({ autoScan = false }) => {
 
   const loadSector = async (key) => {
     setActiveSector(key);
-    const apiUrl = import.meta.env.VITE_API_URL || 'http://127.0.0.1:8000';
+    const apiUrl = API_BASE;
     try {
       const res = await fetch(`${apiUrl}/api/sectors/watchlist/${key}`);
       const d = await res.json();
@@ -100,7 +101,7 @@ const ScanDashboard = ({ autoScan = false }) => {
 
   const fetchSectorRanking = async () => {
     setRankLoading(true);
-    const apiUrl = import.meta.env.VITE_API_URL || 'http://127.0.0.1:8000';
+    const apiUrl = API_BASE;
     try {
       const res = await fetch(`${apiUrl}/api/sectors/ranking`);
       const d = await res.json();
@@ -111,7 +112,7 @@ const ScanDashboard = ({ autoScan = false }) => {
 
   const smartScan = async () => {
     setSmartScanLoading(true);
-    const apiUrl = import.meta.env.VITE_API_URL || 'http://127.0.0.1:8000';
+    const apiUrl = API_BASE;
     try {
       // Momentum screener — ranks all >$10B stocks by price momentum score
       const res = await fetch(`${apiUrl}/api/sectors/momentum-screen?top_n=30`);
@@ -132,7 +133,7 @@ const ScanDashboard = ({ autoScan = false }) => {
   };
 
   const loadWatchlist = async (name) => {
-    const apiUrl = import.meta.env.VITE_API_URL || 'http://127.0.0.1:8000';
+    const apiUrl = API_BASE;
     const res = await fetch(`${apiUrl}/api/watchlists/${name}`);
     const d = await res.json();
     setTickers(d.tickers.slice(0, 30).join(', '));
@@ -144,7 +145,7 @@ const ScanDashboard = ({ autoScan = false }) => {
     setData(null);
     setProgress('Starting scan...');
     const symbols = tickers.split(',').map(s => s.trim().toUpperCase()).filter(Boolean);
-    const apiUrl = import.meta.env.VITE_API_URL || 'http://127.0.0.1:8000';
+    const apiUrl = API_BASE;
     try {
       // SSE streaming — one open connection, no polling, no in-memory job store
       const response = await fetch(`${apiUrl}/api/scan/stream`, {

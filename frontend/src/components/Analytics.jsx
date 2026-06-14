@@ -2,7 +2,9 @@ import { useState, useEffect } from 'react';
 import { Activity, BarChart3, AlertTriangle, TrendingUp } from 'lucide-react';
 import { C, StatCard, SectionCard, PageHeader, BarRow, Badge, EmptyState, LoadingSpinner } from './UIKit';
 
-const API = import.meta.env.VITE_API_URL || 'http://127.0.0.1:8000';
+import { API_BASE } from '../utils/api';
+
+const API = API_BASE;
 
 const Analytics = () => {
   const [data,    setData]    = useState(null);

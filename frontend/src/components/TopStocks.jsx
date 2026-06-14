@@ -1,4 +1,5 @@
 import React, { useState, useEffect } from 'react';
+import { API_BASE } from '../utils/api';
 
 const TICKERS = ['NVDA','AAPL','MSFT','GOOGL','AMZN','META','TSLA','PLTR'];
 
@@ -10,7 +11,7 @@ const TopStocks = ({ onSelectTicker, compact = false }) => {
     useEffect(() => {
         const fetchPrices = async () => {
             try {
-                const apiUrl = import.meta.env.VITE_API_URL || 'http://127.0.0.1:8000';
+                const apiUrl = API_BASE;
                 const res = await fetch(`${apiUrl}/api/prices`, {
                     method: 'POST',
                     headers: { 'Content-Type': 'application/json' },

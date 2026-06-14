@@ -1,6 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { RefreshCw, TrendingUp, TrendingDown, BarChart2, Star, X } from 'lucide-react';
 import ChartPanel from './ChartPanel';
+import { API_BASE } from '../utils/api';
 
 const convC  = p => p >= 75 ? "#00ff88" : p >= 60 ? "#fbbf24" : p >= 45 ? "#94a3b8" : "#ff4466";
 const trendC = t => t === "BULL" ? "#00ff88" : t === "BEAR" ? "#ff4466" : "#fbbf24";
@@ -22,7 +23,7 @@ const AlphaMegaDashboard = () => {
   const [chartTicker, setChartTicker] = useState(null);
   const [lastTs, setLastTs]     = useState(null);
 
-  const apiUrl = import.meta.env.VITE_API_URL || 'http://127.0.0.1:8000';
+  const apiUrl = API_BASE;
 
   const fetchData = async (lb = lookback) => {
     setLoading(true); setError(null);

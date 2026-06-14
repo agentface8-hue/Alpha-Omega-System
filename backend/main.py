@@ -107,7 +107,18 @@ app.add_middleware(
 
 @app.get("/health")
 async def health():
-    return {"status": "online", "ts": __import__("datetime").datetime.utcnow().isoformat()}
+    supabase = {"ok": None}
+    try:
+        from backend.auth import supabase_status
+        supabase = supabase_status()
+    except Exception as e:
+        supabase = {"ok": False, "error": str(e)[:120]}
+    status = "online" if supabase.get("ok") is not False else "degraded"
+    return {
+        "status": status,
+        "supabase": supabase,
+        "ts": __import__("datetime").datetime.utcnow().isoformat(),
+    }
 
 @app.get("/api/memory")
 async def memory_status():

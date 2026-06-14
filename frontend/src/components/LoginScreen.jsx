@@ -1,7 +1,8 @@
 import React, { useState } from 'react';
 import { Activity, Lock, User, Eye, EyeOff, UserPlus } from 'lucide-react';
+import { API_BASE } from '../utils/api';
 
-const API = import.meta.env.VITE_API_URL || 'http://127.0.0.1:8000';
+const API = API_BASE;
 
 function getVisitorId() {
   let id = localStorage.getItem('ao_visitor_id');

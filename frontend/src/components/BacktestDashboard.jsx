@@ -1,7 +1,8 @@
 import React, { useState } from 'react';
 import { BarChart3, Play, RotateCcw, TrendingUp, TrendingDown, Target, AlertTriangle } from 'lucide-react';
+import { API_BASE } from '../utils/api';
 
-const API = () => import.meta.env.VITE_API_URL || 'http://127.0.0.1:8000';
+const API = () => API_BASE;
 
 const pctColor = v => v > 0 ? "#00ff88" : v < 0 ? "#ff4466" : "#94a3b8";
 const rateColor = v => v >= 75 ? "#00ff88" : v >= 50 ? "#fbbf24" : "#ff4466";

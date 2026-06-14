@@ -1,6 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { Activity, RefreshCw, X, TrendingUp, TrendingDown, Target, AlertTriangle, Clock, BarChart3, Shield, Zap } from 'lucide-react';
 import { C as KC, StatCard as KSC } from './UIKit';
+import { API_BASE } from '../utils/api';
 
 const pnlColor   = v => v > 0 ? "#00ff88" : v < 0 ? "#ff4466" : "#94a3b8";
 const statusColor = s => {
@@ -270,7 +271,7 @@ const EntryReasonPanel = ({ signal }) => {
 const OverrideSLForm = ({ signal, onSave, onCancel }) => {
   const [val, setVal]     = useState(String(signal.sl));
   const [saving, setSaving] = useState(false);
-  const apiUrl = import.meta.env.VITE_API_URL || 'http://127.0.0.1:8000';
+  const apiUrl = API_BASE;
   const save = async () => {
     const newSl = parseFloat(val);
     if (isNaN(newSl) || newSl <= 0) { alert("Invalid SL value"); return; }
@@ -515,7 +516,7 @@ const SignalTracker = ({ compact = false, isOwner = false, backendReady = true }
   // Agent Council state
   const [councilOpen,      setCouncilOpen]      = useState(null);   // signal id or null
   const [councilLoading,   setCouncilLoading]   = useState({});     // { [signalId]: bool }
-  const apiUrl = import.meta.env.VITE_API_URL || 'http://127.0.0.1:8000';
+  const apiUrl = API_BASE;
 
   useEffect(() => { const t = setInterval(() => setNow(new Date()), 60000); return () => clearInterval(t); }, []);
 

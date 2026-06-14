@@ -1,6 +1,7 @@
 import React from 'react';
 import { TrendingUp, TrendingDown, ShieldAlert, ShieldCheck, Minus, AlertTriangle } from 'lucide-react';
 import { useState, useEffect } from 'react';
+import { API_BASE } from '../utils/api';
 
 const DecisionRow = ({ label, value, suffix, color }) => (
   <div style={{ display:'flex', alignItems:'center', gap:8, padding:'3px 0' }}>
@@ -32,7 +33,7 @@ const ResultCard = ({ result }) => {
   const { consensus_view, confidence_score, executioner_decision, full_report, trade_params, mtf_analysis, symbol } = result;
 
   const [earnings, setEarnings] = useState(null);
-  const API = import.meta.env.VITE_API_URL || 'http://127.0.0.1:8000';
+  const API = API_BASE;
 
   useEffect(() => {
     if (!symbol && !result.symbol) return;

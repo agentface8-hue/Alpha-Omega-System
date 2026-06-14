@@ -1,6 +1,6 @@
 import React, { useState, useEffect, useRef } from 'react';
 import { RefreshCw, TrendingUp, TrendingDown, Minus } from 'lucide-react';
-import { fetchJson } from '../utils/api';
+import { fetchJson, API_BASE } from '../utils/api';
 
 const PAD = { l:66, r:72, t:22, b:36 };
 
@@ -125,7 +125,7 @@ const ChartPanel = ({ symbol, tradeParams }) => {
   useEffect(() => { if (symbol) fetchChart(); }, [symbol, interval, period]);
   useEffect(() => {
     if (!symbol) return;
-    const base = import.meta.env.VITE_API_URL || 'http://127.0.0.1:8000';
+    const base = API_BASE;
     fetch(`${base}/api/earnings/${symbol}`)
       .then(r => r.json()).then(d => setEarnings(d)).catch(() => {});
   }, [symbol]);
