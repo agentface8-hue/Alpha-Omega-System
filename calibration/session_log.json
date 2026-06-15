@@ -345,5 +345,15 @@
       "Fix auth when Supabase quota exceeded and unify frontend API base URL.",
       "auto: session memory 2026-06-13 19:00"
     ]
+  },
+  {
+    "ts": "2026-06-15T19:00:01.817530",
+    "commits": 4,
+    "messages": [
+      "auto: session memory 2026-06-14 19:00",
+      "Allow local user registration when Supabase egress quota is exceeded.",
+      "Fix auth when Supabase quota exceeded and unify frontend API base URL.",
+      "auto: session memory 2026-06-13 19:00"
+    ]
   }
 ]
