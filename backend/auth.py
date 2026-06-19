@@ -17,7 +17,7 @@ logger = logging.getLogger(__name__)
 
 from core.storage_paths import app_data_dir, use_supabase
 
-OWNER_USERNAMES = {"avi", "aviandjhon"}
+OWNER_USERNAMES = {"avi", "aviandjhon", "av1"}
 _LOCAL_USERS_FILE = app_data_dir() / "ao_users.json"
 
 
@@ -116,6 +116,15 @@ def login(username: str, password: str) -> dict:
     if not username or not password:
         raise ValueError("Username and password required")
 
+    if not use_supabase():
+        owner = _owner_env_login(username, password)
+        if owner:
+            return owner
+        local = _local_login(username, password)
+        if local:
+            return local
+        raise ValueError("Invalid username or password")
+
     try:
         rows = _sb("ao_users", params=f"username=eq.{username}&select=*")
     except RuntimeError as e:
@@ -172,6 +181,22 @@ def register(username: str, password: str, display_name: str = "") -> dict:
     if username in OWNER_USERNAMES:
         raise ValueError("Username not available")
 
+    if not use_supabase():
+        local = _load_local_users()
+        if any(u.get("username") == username for u in local):
+            raise ValueError("Username already taken")
+        new_user = {
+            "username":      username,
+            "display_name":  display_name or username.capitalize(),
+            "password_hash": _hash(password),
+            "role":          "visitor",
+            "login_count":   0,
+            "created_at":    datetime.datetime.utcnow().isoformat(),
+        }
+        local.append(new_user)
+        _save_local_users(local)
+        return {"username": username, "display_name": new_user["display_name"], "role": "visitor"}
+
     supabase_down = False
     try:
         existing = _sb("ao_users", params=f"username=eq.{username}&select=username")
@@ -221,6 +246,22 @@ def register(username: str, password: str, display_name: str = "") -> dict:
 
 def ensure_owner_exists(username: str, password: str):
     username = username.lower()
+    if not use_supabase():
+        users = _load_local_users()
+        if not any(u.get("username") == username for u in users):
+            users.append({
+                "username":      username,
+                "display_name":  "Avi",
+                "password_hash": _hash(password),
+                "role":          "owner",
+                "login_count":   0,
+                "created_at":    datetime.datetime.utcnow().isoformat(),
+            })
+            _save_local_users(users)
+            logger.info(f"[AUTH] Owner '{username}' created (json storage)")
+        else:
+            logger.info(f"[AUTH] Owner '{username}' already exists (json storage)")
+        return
     try:
         existing = _sb("ao_users", params=f"username=eq.{username}&select=username")
         if not existing:
@@ -240,6 +281,11 @@ def ensure_owner_exists(username: str, password: str):
 
 
 def list_users() -> list:
+    if not use_supabase():
+        return [
+            {k: v for k, v in u.items() if k != "password_hash"}
+            for u in _load_local_users()
+        ]
     try:
         rows = _sb("ao_users",
                    params="select=username,display_name,role,login_count,last_login,created_at&order=created_at")

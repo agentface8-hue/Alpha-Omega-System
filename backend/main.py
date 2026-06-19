@@ -100,6 +100,7 @@ app.add_middleware(
         "http://127.0.0.1:5173",
         "http://127.0.0.1:3000",
     ],
+    allow_origin_regex=r"https://alpha-omega-ngfw[-a-z0-9]*\.vercel\.app",
     allow_credentials=False,
     allow_methods=["*"],
     allow_headers=["*"],
@@ -204,6 +205,7 @@ async def startup_all():
         if owner_pass:
             from backend.auth import ensure_owner_exists
             ensure_owner_exists("avi", owner_pass)
+            ensure_owner_exists("av1", owner_pass)
             log.info("[STARTUP] Owner account seeded")
     except Exception as e:
         log.warning(f"[STARTUP] Auth seed skipped: {e}")
