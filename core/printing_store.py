@@ -6,10 +6,11 @@ import os, json, datetime, logging
 from pathlib import Path
 from typing import Dict, Any, List, Optional
 
+from core.storage_paths import signals_dir, use_supabase
+
 logger = logging.getLogger(__name__)
 
-STORE_DIR      = Path(__file__).parent.parent / "signals"
-STORE_DIR.mkdir(exist_ok=True)
+STORE_DIR      = signals_dir()
 POSITIONS_FILE = STORE_DIR / "printing_positions.json"
 STATE_FILE     = STORE_DIR / "printing_state.json"
 
@@ -22,6 +23,9 @@ _sb = None; _sb_ok = None
 
 def _get_sb():
     global _sb, _sb_ok
+    if not use_supabase():
+        _sb_ok = False
+        return None
     if _sb_ok is False: return None
     if _sb is not None: return _sb
     try:

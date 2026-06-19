@@ -7,10 +7,11 @@ from pathlib import Path
 from typing import Dict, Any, List, Optional
 import logging
 
+from core.storage_paths import signals_dir, use_supabase
+
 logger = logging.getLogger(__name__)
 
-SIGNALS_DIR = Path(__file__).parent.parent / "signals"
-SIGNALS_DIR.mkdir(exist_ok=True)
+SIGNALS_DIR = signals_dir()
 SIGNALS_FILE = SIGNALS_DIR / "active_signals.json"
 CLOSED_FILE = SIGNALS_DIR / "closed_signals.json"
 REPORTS_DIR = SIGNALS_DIR / "reports"
@@ -60,6 +61,9 @@ def _startup_migrate_if_needed(sb):
 def _get_supabase():
     """Lazy-init Supabase client. Returns None if unavailable."""
     global _sb, _sb_available
+    if not use_supabase():
+        _sb_available = False
+        return None
     if _sb_available is False:
         return None
     if _sb is not None:

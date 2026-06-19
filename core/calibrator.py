@@ -14,14 +14,17 @@ from pathlib import Path
 from typing import Dict, Any, List
 from datetime import datetime
 
-CALIB_DIR = Path(__file__).parent.parent / "calibration"
-CALIB_DIR.mkdir(exist_ok=True)
+from core.storage_paths import calibration_dir, use_supabase
+
+CALIB_DIR = calibration_dir()
 CALIB_FILE = CALIB_DIR / "calibration_params.json"
 
 # ── Supabase persistence helpers ──────────────────────────────────────────────
 
 def _sb_client():
     """Return a Supabase client or None if credentials are missing."""
+    if not use_supabase():
+        return None
     url = os.environ.get("SUPABASE_URL", "")
     key = os.environ.get("SUPABASE_ANON_KEY", "")
     if not url or not key:

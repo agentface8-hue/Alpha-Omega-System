@@ -14,7 +14,7 @@ logger = logging.getLogger(__name__)
 _INTERVAL  = 480   # 8 minutes
 _SERVICE_URL = os.environ.get(
     "RENDER_EXTERNAL_URL",
-    "https://alpha-omega-system.onrender.com"
+    "http://46.183.113.197"
 )
 
 def _ping_loop():

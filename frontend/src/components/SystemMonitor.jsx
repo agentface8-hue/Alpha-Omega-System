@@ -3,7 +3,7 @@ import AuditTrail from "./AuditTrail";
 import SafetyControls from "./SafetyControls";
 import AiRadar from "./AiRadar";
 
-const API = "https://alpha-omega-system.onrender.com";
+const API = import.meta.env.VITE_API_URL || "http://46.183.113.197";
 const REFRESH = 30000;
 
 const STATUS_COLOR = { GREEN: "#1D9E75", YELLOW: "#BA7517", RED: "#E24B4A", running: "#1D9E75", stopped: "#E24B4A", unknown: "#888780" };

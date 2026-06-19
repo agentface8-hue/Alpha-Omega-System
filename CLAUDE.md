@@ -18,7 +18,7 @@ Do NOT assume anything from your training data — use this file.
 Alpha-Omega is a fully autonomous AI-powered stock/crypto swing trading system.
 
 **Live at:** https://alpha-omega-ngfw.vercel.app (Vercel: team **synapse-s**, project **alpha-omega-ngfw** — not Avi personal Vercel)
-**Backend API:** https://alpha-omega-system.onrender.com
+**Backend API:** http://46.183.113.197
 **Owner:** Avi | Windows 11 (ASUS laptop) | Cyprus
 
 ### Core capabilities (all live):
@@ -40,7 +40,7 @@ Alpha-Omega is a fully autonomous AI-powered stock/crypto swing trading system.
 | Component | Platform | URL | Remote |
 |---|---|---|---|
 | Frontend | Vercel team **synapse-s** (profile agent / agentface8@gmail.com) | https://alpha-omega-ngfw.vercel.app | Project: **alpha-omega-ngfw** only |
-| Backend | Render | https://alpha-omega-system.onrender.com | origin → github.com/agentface8-hue/Alpha-Omega-System |
+| Backend | Clouding VPS | http://46.183.113.197 | JSON storage, no Supabase |
 
 ### Single remote — ONE push deploys BOTH:
 ```cmd

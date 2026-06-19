@@ -15,8 +15,10 @@ from pathlib import Path
 
 logger = logging.getLogger(__name__)
 
+from core.storage_paths import app_data_dir, use_supabase
+
 OWNER_USERNAMES = {"avi", "aviandjhon"}
-_LOCAL_USERS_FILE = Path(__file__).resolve().parent.parent / "data" / "ao_users.json"
+_LOCAL_USERS_FILE = app_data_dir() / "ao_users.json"
 
 
 def _is_supabase_quota_error(err: Exception) -> bool:
@@ -76,6 +78,8 @@ def _hash(password: str) -> str:
 def _sb(endpoint: str, method: str = "GET", data: dict = None,
         params: str = "", prefer: str = "") -> list | dict | None:
     """Direct REST call to Supabase PostgREST. No supabase-py client."""
+    if not use_supabase():
+        raise RuntimeError("Supabase disabled (STORAGE_MODE=json)")
     url_base = os.environ.get("SUPABASE_URL", "").rstrip("/")
     key      = os.environ.get("SUPABASE_ANON_KEY", "")
     if not url_base or not key:
@@ -247,6 +251,8 @@ def list_users() -> list:
 
 def supabase_status() -> dict:
     """Lightweight Supabase probe for /health and dashboards."""
+    if not use_supabase():
+        return {"ok": True, "storage": "json", "supabase": False}
     try:
         _sb("ao_users", params="select=username&limit=1")
         return {"ok": True}

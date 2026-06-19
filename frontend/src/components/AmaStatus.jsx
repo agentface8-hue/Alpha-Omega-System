@@ -1,6 +1,6 @@
 import { useState, useEffect } from "react";
 
-const API = import.meta.env.VITE_API_URL || "https://alpha-omega-system.onrender.com";
+const API = import.meta.env.VITE_API_URL || "http://46.183.113.197";
 
 export default function AmaStatus({ compact = false }) {
   const [st, setSt] = useState(null);

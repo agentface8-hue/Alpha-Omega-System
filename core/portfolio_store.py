@@ -8,10 +8,11 @@ import os, json, datetime, logging
 from pathlib import Path
 from typing import Dict, Any, List, Optional
 
+from core.storage_paths import signals_dir, use_supabase
+
 logger = logging.getLogger(__name__)
 
-PORTFOLIO_DIR = Path(__file__).parent.parent / "signals"
-PORTFOLIO_DIR.mkdir(exist_ok=True)
+PORTFOLIO_DIR = signals_dir()
 POSITIONS_FILE  = PORTFOLIO_DIR / "portfolio_positions.json"
 STATE_FILE      = PORTFOLIO_DIR / "portfolio_state.json"
 
@@ -35,6 +36,9 @@ _sb_ok = None
 
 def _get_sb():
     global _sb, _sb_ok
+    if not use_supabase():
+        _sb_ok = False
+        return None
     if _sb_ok is False:
         return None
     if _sb is not None:

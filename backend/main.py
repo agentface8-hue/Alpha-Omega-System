@@ -1904,20 +1904,6 @@ async def agent_status():
     }
 
 
-# ── Dreaming Agent ────────────────────────────────────────────────────────────
-@app.get("/api/dreams/latest")
-async def get_dream_log(limit: int = 10):
-    from core.dreaming_agent import load_dream_log
-    return {"dreams": load_dream_log(limit=limit)}
-
-@app.post("/api/dreams/run")
-async def trigger_dream_cycle(request: Request):
-    body  = await request.json() if request.headers.get("content-type","").startswith("application/json") else {}
-    force = body.get("force", False)
-    from core.dreaming_agent import run_dream_cycle
-    return run_dream_cycle(force=force)
-
-
 # ── AI Radar Agent ────────────────────────────────────────────────────────────
 @app.get("/api/radar/latest")
 async def get_ai_radar_log(limit: int = 5):

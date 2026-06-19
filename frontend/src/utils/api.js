@@ -1,6 +1,6 @@
 /** Shared API client — retries + timeout for Render cold starts. */
 export const API_BASE =
-  import.meta.env.VITE_API_URL || 'https://alpha-omega-system.onrender.com';
+  import.meta.env.VITE_API_URL || 'http://46.183.113.197';
 
 function sleep(ms) {
   return new Promise((r) => setTimeout(r, ms));
