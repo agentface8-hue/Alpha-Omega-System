@@ -1,6 +1,6 @@
 /** Shared API client — retries + timeout for Render cold starts. */
 export const API_BASE =
-  import.meta.env.VITE_API_URL || 'http://46.183.113.197';
+  import.meta.env.VITE_API_URL || 'https://289c4c10-4400-4814-b389-cf8b47133fc3.clouding.host';
 
 function sleep(ms) {
   return new Promise((r) => setTimeout(r, ms));

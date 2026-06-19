@@ -3,7 +3,7 @@ import AuditTrail from "./AuditTrail";
 import SafetyControls from "./SafetyControls";
 import AiRadar from "./AiRadar";
 
-const API = import.meta.env.VITE_API_URL || "http://46.183.113.197";
+const API = import.meta.env.VITE_API_URL || "https://289c4c10-4400-4814-b389-cf8b47133fc3.clouding.host";
 const REFRESH = 30000;
 
 const STATUS_COLOR = { GREEN: "#1D9E75", YELLOW: "#BA7517", RED: "#E24B4A", running: "#1D9E75", stopped: "#E24B4A", unknown: "#888780" };

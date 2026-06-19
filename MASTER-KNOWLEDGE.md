@@ -31,7 +31,7 @@ Alpha-Omega is an AI-powered stock/crypto trading analysis system:
 | Component | Platform | URL | Remote |
 |-----------|----------|-----|--------|
 | Frontend | Vercel | https://alpha-omega-ngfw.vercel.app | `origin` → github.com/agentface8-hue/Alpha-Omega-System |
-| Backend | Clouding VPS | http://46.183.113.197 | JSON disk storage (Supabase retired) |
+| Backend | Clouding VPS | https://289c4c10-4400-4814-b389-cf8b47133fc3.clouding.host | JSON disk storage (Supabase retired) |
 | Local dev | localhost | http://127.0.0.1:8000 (backend), :5173 (frontend) | — |
 
 ### Deploy workflow:

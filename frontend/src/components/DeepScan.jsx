@@ -1,6 +1,6 @@
 import React, { useState, useCallback, useEffect } from 'react';
 
-const API = () => window.__AO_API__ || import.meta.env.VITE_API_URL || 'http://46.183.113.197';
+const API = () => window.__AO_API__ || import.meta.env.VITE_API_URL || 'https://289c4c10-4400-4814-b389-cf8b47133fc3.clouding.host';
 
 const SIGNAL_LABELS = {
   sma_flat:      { label: 'SMA 150 flat',     desc: '12+ months horizontal' },

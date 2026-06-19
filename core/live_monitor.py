@@ -31,7 +31,7 @@ from dotenv import load_dotenv; load_dotenv()
 # External L2 checks (Supabase, Telegram, Vercel) use direct outbound HTTP only.
 _ON_RENDER  = bool(os.environ.get("RENDER") or os.environ.get("RENDER_EXTERNAL_URL"))
 _PORT       = os.environ.get("PORT", "10000")
-BASE_PUBLIC = os.environ.get("ALPHA_OMEGA_PUBLIC_URL", "http://46.183.113.197")
+BASE_PUBLIC = os.environ.get("ALPHA_OMEGA_PUBLIC_URL", "https://289c4c10-4400-4814-b389-cf8b47133fc3.clouding.host")
 TG_TOKEN  = os.environ.get("TELEGRAM_TOKEN", "")
 TG_CHAT   = os.environ.get("TELEGRAM_PERSONAL_CHAT_ID", "")
 SB_URL    = os.environ.get("SUPABASE_URL", "")

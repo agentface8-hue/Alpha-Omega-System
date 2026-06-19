@@ -14,7 +14,7 @@ logger = logging.getLogger(__name__)
 _INTERVAL  = 480   # 8 minutes
 _SERVICE_URL = os.environ.get(
     "RENDER_EXTERNAL_URL",
-    "http://46.183.113.197"
+    "https://289c4c10-4400-4814-b389-cf8b47133fc3.clouding.host"
 )
 
 def _ping_loop():

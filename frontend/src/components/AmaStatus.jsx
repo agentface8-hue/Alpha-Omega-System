@@ -1,6 +1,6 @@
 import { useState, useEffect } from "react";
 
-const API = import.meta.env.VITE_API_URL || "http://46.183.113.197";
+const API = import.meta.env.VITE_API_URL || "https://289c4c10-4400-4814-b389-cf8b47133fc3.clouding.host";
 
 export default function AmaStatus({ compact = false }) {
   const [st, setSt] = useState(null);

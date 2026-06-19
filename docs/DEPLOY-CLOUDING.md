@@ -19,7 +19,7 @@ Move the API from Render to a [Clouding](https://clouding.io/) VPS with **persis
 |-------|-------|
 | Public IP | `46.183.113.197` |
 | DNS | `289c4c10-4400-4814-b389-cf8b47133fc3.clouding.host` |
-| Health | http://46.183.113.197/health |
+| Health | https://289c4c10-4400-4814-b389-cf8b47133fc3.clouding.host/health |
 | Storage | JSON at `/var/lib/alpha-omega` (no Supabase) |
 
 ## 1. Create server (Clouding portal)
