@@ -18,18 +18,98 @@ CALIB_DIR = Path(__file__).parent.parent / "calibration"
 CALIB_DIR.mkdir(exist_ok=True)
 CALIB_FILE = CALIB_DIR / "calibration_params.json"
 
+# ── Supabase persistence helpers ──────────────────────────────────────────────
+
+def _sb_client():
+    """Return a Supabase client or None if credentials are missing."""
+    url = os.environ.get("SUPABASE_URL", "")
+    key = os.environ.get("SUPABASE_ANON_KEY", "")
+    if not url or not key:
+        return None
+    try:
+        from supabase import create_client
+        return create_client(url, key)
+    except Exception:
+        return None
+
+
+def _load_from_supabase() -> Dict[str, Any] | None:
+    """Load calibration params from Supabase. Returns None on any failure."""
+    try:
+        sb = _sb_client()
+        if not sb:
+            return None
+        resp = sb.table("calibration_params").select("params").eq("key", "default").limit(1).execute()
+        rows = resp.data
+        if rows:
+            p = rows[0].get("params", {})
+            if isinstance(p, dict):
+                return p
+        return None
+    except Exception as e:
+        print(f"[CALIB] Supabase load failed (will use local file): {e}")
+        return None
+
+
+def _save_to_supabase(params: Dict[str, Any]) -> bool:
+    """Upsert calibration params to Supabase. Returns True on success."""
+    try:
+        sb = _sb_client()
+        if not sb:
+            return False
+        sb.table("calibration_params").upsert(
+            {"key": "default", "params": params, "updated_at": datetime.utcnow().isoformat()},
+            on_conflict="key"
+        ).execute()
+        return True
+    except Exception as e:
+        print(f"[CALIB] Supabase save failed (will use local file): {e}")
+        return False
+
 
 def load_calibration() -> Dict[str, Any]:
-    """Load saved calibration parameters."""
+    """Load saved calibration parameters.
+    Priority: Supabase → local JSON file → hardcoded defaults.
+    On Render (ephemeral fs) Supabase is the durable source.
+    """
+    # 1. Try Supabase first
+    params = _load_from_supabase()
+    if params:
+        # Keep local file in sync for local dev / offline fallback
+        try:
+            CALIB_FILE.write_text(json.dumps(params, indent=2))
+        except Exception:
+            pass
+        return params
+
+    # 2. Fall back to local JSON
     if CALIB_FILE.exists():
-        return json.loads(CALIB_FILE.read_text())
+        try:
+            return json.loads(CALIB_FILE.read_text())
+        except Exception:
+            pass
+
+    # 3. Hardcoded defaults
     return {"mode": "none", "scale": 1.0, "offset": 0}
 
 
 def save_calibration(params: Dict[str, Any]):
+    """Persist calibration params.
+    Writes to BOTH Supabase and local file (dual-write for resilience).
+    """
     params["updated_at"] = datetime.now().isoformat()
-    CALIB_FILE.write_text(json.dumps(params, indent=2))
-    print(f"[CALIB] Saved to {CALIB_FILE}")
+
+    # Always write local file (fast, zero-dep)
+    try:
+        CALIB_FILE.write_text(json.dumps(params, indent=2))
+        print(f"[CALIB] Saved to {CALIB_FILE}")
+    except Exception as e:
+        print(f"[CALIB] Local file save failed: {e}")
+
+    # Best-effort Supabase write
+    ok = _save_to_supabase(params)
+    if ok:
+        print("[CALIB] Synced to Supabase calibration_params table")
 
 
 # Defaults when learning loop has no regime sample yet
