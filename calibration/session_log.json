@@ -381,5 +381,14 @@
       "auto: session memory 2026-06-17 19:00",
       "auto: session memory 2026-06-16 19:00"
     ]
+  },
+  {
+    "ts": "2026-06-19T19:00:02.104137",
+    "commits": 3,
+    "messages": [
+      "hermes: migrate calibration_params to Supabase (dual-write + fallback)",
+      "auto: session memory 2026-06-18 19:00",
+      "auto: session memory 2026-06-17 19:00"
+    ]
   }
 ]

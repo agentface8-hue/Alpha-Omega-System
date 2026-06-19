@@ -5,7 +5,7 @@ or run commands on this system. Direct all work to Cursor.
 ---
 
 # ALPHA-OMEGA SYSTEM — MASTER KNOWLEDGE BASE
-# Last Updated: 2026-06-18
+# Last Updated: 2026-06-19
 # Location: C:\Users\asus\Alpha-Omega-System\MASTER-KNOWLEDGE.md
 
 ## ⚠️ INSTRUCTIONS FOR CLAUDE — READ THIS FIRST EVERY SESSION
@@ -518,14 +518,18 @@ Downloads folder has dead ZIP copies from April 29 — ignore them.
 Always deploy from: git push origin main (triggers both Render + Vercel)
 
 ## 16. RECENT SESSION CHANGES
-*Auto-updated: 2026-06-18 19:00 UTC*
+*Auto-updated: 2026-06-19 19:00 UTC*
 
-### `5aaecd5` 2026-06-17 22:00 - auto: session memory 2026-06-17 19:00
+### `f9de74d` 2026-06-19 10:57 - hermes: migrate calibration_params to Supabase (dual-write + fallback)
+- `core/calibrator.py`
+- `migrations/004_calibration_params.sql`
+
+### `e0f361f` 2026-06-18 22:00 - auto: session memory 2026-06-18 19:00
 - `CLAUDE.md`
 - `MASTER-KNOWLEDGE.md`
 - `calibration/session_log.json`
 
-### `87c829d` 2026-06-16 22:00 - auto: session memory 2026-06-16 19:00
+### `5aaecd5` 2026-06-17 22:00 - auto: session memory 2026-06-17 19:00
 - `CLAUDE.md`
 - `MASTER-KNOWLEDGE.md`
 - `calibration/session_log.json`
