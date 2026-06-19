@@ -120,8 +120,27 @@ def _learning_summary_direct():
     return f"closed={closed} calibration={params.get('mode', '?')}"
 
 
+from core.storage_paths import use_supabase
+
+def _json_storage_ok():
+    """JSON mode health — verify local portfolio + signals readable."""
+    from core.portfolio_manager import get_portfolio
+    from core.signal_store import load_active
+    p = get_portfolio()
+    active = load_active()
+    open_n = sum(
+        1 for x in (p.get("open_positions") or [])
+        if x.get("status") in ("open", "partial")
+    )
+    return f"json ok open={open_n} signals={len(active)}"
+
+
 def _trade_history_direct():
-    """In-process trade log read — avoids slow self-HTTP on Render."""
+    """In-process trade log read — JSON file or Supabase."""
+    if not use_supabase():
+        from core.portfolio_manager import get_portfolio
+        closed = get_portfolio().get("closed_positions") or []
+        return f"{len(closed)} closed positions (json)"
     if not SB_URL or not SB_KEY:
         raise RuntimeError("Supabase not configured")
     req = urllib.request.Request(
@@ -144,22 +163,28 @@ CHECKS_L1 = [  # Every 5 min — direct internal calls, no HTTP
     ("backend.process",    lambda: "alive",                                                                                    True),
     ("portfolio.data",     lambda: __import__("core.portfolio_manager", fromlist=["get_portfolio"]).get_portfolio(),           True),
     ("signals.active",     lambda: __import__("core.signal_store",      fromlist=["load_active"]).load_active(),               True),
-    ("supabase.reachable", lambda: _sb_write_test(),                                                                           True),
 ]
+if use_supabase():
+    CHECKS_L1.append(("supabase.reachable", lambda: _sb_write_test(), True))
+else:
+    CHECKS_L1.append(("storage.json", lambda: _json_storage_ok(), True))
 
 CHECKS_L2 = [  # Every 15 min — integrations (prices.live in-process)
-    ("supabase.signals",  lambda: urllib.request.urlopen(
-        urllib.request.Request(f"{SB_URL}/rest/v1/signals?limit=1",
-        headers={"apikey":SB_KEY,"Authorization":f"Bearer {SB_KEY}"}),timeout=8).status, False),
-    ("supabase.trade_log",lambda: urllib.request.urlopen(
-        urllib.request.Request(f"{SB_URL}/rest/v1/trade_log?limit=1",
-        headers={"apikey":SB_KEY,"Authorization":f"Bearer {SB_KEY}"}),timeout=8).status, False),
     ("prices.live",       _prices_live_direct, False),
     ("telegram.bot",      lambda: urllib.request.urlopen(
         f"https://api.telegram.org/bot{TG_TOKEN}/getMe",timeout=8).status, False),
     ("frontend.vercel",   lambda: urllib.request.urlopen(
         "https://alpha-omega-ngfw.vercel.app",timeout=10).status, False),
 ]
+if use_supabase():
+    CHECKS_L2[:0] = [
+        ("supabase.signals",  lambda: urllib.request.urlopen(
+            urllib.request.Request(f"{SB_URL}/rest/v1/signals?limit=1",
+            headers={"apikey":SB_KEY,"Authorization":f"Bearer {SB_KEY}"}),timeout=8).status, False),
+        ("supabase.trade_log",lambda: urllib.request.urlopen(
+            urllib.request.Request(f"{SB_URL}/rest/v1/trade_log?limit=1",
+            headers={"apikey":SB_KEY,"Authorization":f"Bearer {SB_KEY}"}),timeout=8).status, False),
+    ]
 
 # ── Alert logic ───────────────────────────────────────────────────
 ALERT_COOLDOWN_S = 3600  # 1h between repeated alerts for same check

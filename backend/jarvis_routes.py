@@ -127,8 +127,9 @@ async def jarvis_summary(authorization: Optional[str] = Header(None)) -> Dict[st
     autopilot_on = not global_halt
 
     stats = portfolio.get("stats") or {}
+    _OPEN_STATUSES = {"open", "partial"}
     open_positions = [
-        p for p in (portfolio.get("open_positions") or []) if p.get("status") == "open"
+        p for p in (portfolio.get("open_positions") or []) if p.get("status") in _OPEN_STATUSES
     ]
     today_pnl = _today_pnl_pct(portfolio)
     sector_gate = _sector_gate_today()
