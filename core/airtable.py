@@ -2,7 +2,7 @@
 airtable.py - Airtable trade logging for Alpha-Omega.
 Replaces Google Sheets. Permanent API key, no OAuth, no expiry.
 """
-import os, json, logging, urllib.request, datetime
+import os, json, logging, urllib.request, urllib.error, datetime, time, threading
 from typing import Dict, Optional
 
 logger = logging.getLogger(__name__)
@@ -56,19 +56,38 @@ def log_trade(signal: Dict) -> Optional[str]:
         return None
 
 
+_health_cache = None
+_health_cache_until = 0.0
+_health_lock = threading.Lock()
+
+
 def check_connection() -> Dict:
-    """Health check: write+delete a test record."""
-    try:
-        test = {"Ticker": "HEALTH_CHECK", "Trade Status": "TEST",
-                "Signal ID": f"hc_{datetime.datetime.utcnow().strftime('%H%M%S')}"}
-        body = json.dumps({"records": [{"fields": test}]}).encode()
-        req  = urllib.request.Request(BASE_URL, data=body, headers=_hdrs())
-        with urllib.request.urlopen(req, timeout=10) as r:
-            resp = json.loads(r.read())
-        rec_id = resp["records"][0]["id"]
-        del_req = urllib.request.Request(f"{BASE_URL}/{rec_id}", method="DELETE", headers=_hdrs())
-        with urllib.request.urlopen(del_req, timeout=10):
-            pass
-        return {"status": "GREEN", "detail": "Write+delete verified - Airtable connected"}
-    except Exception as e:
-        return {"status": "YELLOW", "detail": f"{type(e).__name__}: {str(e)[:80]}"}
+    """Read-only probe; cache results so dashboard refreshes do not consume writes."""
+    global _health_cache, _health_cache_until
+    with _health_lock:
+        if _health_cache is not None and time.monotonic() < _health_cache_until:
+            return dict(_health_cache)
+        ttl = 300
+        try:
+            if not APIKEY:
+                return {"status": "YELLOW", "detail": "AIRTABLE_API_KEY missing"}
+            req = urllib.request.Request(f"{BASE_URL}?maxRecords=1&pageSize=1", headers=_hdrs())
+            with urllib.request.urlopen(req, timeout=10) as r:
+                json.loads(r.read())
+            result = {"status": "GREEN", "detail": "Read access verified; write access not tested"}
+        except urllib.error.HTTPError as e:
+            ttl = 60
+            if e.code == 429:
+                try:
+                    ttl = max(30, min(3600, int(e.headers.get('Retry-After', '60'))))
+                except (ValueError, TypeError):
+                    ttl = 60
+                result = {"status": "YELLOW", "detail": f"Airtable rate/quota limit (429); retry after {ttl}s"}
+            else:
+                result = {"status": "YELLOW", "detail": f"Airtable HTTP {e.code}"}
+        except Exception as e:
+            ttl = 60
+            result = {"status": "YELLOW", "detail": f"Airtable probe failed: {type(e).__name__}"}
+        _health_cache = dict(result)
+        _health_cache_until = time.monotonic() + ttl
+        return result

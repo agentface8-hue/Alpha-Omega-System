@@ -608,7 +608,7 @@ body::before {
 .top-stocks-compact .stocks-grid {
   display: grid;
   grid-auto-flow: column;
-  grid-auto-columns: minmax(112px, 1fr);
+  grid-auto-columns: max-content;
   grid-template-rows: 1fr;
   gap: 6px;
   overflow-x: auto;
@@ -617,7 +617,7 @@ body::before {
 }
 
 .top-stocks-compact .stock-card {
-  grid-template-columns: 42px 1fr auto;
+  grid-template-columns: max-content max-content max-content;
   gap: 6px;
   padding: 6px 8px;
   min-height: 30px;
@@ -633,6 +633,11 @@ body::before {
 .top-stocks-compact .stock-change {
   font-size: 9px;
   min-width: 42px;
+}
+
+button:disabled {
+  opacity: 0.45;
+  cursor: not-allowed !important;
 }
 
 /* ===== ANIMATIONS ===== */

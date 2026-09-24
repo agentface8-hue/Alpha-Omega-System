@@ -1,7 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { RefreshCw, TrendingUp, TrendingDown, BarChart2, Star, X } from 'lucide-react';
 import ChartPanel from './ChartPanel';
-import { API_BASE } from '../utils/api';
+import { fetchJson } from '../utils/api';
 
 const convC  = p => p >= 75 ? "#00ff88" : p >= 60 ? "#fbbf24" : p >= 45 ? "#94a3b8" : "#ff4466";
 const trendC = t => t === "BULL" ? "#00ff88" : t === "BEAR" ? "#ff4466" : "#fbbf24";
@@ -23,14 +23,10 @@ const AlphaMegaDashboard = () => {
   const [chartTicker, setChartTicker] = useState(null);
   const [lastTs, setLastTs]     = useState(null);
 
-  const apiUrl = API_BASE;
-
   const fetchData = async (lb = lookback) => {
     setLoading(true); setError(null);
     try {
-      const res = await fetch(`${apiUrl}/api/alpha-mega?lookback_days=${lb}`);
-      if (!res.ok) throw new Error(`HTTP ${res.status}`);
-      const d = await res.json();
+      const d = await fetchJson(`/api/alpha-mega?lookback_days=${lb}`, {}, { timeoutMs: 180000, retries: 1 });
       setData(d);
       setLastTs(d.last_updated ? new Date(d.last_updated * 1000).toLocaleString() : null);
     } catch (e) { setError(e.message); }

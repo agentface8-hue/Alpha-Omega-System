@@ -12,13 +12,16 @@ export default function DreamLog({ backendReady = true }) {
   const [loading, setLoading] = useState(true);
   const [running, setRunning] = useState(false);
   const [lastRun, setLastRun] = useState(null);
+  const [error, setError] = useState(null);
 
   const fetchDreams = async () => {
     if (!backendReady) { setLoading(false); return; }
+    setLoading(true);
+    setError(null);
     try {
-      const json = await fetchJson('/api/dreams/latest?limit=20', {}, { timeoutMs: 45000, retries: 2 });
+      const json = await fetchJson('/api/dreams/latest?limit=20', {}, { timeoutMs: 15000, retries: 1 });
       setDreams(json.dreams || []);
-    } catch(e) { console.error(e); }
+    } catch(e) { setError(`Unable to load dream log: ${e.message}`); }
     setLoading(false);
   };
 
@@ -32,7 +35,7 @@ export default function DreamLog({ backendReady = true }) {
       }, { timeoutMs: 90000, retries: 1 });
       setLastRun(new Date().toLocaleTimeString());
       setTimeout(fetchDreams, 3000);
-    } catch(e) { console.error(e); }
+    } catch(e) { setError(`Dream cycle failed: ${e.message}`); }
     setRunning(false);
   };
 
@@ -67,8 +70,9 @@ export default function DreamLog({ backendReady = true }) {
       />
 
       {loading && <LoadingSpinner text="Loading dream log..." />}
+      {error && <div role="alert" style={{ color:C.red, padding:12 }}>{error} <button onClick={fetchDreams} disabled={loading}>Retry loading</button></div>}
 
-      {!loading && dreams.length === 0 && (
+      {!loading && !error && dreams.length === 0 && (
         <SectionCard title="DREAM LOG" accent={C.purple}>
           <EmptyState
             icon={<Moon size={36} />}

@@ -1,9 +1,5 @@
 import React, { useState, useCallback, useEffect } from 'react';
-
-const API = () => {
-  const raw = window.__AO_API__ || import.meta.env.VITE_API_URL || 'https://alpha-omega-system.onrender.com';
-  return String(raw).includes('clouding.host') ? 'https://alpha-omega-system.onrender.com' : raw;
-};
+import { fetchJson } from '../utils/api';
 
 const SIGNAL_LABELS = {
   sma_flat:      { label: 'SMA 150 flat',     desc: '12+ months horizontal' },
@@ -28,9 +24,7 @@ export default function DeepScan() {
   const load = useCallback(async (refresh = false) => {
     setLoading(true); setError(null);
     try {
-      const r = await fetch(`${API()}/api/scan/sleeping-giants${refresh ? '?refresh=true' : ''}`);
-      if (!r.ok) throw new Error(await r.text());
-      setData(await r.json());
+      setData(await fetchJson(`/api/scan/sleeping-giants${refresh ? '?refresh=true' : ''}`, {}, { timeoutMs: 180000, retries: 1 }));
     } catch (e) { setError(e.message); }
     setLoading(false);
   }, []);

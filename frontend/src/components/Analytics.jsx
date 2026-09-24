@@ -2,29 +2,28 @@ import { useState, useEffect } from 'react';
 import { Activity, BarChart3, AlertTriangle, TrendingUp } from 'lucide-react';
 import { C, StatCard, SectionCard, PageHeader, BarRow, Badge, EmptyState, LoadingSpinner } from './UIKit';
 
-import { API_BASE } from '../utils/api';
-
-const API = API_BASE;
+import { fetchJson } from '../utils/api';
 
 const Analytics = () => {
   const [data,    setData]    = useState(null);
   const [risk,    setRisk]    = useState(null);
   const [source,  setSource]  = useState(null);
   const [loading, setLoading] = useState(true);
+  const [error, setError] = useState(null);
 
   useEffect(() => {
     const load = async () => {
       setLoading(true);
       try {
-        const [perfRes, riskRes, srcRes] = await Promise.all([
-          fetch(`${API}/api/analytics/performance`),
-          fetch(`${API}/api/portfolio/risk`),
-          fetch(`${API}/api/data/source`),
+        const results = await Promise.allSettled([
+          fetchJson('/api/analytics/performance', {}, { timeoutMs: 15000, retries: 1 }),
+          fetchJson('/api/portfolio/risk', {}, { timeoutMs: 15000, retries: 1 }),
+          fetchJson('/api/data/source', {}, { timeoutMs: 15000, retries: 1 }),
         ]);
-        if (perfRes.ok) setData(await perfRes.json());
-        if (riskRes.ok) setRisk(await riskRes.json());
-        if (srcRes.ok)  setSource(await srcRes.json());
-      } catch(e) { console.error(e); }
+        const setters = [setData, setRisk, setSource];
+        results.forEach((result, i) => { if (result.status === 'fulfilled') setters[i](result.value); });
+        if (results.some(result => result.status === 'rejected')) setError('Unable to load all analytics. Some data is unavailable; reopen this tab to retry.');
+      } catch(e) { setError(`Unable to load analytics: ${e.message}`); }
       setLoading(false);
     };
     load();
@@ -49,8 +48,9 @@ const Analytics = () => {
       />
 
       {loading && <LoadingSpinner text="Loading analytics..." />}
+      {error && <div role="alert" style={{ color: C.red, padding: 12 }}>{error}</div>}
 
-      {!loading && (
+      {!loading && (data || risk) && (
         <div style={{ display: 'flex', flexDirection: 'column', gap: 20 }}>
 
           {/* Portfolio Risk */}

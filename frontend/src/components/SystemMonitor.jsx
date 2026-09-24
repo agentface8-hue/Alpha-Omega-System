@@ -75,6 +75,7 @@ export default function SystemMonitor() {
   const [memData, setMemData]         = useState(null);
   const [log, setLog]                 = useState([]);
   const [lastRefresh, setLastRefresh] = useState(null);
+  const [loadErrors, setLoadErrors] = useState([]);
   const [loading, setLoading]         = useState(true);
   const [countdown, setCountdown]     = useState(30);
   const timerRef = useRef(null);
@@ -122,6 +123,10 @@ export default function SystemMonitor() {
         fetchJson("/api/agent-platforms/status", 8000),
       ]);
 
+      const names = ['health', 'agents', 'AI health', 'performance', 'memory', 'monitor', 'learning', 'AMA', 'platforms'];
+      const failures = [h, a, ai, p, m, mon, learn, ama, platforms]
+        .flatMap((result, i) => result.status === 'rejected' ? [names[i]] : []);
+      setLoadErrors(failures);
       if (h.status === "fulfilled") {
         setHealth(h.value);
         const reds = h.value.checks?.filter(c => c.status === "RED") || h.value.reds || [];
@@ -150,7 +155,7 @@ export default function SystemMonitor() {
       if (platforms.status === "fulfilled") setPlatformStatus(platforms.value);
 
       setLastRefresh(new Date());
-      addLog(`Refresh OK (${runFull ? "full" : "quick"} health)`, "info");
+      addLog(failures.length ? `Refresh incomplete: ${failures.join(', ')}` : `Refresh OK (${runFull ? "full" : "quick"} health)`, failures.length ? 'warn' : 'info');
     } catch (e) {
       addLog(`Fetch error: ${e.message}`, "error");
     }
@@ -303,6 +308,9 @@ export default function SystemMonitor() {
       boxSizing: "border-box",
       fontFamily: "var(--font-sans)",
     }}>
+      {loadErrors.length > 0 && <div role="alert" style={{color:'#fbbf24',padding:12}}>
+        Unable to load system data: {loadErrors.join(', ')}. Existing values may be stale; use Refresh to retry.
+      </div>}
 
       <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: 16, flexWrap: "wrap", gap: 10 }}>
         <div style={{ display: "flex", alignItems: "center", gap: 10 }}>
@@ -348,7 +356,7 @@ export default function SystemMonitor() {
                 <Row status={agentStatus.monitor_running ? "GREEN" : "YELLOW"} label="Live Monitor" detail={agentStatus.monitor_running ? "L1/L2/L3" : "threads missing"} />
                 <Row status={agentStatus.active_threads?.includes("dreaming_agent") ? "GREEN" : "YELLOW"} label="Dreaming Agent" detail="every 4h" />
               </>
-            ) : <div style={{ fontSize: 13, color: "var(--color-text-secondary)" }}>loading...</div>}
+            ) : <div style={{ fontSize: 13, color: "var(--color-text-secondary)" }}>{loading ? 'loading...' : 'Unavailable — use Refresh to retry'}</div>}
           </Card>
 
           <Card title="Autonomous Agent (AMA)">
@@ -359,7 +367,7 @@ export default function SystemMonitor() {
                 <Row status="GREEN" label="Actions today" detail={amaStatus.actions_today ?? 0} />
                 <button onClick={runAmaNow} style={{ marginTop: 10, fontSize: 12, padding: "4px 12px", cursor: "pointer", width: "100%" }}>Run AMA cycle now</button>
               </>
-            ) : <div style={{ fontSize: 13, color: "var(--color-text-secondary)" }}>loading...</div>}
+            ) : <div style={{ fontSize: 13, color: "var(--color-text-secondary)" }}>{loading ? 'loading...' : 'Unavailable — use Refresh to retry'}</div>}
           </Card>
 
           <Card title="Agent Platform Adaptation">
@@ -375,7 +383,7 @@ export default function SystemMonitor() {
                   Next: {platformStatus.next_step}
                 </div>
               </>
-            ) : <div style={{ fontSize: 13, color: "var(--color-text-secondary)" }}>loading...</div>}
+            ) : <div style={{ fontSize: 13, color: "var(--color-text-secondary)" }}>{loading ? 'loading...' : 'Unavailable — use Refresh to retry'}</div>}
           </Card>
 
           <Card title="integrations">
@@ -405,7 +413,7 @@ export default function SystemMonitor() {
                 )}
                 <button onClick={runAgentNow} style={{ marginTop: 10, fontSize: 12, padding: "4px 12px", cursor: "pointer", width: "100%" }}>Force run now</button>
               </>
-            ) : <div style={{ fontSize: 13, color: "var(--color-text-secondary)" }}>loading...</div>}
+            ) : <div style={{ fontSize: 13, color: "var(--color-text-secondary)" }}>{loading ? 'loading...' : 'Unavailable — use Refresh to retry'}</div>}
           </Card>
 
           <Card title="performance">
@@ -426,7 +434,7 @@ export default function SystemMonitor() {
                   </div>
                 )}
               </>
-            ) : <div style={{ fontSize: 13, color: "var(--color-text-secondary)" }}>loading performance...</div>}
+            ) : <div style={{ fontSize: 13, color: "var(--color-text-secondary)" }}>{loading ? 'loading performance...' : 'Performance unavailable — use Refresh to retry'}</div>}
           </Card>
         </div>
       </div>

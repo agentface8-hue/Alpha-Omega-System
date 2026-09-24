@@ -145,51 +145,51 @@ const ScanDashboard = ({ autoScan = false }) => {
     setData(null);
     setProgress('Starting scan...');
     const symbols = tickers.split(',').map(s => s.trim().toUpperCase()).filter(Boolean);
-    const apiUrl = API_BASE;
+    const controller = new AbortController();
+    const timer = setTimeout(() => controller.abort(), 180000);
+    let reader;
+    let completed = false;
     try {
-      // SSE streaming — one open connection, no polling, no in-memory job store
-      const response = await fetch(`${apiUrl}/api/scan/stream`, {
-        method: 'POST',
+      const response = await fetch(`${API_BASE}/api/scan/stream`, {
+        method: 'POST', signal: controller.signal,
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ symbols })
       });
-      if (!response.ok) {
-        const err = await response.text();
-        throw new Error(`API error ${response.status}: ${err}`);
-      }
-      const reader = response.body.getReader();
+      if (!response.ok) throw new Error(`API error ${response.status}: ${(await response.text()).slice(0, 300)}`);
+      reader = response.body.getReader();
       const decoder = new TextDecoder();
       let buffer = '';
-      while (true) {
+      while (!completed) {
         const { done, value } = await reader.read();
-        if (done) break;
-        buffer += decoder.decode(value, { stream: true });
+        buffer += done ? decoder.decode() : decoder.decode(value, { stream: true });
         const lines = buffer.split('\n');
-        buffer = lines.pop(); // hold incomplete line for next chunk
+        buffer = done ? '' : lines.pop();
         for (const line of lines) {
-          if (!line.startsWith('data: ')) continue;
-          try {
-            const event = JSON.parse(line.slice(6));
-            if (event.type === 'progress') {
-              setProgress(event.progress || '');
-            } else if (event.type === 'complete') {
-              const json = event.results;
-              setData(json);
-              const top3 = (json.results || []).filter(r => !r.hard_fail).slice(0, 3).map(r => r.ticker);
-              setExpanded(new Set(top3));
-            } else if (event.type === 'error') {
-              throw new Error(event.error || 'Scan failed');
-            }
-          } catch (pe) {
-            if (pe.message && (pe.message.includes('API error') || pe.message.includes('Scan failed'))) throw pe;
+          if (!line.startsWith('data:')) continue;
+          let event;
+          try { event = JSON.parse(line.slice(5).trim()); } catch { continue; }
+          if (event.type === 'progress') setProgress(event.progress || '');
+          else if (event.type === 'error') throw new Error(event.error || 'Scan failed');
+          else if (event.type === 'complete') {
+            const json = event.results;
+            if (!json || !Array.isArray(json.results)) throw new Error('Scan returned an invalid result');
+            setData(json);
+            setExpanded(new Set(json.results.filter(r => !r.hard_fail).slice(0, 3).map(r => r.ticker)));
+            completed = true;
+            break;
           }
         }
+        if (done) break;
       }
+      if (!completed) throw new Error('Scan ended before completion. Retry the scan.');
     } catch (e) {
-      setError(e.message);
+      setError(e.name === 'AbortError' ? 'Scan timed out. The server may still be processing it.' : e.message);
+    } finally {
+      clearTimeout(timer);
+      if (reader) { try { await reader.cancel(); } catch {} }
+      setLoading(false);
+      setProgress('');
     }
-    setLoading(false);
-    setProgress('');
   };
 
   const toggleExpand = (ticker) => {

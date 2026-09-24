@@ -28,6 +28,9 @@ def _now() -> str:
 
 
 def check_supabase() -> Dict:
+    from core.storage_paths import use_supabase
+    if not use_supabase():
+        return _ok("Supabase", "Disabled by configured JSON storage mode; not a database connectivity check")
     try:
         url = os.environ.get("SUPABASE_URL", "")
         key = os.environ.get("SUPABASE_ANON_KEY", "")

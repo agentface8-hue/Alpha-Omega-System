@@ -8,6 +8,7 @@ from typing import Dict, Any, List, Optional
 import logging
 
 from core.storage_paths import signals_dir, use_supabase
+from core.json_storage import atomic_write_json
 
 logger = logging.getLogger(__name__)
 
@@ -96,14 +97,11 @@ def _get_supabase():
 
 def _load_json(path: Path) -> List[Dict]:
     if path.exists():
-        try:
-            return json.loads(path.read_text())
-        except json.JSONDecodeError:
-            return []
+        return json.loads(path.read_text(encoding="utf-8"))
     return []
 
 def _save_json(path: Path, data: List[Dict]):
-    path.write_text(json.dumps(data, indent=2, default=str))
+    atomic_write_json(path, data)
 
 
 # ══════════════════════════════════════════════════════════════

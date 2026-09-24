@@ -5,8 +5,11 @@ from __future__ import annotations
 
 import datetime
 import json
+import copy
+import math
 from pathlib import Path
 from typing import Any, Dict, Optional
+from core.json_storage import atomic_write_json
 
 SAFETY_FILE = Path(__file__).parent.parent / "signals" / "safety_state.json"
 DEFAULT_STATE = {
@@ -29,17 +32,31 @@ def _now() -> str:
 def load_state() -> Dict[str, Any]:
     if SAFETY_FILE.exists():
         try:
-            data = json.loads(SAFETY_FILE.read_text())
-            return {**DEFAULT_STATE, **data}
-        except Exception:
-            pass
-    return dict(DEFAULT_STATE)
+            data = json.loads(SAFETY_FILE.read_text(encoding="utf-8"))
+            if not isinstance(data, dict):
+                raise ValueError("Safety state must be an object")
+            state = {**copy.deepcopy(DEFAULT_STATE), **data}
+            if any(type(state[k]) is not bool for k in ("global_halt", "live_mode_confirmed")):
+                raise ValueError("Safety flags must be booleans")
+            halted = state["halted_symbols"]
+            if not isinstance(halted, dict) or any(not isinstance(v, dict) for v in halted.values()):
+                raise ValueError("Invalid halted symbols")
+            for key in ("max_daily_realized_loss", "max_open_risk", "max_new_positions_per_day"):
+                value = state[key]
+                if isinstance(value, bool) or not isinstance(value, (int, float)) or not math.isfinite(value) or value < 0:
+                    raise ValueError("Invalid safety limit")
+            return state
+        except (OSError, ValueError, TypeError):
+            return {**copy.deepcopy(DEFAULT_STATE), "global_halt": True,
+                    "halt_reason": "Safety state unreadable or invalid; repair before resuming",
+                    "state_error": True}
+    return copy.deepcopy(DEFAULT_STATE)
 
 
 def save_state(state: Dict[str, Any]) -> Dict[str, Any]:
     state = {**DEFAULT_STATE, **(state or {}), "updated_at": _now()}
     SAFETY_FILE.parent.mkdir(exist_ok=True)
-    SAFETY_FILE.write_text(json.dumps(state, indent=2, default=str))
+    atomic_write_json(SAFETY_FILE, state)
     return state
 
 

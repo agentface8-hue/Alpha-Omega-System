@@ -782,13 +782,15 @@ export default function PortfolioTab({ compact = false, isOwner = false, backend
   const [scanCandidates, setScanCandidates] = useState([]);
   const [allActions,     setAllActions]     = useState([]);
   const [tradeHistory,   setTradeHistory]   = useState(null);   // { trades, stats }
+  const [historyLoading, setHistoryLoading] = useState(false);
+  const [historyError, setHistoryError] = useState(null);
   const [historyTab,     setHistoryTab]     = useState('log');  // 'log' | 'history'
 
   const load = useCallback(async (silent = false) => {
     if (!backendReady) return;
     if (!silent) setLoading(true);
     try {
-      const json = await fetchJson('/api/portfolio', {}, { timeoutMs: 50000, retries: 3 });
+      const json = await fetchJson('/api/portfolio', {}, { timeoutMs: 20000, retries: 1 });
       setData(json);
       setError(null);
     } catch (e) { setError(e.message || 'Failed to load portfolio'); }
@@ -806,11 +808,12 @@ export default function PortfolioTab({ compact = false, isOwner = false, backend
   }, [data]);
 
   const fetchTradeHistory = useCallback(async () => {
+    setHistoryLoading(true);
+    setHistoryError(null);
     try {
-      const r = await fetch(`${API()}/api/trade-history`);
-      if (!r.ok) return;
-      setTradeHistory(await r.json());
-    } catch { /* silent */ }
+      setTradeHistory(await fetchJson('/api/trade-history', {}, { timeoutMs: 15000, retries: 1 }));
+    } catch (e) { setHistoryError(`Unable to load history: ${e.message}`); }
+    finally { setHistoryLoading(false); }
   }, []);
 
   const fetchCandidates = useCallback(async (excludeTickers = []) => {
@@ -870,7 +873,7 @@ export default function PortfolioTab({ compact = false, isOwner = false, backend
   };
 
   const openFromScan = async () => {
-    if (!openTicker.trim()) return;
+    if (loading || !data || slots === 0 || !openTicker.trim()) return;
     setLoading(true);
     try {
       const scanRes = await fetch(`${API()}/api/scan`, {
@@ -934,8 +937,10 @@ export default function PortfolioTab({ compact = false, isOwner = false, backend
     if (!backendReady) return;
     load();
     fetchCandidates([]);
-    fetchActionLog();
-  }, [load, fetchCandidates, fetchActionLog, backendReady]);
+  }, [load, fetchCandidates, backendReady]);
+  useEffect(() => {
+    if (backendReady && data) fetchActionLog();
+  }, [fetchActionLog, backendReady, data]);
   useEffect(() => {
     if (!autoRefresh) return;
     const timer = setInterval(() => setCountdown(c => { if (c <= 1) { checkPrices(); return 30; } return c - 1; }), 1000);
@@ -998,7 +1003,8 @@ export default function PortfolioTab({ compact = false, isOwner = false, backend
       )}
 
       {/* ── Stats row ── */}
-      <div style={{ display:'flex', gap: compact ? 6 : 10, marginBottom: compact ? 10 : 24, flexWrap:'wrap' }}>
+      {!data && <div role="status" style={{ padding:12, color:'#fbbf24' }}>Portfolio data not loaded. Balances and slot availability are unverified.</div>}
+      {data && <div style={{ display:'flex', gap: compact ? 6 : 10, marginBottom: compact ? 10 : 24, flexWrap:'wrap' }}>
         <KStatCard label='TOTAL VALUE'   value={usd(equity)}  color='#00d4ff' accent='#00d4ff' compact={compact} />
         <KStatCard label='CASH'          value={usd(s.cash)}          color='#7ee8ff' sub={`${slots} slot${slots!==1?'s':''} open`} compact={compact} />
         <KStatCard label='TOTAL P&L'     value={`${totalPnl>=0?'+':''}${fmt(totalPnl,0)}`} color={clr(totalPnl)} sub={pct(s.total_pnl_pct||0)} accent={clr(totalPnl)} compact={compact} />
@@ -1006,28 +1012,28 @@ export default function PortfolioTab({ compact = false, isOwner = false, backend
         <KStatCard label='REALIZED'      value={`${(s.total_realized_pnl||0)>=0?'+':''}${fmt(s.total_realized_pnl||0,0)}`} color={clr(s.total_realized_pnl||0)} compact={compact} />
         <KStatCard label='OPEN'          value={s.open_count||0}      sub='positions' color='#fbbf24' compact={compact} />
         <KStatCard label='WIN RATE'      value={(s.total_closed||0)===0?'—':`${s.win_rate||0}%`}  sub={`${s.total_closed||0} closed`} color={(s.total_closed||0)===0?KC.textFaint:(s.win_rate>=60?KC.green:s.win_rate>=40?KC.yellow:KC.red)} compact={compact} />
-      </div>
+      </div>}
 
       {/* ── Period P&L breakdown ── */}
-      {!compact && <PeriodPnLBar closedPositions={closedPositions} startingCash={data?.state?.starting_capital || 25000} />}
+      {data && !compact && <PeriodPnLBar closedPositions={closedPositions} startingCash={data?.state?.starting_capital || 25000} />}
 
       <div style={{ background:'#0a1018', border:'1px solid #1a2535', borderRadius:10, padding:16, marginBottom:20 }}>
-        <div style={{ display:'flex', justifyContent:'space-between', alignItems:'center', marginBottom:8 }}>
+        <div style={{ display:'flex', justifyContent:'space-between', alignItems:'center', marginBottom:8, flexWrap:'wrap', gap:12 }}>
           <div>
-            <div style={{ fontSize:13, fontWeight:'bold', color:'#00d4ff', letterSpacing:1 }}>POSITIONS — {openPositions.length}/{maxPositions} SLOTS USED</div>
+            <div style={{ fontSize:13, fontWeight:'bold', color:'#00d4ff', letterSpacing:1 }}>POSITIONS — {data ? `${openPositions.length}/${maxPositions} SLOTS USED` : 'LOADING'}</div>
             <div style={{ fontSize:10, color:'#2a4a5a', marginTop:2, fontFamily:'sans-serif' }}>Click any position to expand details</div>
           </div>
-          <div style={{ display:'flex', gap:8 }}>
+          <div style={{ display:'flex', gap:8, flexWrap:'wrap' }}>
             {isOwner && <>
             <input value={openTicker} onChange={e => setOpenTicker(e.target.value.toUpperCase())}
               onKeyDown={e => e.key==='Enter' && openFromScan()}
               placeholder='TICKER' maxLength={6}
               style={{ width:90, background:'#0d1a2a', border:'1px solid #1a2535', borderRadius:6, padding:'6px 10px', color:'#e0e0e0', fontSize:13, fontFamily:'monospace', letterSpacing:2, textAlign:'center' }} />
-            <button onClick={openFromScan} disabled={loading || !openTicker.trim()}
+            <button onClick={openFromScan} disabled={!data || loading || slots === 0 || !openTicker.trim()}
               style={{ background:'linear-gradient(135deg,#00ff88,#00bb66)', border:'none', borderRadius:6, padding:'6px 14px', color:'#000', fontSize:12, fontWeight:'bold', cursor:'pointer', display:'flex', alignItems:'center', gap:5 }}>
               <Target size={13} /> OPEN
             </button>
-            <button onClick={autopilot} disabled={loading || slots===0}
+            <button onClick={autopilot} disabled={!data || loading || slots===0}
               style={{ background: slots===0?'#1a2535':'linear-gradient(135deg,#7c3aed,#a855f7)', border: slots===0?'1px solid #2a3545':'none', borderRadius:6, padding:'6px 14px', color: slots===0?'#4a5568':'#fff', fontSize:12, fontWeight:'bold', cursor: slots===0?'not-allowed':'pointer', display:'flex', alignItems:'center', gap:5 }}>
               <Zap size={13} /> {slots===0 ? 'PORTFOLIO FULL' : `AUTO-FILL ${slots} SLOTS`}
             </button>
@@ -1041,7 +1047,7 @@ export default function PortfolioTab({ compact = false, isOwner = false, backend
           </div>
         </div>
         {loading && <div style={{ padding:10, color:'#fbbf24', fontSize:11, fontFamily:'monospace' }}>⧑ Processing...</div>}
-        {openPositions.length === 0 && !loading && (
+        {data && openPositions.length === 0 && !loading && (
           <div style={{ textAlign:'center', padding:'30px 20px', color:'#8899aa', fontSize:12 }}>
             No open positions. Enter a ticker or click AUTO-FILL to start.
           </div>
@@ -1050,7 +1056,7 @@ export default function PortfolioTab({ compact = false, isOwner = false, backend
           <PositionCard key={pos.id} pos={pos} onClose={closePos} onRefresh={() => { load(true); fetchActionLog(); }}
             bench={getBenchForPos(pos)} onOpenBench={openBenchAsPosition} />
         ))}
-        {Array.from({ length: slots }).map((_, i) => (
+        {Array.from({ length: data ? slots : 0 }).map((_, i) => (
           <div key={i} style={{ border:'1px dashed #1a2535', borderRadius:10, padding:14, marginBottom:10, textAlign:'center', color:'#1a2535', fontSize:12 }}>
             — empty slot {openPositions.length + i + 1} —
           </div>
@@ -1084,7 +1090,7 @@ export default function PortfolioTab({ compact = false, isOwner = false, backend
         {/* Tab header */}
         <div style={{ display:'flex', alignItems:'center', justifyContent:'space-between', marginBottom:10 }}>
           <div style={{ display:'flex', gap:4 }}>
-            {[['log','SYSTEM ACTION LOG'],['history','TRADE HISTORY (85)']].map(([key,label]) => (
+            {[['log','SYSTEM ACTION LOG'],['history',`TRADE HISTORY${tradeHistory ? ` (${tradeHistory.stats?.total ?? tradeHistory.trades?.length ?? 0})` : ''}`]].map(([key,label]) => (
               <button key={key} onClick={() => { setHistoryTab(key); if(key==='history' && !tradeHistory) fetchTradeHistory(); }}
                 style={{ background: historyTab===key ? '#1a2535' : 'transparent',
                          border:`1px solid ${historyTab===key ? '#2a4a6a' : '#1a2535'}`,
@@ -1101,7 +1107,7 @@ export default function PortfolioTab({ compact = false, isOwner = false, backend
             </button>
           )}
           {historyTab === 'history' && (
-            <button onClick={fetchTradeHistory}
+            <button onClick={fetchTradeHistory} disabled={historyLoading}
               style={{ background:'transparent', border:'1px solid #1a2535', borderRadius:4, padding:'3px 8px', color:'#8899aa', fontSize:10, cursor:'pointer', display:'flex', alignItems:'center', gap:4 }}>
               <RefreshCw size={10} /> Refresh
             </button>
@@ -1139,9 +1145,10 @@ export default function PortfolioTab({ compact = false, isOwner = false, backend
 
         {/* TRADE HISTORY tab */}
         {historyTab === 'history' && (<>
-          {!tradeHistory ? (
+          {historyError && <div role="alert" style={{ color:'#ff8899', padding:12 }}>{historyError}</div>}
+          {historyLoading && !tradeHistory ? (
             <div style={{ textAlign:'center', padding:'20px', color:'#2a4a5a', fontSize:12 }}>Loading history...</div>
-          ) : (<>
+          ) : tradeHistory ? (<>
             {/* Summary stats bar */}
             <div style={{ display:'flex', gap:12, flexWrap:'wrap', marginBottom:14 }}>
               {[
@@ -1191,7 +1198,7 @@ export default function PortfolioTab({ compact = false, isOwner = false, backend
                 </tbody>
               </table>
             </div>
-          </>)}
+          </>) : null}
         </>)}
       </div>
     </div>

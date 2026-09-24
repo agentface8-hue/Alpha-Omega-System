@@ -1,6 +1,6 @@
 import React, { useState, useEffect, useCallback } from 'react';
 import { TrendingUp, TrendingDown, Zap, RefreshCw, RotateCcw, DollarSign, Target, Activity, BarChart2, Clock, Shield, ChevronDown, ChevronUp } from 'lucide-react';
-import { API_BASE } from '../utils/api';
+import { API_BASE, fetchJson } from '../utils/api';
 
 const API = () => API_BASE;
 const fmt  = (n, d=2) => n == null ? '—' : Number(n).toFixed(d);
@@ -377,11 +377,11 @@ export default function PrintingProfits() {
 
   const loadFutures = async () => {
     setLoading(true);
+    setError(null);
     try {
-      const r = await fetch(`${API()}/api/printing/futures`);
-      if (r.ok) setFuturesData(await r.json());
-    } catch {}
-    setLoading(false);
+      setFuturesData(await fetchJson('/api/printing/futures', {}, { timeoutMs: 20000, retries: 1 }));
+    } catch (e) { setError(`Unable to load futures: ${e.message}`); }
+    finally { setLoading(false); }
   };
 
   const checkPrices = async () => {
@@ -652,7 +652,7 @@ export default function PrintingProfits() {
           ) : (
             <div style={{ textAlign:'center', padding:'60px 20px', color:'#8899aa' }}>
               <BarChart2 size={40} color="#fbbf24" style={{ marginBottom:12 }}/>
-              <div>Loading futures data...</div>
+              <div>{loading ? 'Loading futures data...' : 'Futures data unavailable. Use Refresh to retry.'}</div>
             </div>
           )}
         </div>

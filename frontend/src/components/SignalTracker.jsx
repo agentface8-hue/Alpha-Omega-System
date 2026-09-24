@@ -1,7 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { Activity, RefreshCw, X, TrendingUp, TrendingDown, Target, AlertTriangle, Clock, BarChart3, Shield, Zap } from 'lucide-react';
 import { C as KC, StatCard as KSC } from './UIKit';
-import { API_BASE } from '../utils/api';
+import { API_BASE, fetchJson } from '../utils/api';
 
 const pnlColor   = v => v > 0 ? "#00ff88" : v < 0 ? "#ff4466" : "#94a3b8";
 const statusColor = s => {
@@ -492,6 +492,7 @@ const SLHistoryPanel = ({ signal, entryTime, onClose }) => {
 const SignalTracker = ({ compact = false, isOwner = false, backendReady = true }) => {
   const [data,             setData]             = useState(null);
   const [loading,          setLoading]          = useState(false);
+  const [loadError, setLoadError] = useState(null);
   const [refreshing,       setRefreshing]       = useState(false);
   const [tab,              setTab]              = useState('active');
   const [turboTicker,      setTurboTicker]      = useState('');
@@ -556,14 +557,14 @@ const SignalTracker = ({ compact = false, isOwner = false, backendReady = true }
 
   const fetchSignals = async (refresh = false) => {
     if (refresh) setRefreshing(true); else setLoading(true);
+    setLoadError(null);
     try {
-      const res  = await fetch(`${apiUrl}${refresh?'/api/signals/check':'/api/signals'}`, { method: refresh?'POST':'GET' });
-      const json = await res.json();
+      const json = await fetchJson(refresh ? '/api/signals/check' : '/api/signals', { method: refresh ? 'POST' : 'GET' }, { timeoutMs: 20000, retries: 1 });
       setData(json);
       if (refresh && autoRefresh) setCountdown(30);
       // Refresh bench candidates whenever prices are checked
       if (refresh) fetchCandidates((json.active || []).map(s => s.ticker));
-    } catch (e) { console.error(e); }
+    } catch (e) { setLoadError(`Unable to load signals: ${e.message}`); }
     setLoading(false); setRefreshing(false);
   };
 
@@ -697,6 +698,7 @@ const SignalTracker = ({ compact = false, isOwner = false, backendReady = true }
     <div style={{ background:"#050810", padding:"20px 16px", fontFamily:"'Courier New',monospace", color:"#c9d8e8" }}>
       <style>{`@keyframes st-pulse { 0%,100%{opacity:1} 50%{opacity:0.45} }`}</style>
 
+      {loadError && <div role="alert" style={{ color: '#ff6677', padding: 12 }}>{loadError} <button onClick={() => fetchSignals()} disabled={loading}>Retry</button></div>}
       {/* Header */}
       <div style={{ display:"flex", alignItems:"center", justifyContent:"space-between", borderBottom:"1px solid #1a2535", paddingBottom:14, marginBottom:16 }}>
         <div>

@@ -28,6 +28,8 @@ import os
 import uuid
 import logging
 import datetime
+import math
+from decimal import Decimal, InvalidOperation
 from typing import Dict, Any, Optional
 
 logger = logging.getLogger(__name__)
@@ -272,36 +274,47 @@ def execute_signal(signal: Dict) -> Dict:
     Returns:
         execution result dict with status, fill_price, order IDs, commission
     """
-    ticker     = signal.get("ticker", "").upper()
-    entry      = float(signal.get("entry_price", signal.get("entry", 0)))
-    sl         = float(signal.get("sl", 0))
-    tp1        = float(signal.get("tp1", 0))
-    tp2        = float(signal.get("tp2", 0))
-    tp3        = float(signal.get("tp3", 0))
-    shares     = int(signal.get("shares", signal.get("qty", 0)))
-    tp1_shares = int(signal.get("tp1_shares", max(1, round(shares * 0.50))))
-    tp2_shares = int(signal.get("tp2_shares", max(1, round(shares * 0.30))))
-    tp3_shares = shares - tp1_shares - tp2_shares
-    if tp3_shares < 0: tp3_shares = 0
+    if EXECUTOR_MODE not in ("paper", "ibkr"):
+        return {"status": "failed", "error": "Unknown executor mode"}
+    try:
+        ticker = signal.get("ticker", "")
+        if not isinstance(ticker, str) or not ticker.strip():
+            raise ValueError("No ticker provided")
+        ticker = ticker.strip().upper()
+        entry = float(signal.get("entry_price", signal.get("entry", 0)))
+        sl, tp1, tp2, tp3 = (float(signal.get(k, 0)) for k in ("sl", "tp1", "tp2", "tp3"))
+        if not all(math.isfinite(p) and p > 0 for p in (entry, sl, tp1, tp2, tp3)):
+            raise ValueError("Prices must be finite and positive")
+        if not sl < entry < tp1 < tp2 < tp3:
+            raise ValueError("Long order requires SL < entry < TP1 < TP2 < TP3")
 
-    # Sanity checks
-    if not ticker:
-        return {"status": "failed", "error": "No ticker provided"}
-    if shares <= 0:
-        return {"status": "failed", "error": "shares must be > 0"}
-    if sl >= entry:
-        return {"status": "failed", "error": f"SL ${sl} must be below entry ${entry}"}
-    if tp1 <= entry:
-        return {"status": "failed", "error": f"TP1 ${tp1} must be above entry ${entry}"}
+        def quantity(value):
+            number = Decimal(str(value))
+            if not number.is_finite() or number < 0 or number != number.to_integral_value():
+                raise ValueError("Share quantities must be non-negative integers")
+            return int(number)
+
+        shares = quantity(signal.get("shares", signal.get("qty", 0)))
+        if shares <= 0:
+            raise ValueError("shares must be > 0")
+        tp1_shares = quantity(signal.get("tp1_shares", max(1, round(shares * 0.50))))
+        tp2_shares = quantity(signal.get("tp2_shares", min(shares - tp1_shares, max(1, round(shares * 0.30)))))
+        tp3_shares = quantity(signal.get("tp3_shares", shares - tp1_shares - tp2_shares))
+        if tp1_shares + tp2_shares + tp3_shares != shares:
+            raise ValueError("Exit quantities must sum to entry shares")
+    except (TypeError, ValueError, InvalidOperation, OverflowError) as exc:
+        return {"status": "failed", "error": str(exc)}
 
     try:
         from core.trading_safety import check_trade_allowed
-        mode = "ibkr_live" if EXECUTOR_MODE == "ibkr" and IBKR_PORT == 7496 else EXECUTOR_MODE
+        # Both TWS and Gateway paper ports; unknown/custom ports require live acknowledgement.
+        mode = ("ibkr_paper" if IBKR_PORT in (7497, 4002) else "ibkr_live") if EXECUTOR_MODE == "ibkr" else "paper"
         safety = check_trade_allowed(ticker=ticker, mode=mode, new_position=True)
-        if not safety.get("allowed", True):
+        if safety.get("allowed") is not True:
             return {"status": "blocked", "error": safety.get("reason"), "safety": safety}
     except Exception as e:
-        logger.warning(f"[EXECUTOR] Safety check skipped: {e}")
+        logger.error(f"[EXECUTOR] Safety check unavailable: {e}")
+        return {"status": "blocked", "error": "Safety check unavailable; execution blocked"}
 
     logger.info(f"[EXECUTOR] Routing {ticker} x{shares} via mode={EXECUTOR_MODE}")
 

@@ -55,16 +55,19 @@ def _live_price(ticker: str, asset_type: str = "stock") -> Optional[float]:
 
 
 def _size_position(entry: float, sl: float) -> Dict:
-    sl_dist        = max(entry - sl, 0.01)
+    if not math.isfinite(entry) or not math.isfinite(sl) or not 0 < sl < entry:
+        raise ValueError("Long position requires finite prices with 0 < SL < entry")
+    sl_dist        = entry - sl
     shares_by_risk = math.floor(MAX_RISK / sl_dist)
     max_shares     = math.floor(MAX_POS_SIZE / entry)
     min_shares     = math.ceil(MIN_POS_SIZE / entry)
-    shares         = max(min_shares, min(shares_by_risk, max_shares))
-    if shares < 1: shares = 1
+    shares         = min(shares_by_risk, max_shares)
+    if shares < max(1, min_shares):
+        raise ValueError("Minimum position size cannot be met within risk and size limits")
     position_size = round(shares * entry, 2)
     risk_actual   = round(shares * sl_dist, 2)
     tp1_shares = max(1, round(shares * SPLIT_TP1_PCT))
-    tp2_shares = max(1, round(shares * SPLIT_TP2_PCT))
+    tp2_shares = min(shares - tp1_shares, max(1, round(shares * SPLIT_TP2_PCT)))
     tp3_shares = shares - tp1_shares - tp2_shares
     if tp3_shares < 0: tp3_shares = 0
     return {"shares": shares, "position_size": position_size, "risk_actual": risk_actual,
@@ -95,10 +98,10 @@ def open_position(ticker: str, entry_price: float, sl: float,
             new_position=True,
             open_risk=sum(float(p.get("risk_actual") or 0) for p in open_pos),
         )
-        if not safety.get("allowed", True):
+        if safety.get("allowed") is not True:
             return {"error": f"Safety blocked: {safety.get('reason', safety.get('code'))}", "safety": safety}
     except Exception as e:
-        print(f"  [SAFETY] check skipped: {e}")
+        return {"error": "Safety check unavailable; position blocked"}
     if len(open_pos) >= MAX_POSITIONS:
         return {"error": f"Max {MAX_POSITIONS} positions reached"}
 
@@ -171,13 +174,16 @@ def open_position(ticker: str, entry_price: float, sl: float,
     except Exception:
         pass  # If sector lookup fails, allow the trade
 
-    sizing = _size_position(entry_price, sl)
+    try:
+        sizing = _size_position(entry_price, sl)
+    except (ValueError, TypeError) as exc:
+        return {"error": str(exc)}
     if sizing["position_size"] > state["cash"]:
         min_shares = max(1, math.ceil(MIN_POS_SIZE / entry_price))
         min_size   = round(min_shares * entry_price, 2)
         if min_size <= state["cash"]:
             tp1_sh = max(1, round(min_shares * SPLIT_TP1_PCT))
-            tp2_sh = max(1, round(min_shares * SPLIT_TP2_PCT))
+            tp2_sh = min(min_shares - tp1_sh, max(1, round(min_shares * SPLIT_TP2_PCT)))
             tp3_sh = max(0, min_shares - tp1_sh - tp2_sh)
             sizing = {"shares": min_shares, "position_size": min_size,
                       "risk_actual": round(min_shares * max(entry_price - sl, 0.01), 2),

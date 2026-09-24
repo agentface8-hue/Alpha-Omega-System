@@ -188,3 +188,7 @@ core/trade_log.py
 | Rotate GitHub token | Medium | Token `ghp_YVx...` briefly appeared in a commit (since reset). Rotate at github.com/settings/tokens for hygiene. |
 | `GOOGLE_API_KEY` | Low | Empty in `.env`. Fill when adding Google News feed or Gemini analysis to agents. |
 | Old Supabase project | Low | `trade_journal` data on `gmepzeapdrnglgucgqop` not migrated. Historical scan data lives there. |
+
+
+## Stability release 2026-09-24
+Authorized isolated release: see docs/RELEASE-2026-09-24.md for changes, verification, limitations and rollback.
