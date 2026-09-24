@@ -229,7 +229,7 @@ const TPTTracker = ({ portfolioStats }) => {
   const remaining = Math.max(0, target - realized);
   const daysLeft  = remaining > 0 && realized > 0 ? Math.ceil(remaining / (realized / Math.max(days,1))) : '—';
   const passed    = realized >= target && days >= 5;
-  const failed    = false; // would need drawdown tracking
+
 
   return (
     <div style={{ padding:16 }}>
@@ -237,7 +237,7 @@ const TPTTracker = ({ portfolioStats }) => {
         <Shield size={20} color="#fbbf24" />
         <div>
           <div style={{ fontSize:14, fontWeight:'bold', color:'#fff', letterSpacing:1 }}>TAKEPROFITTRADER EVALUATION TRACKER</div>
-          <div style={{ fontSize:10, color:'#8899aa' }}>Track your progress toward a funded account — trade their $50K-$150K, keep 80%</div>
+          <div style={{ fontSize:10, color:'#8899aa' }}>Illustrative calculator. Targets are assumptions; current provider terms and eligibility are not verified.</div>
         </div>
       </div>
 
@@ -263,7 +263,7 @@ const TPTTracker = ({ portfolioStats }) => {
         borderRadius:10, padding:16, marginBottom:16 }}>
         <div style={{ display:'flex', justifyContent:'space-between', marginBottom:12 }}>
           <div style={{ fontSize:13, fontWeight:'bold', color: passed?'#00ff88':'#fff', letterSpacing:1 }}>
-            {passed ? '🎉 EVALUATION PASSED — GET FUNDED' : '📊 EVALUATION IN PROGRESS'}
+            {passed ? 'ILLUSTRATIVE TARGET REACHED — ELIGIBILITY UNVERIFIED' : 'ILLUSTRATIVE TARGET PROGRESS'}
           </div>
           <div style={{ fontSize:12, color:'#8899aa', fontFamily:'monospace' }}>
             ${fmt(realized,0)} / ${(target/1000).toFixed(0)}K target
@@ -288,18 +288,18 @@ const TPTTracker = ({ portfolioStats }) => {
 
       {/* Rules checklist */}
       <div style={{ background:'#0a1018', border:'1px solid #1a2535', borderRadius:8, padding:14, marginBottom:16 }}>
-        <div style={{ fontSize:11, fontWeight:'bold', color:'#94a3b8', marginBottom:10, letterSpacing:1 }}>TPT EVALUATION RULES</div>
+        <div style={{ fontSize:11, fontWeight:'bold', color:'#94a3b8', marginBottom:10, letterSpacing:1 }}>ILLUSTRATIVE INPUTS — NOT A COMPLIANCE CHECK</div>
         {[
           { rule: `Profit target: $${target.toLocaleString()}`, ok: realized >= target },
           { rule: `Min 5 trading days`, ok: days >= 5 },
-          { rule: `No single day > 50% of total profit`, ok: true },
-          { rule: `Close all positions by 5:00 PM ET`, ok: true },
-          { rule: `Max trailing drawdown: $${drawdown.toLocaleString()}`, ok: true },
-          { rule: `Algo trading: ✅ PERMITTED`, ok: true },
+          { rule: `No single day > 50% of total profit`, ok: null },
+          { rule: `Close all positions by 5:00 PM ET`, ok: null },
+          { rule: `Max trailing drawdown: $${drawdown.toLocaleString()}`, ok: null },
+          { rule: `Algorithmic trading permission: not verified`, ok: null },
         ].map((item, i) => (
           <div key={i} style={{ display:'flex', alignItems:'center', gap:8, marginBottom:6 }}>
             <span style={{ fontSize:12, color: item.ok ? '#00ff88' : '#fbbf24' }}>
-              {item.ok ? '✓' : '○'}
+              {item.ok == null ? '?' : item.ok ? '✓' : '○'}
             </span>
             <span style={{ fontSize:11, color: item.ok ? '#e0e0e0' : '#94a3b8' }}>{item.rule}</span>
           </div>
@@ -310,7 +310,7 @@ const TPTTracker = ({ portfolioStats }) => {
       <div style={{ background:'linear-gradient(135deg, rgba(251,191,36,0.06), rgba(249,115,22,0.04))',
         border:'1px solid rgba(251,191,36,0.2)', borderRadius:8, padding:14 }}>
         <div style={{ fontSize:11, fontWeight:'bold', color:'#fbbf24', marginBottom:10, letterSpacing:1 }}>
-          💰 REVENUE PROJECTION (once funded)
+          HYPOTHETICAL ARITHMETIC — NOT A RETURN FORECAST
         </div>
         {[
           { label: '1 × $50K account @ +2%/month', value: '+$1,000/mo', keep: '+$800/mo (80%)' },
@@ -327,7 +327,7 @@ const TPTTracker = ({ portfolioStats }) => {
           </div>
         ))}
         <div style={{ marginTop:10, fontSize:9, color:'#8899aa', lineHeight:1.6 }}>
-          Evaluation fee: $75–$150/month · Activation: $130 one-time · Algo trading: permitted · Daily withdrawals
+          Examples assume positive monthly returns and an 80% share, exclude costs and do not estimate likely earnings. Provider fees, permissions and payout terms must be verified separately.
         </div>
       </div>
     </div>
@@ -350,9 +350,10 @@ export default function PrintingProfits() {
 
   const loadPortfolio = useCallback(async () => {
     try {
-      const r = await fetch(`${API()}/api/printing/portfolio`);
-      if (r.ok) setPortfolio(await r.json());
-    } catch {}
+      const data = await fetchJson('/api/printing/portfolio', {}, { timeoutMs: 20000, retries: 1 });
+      if (!Array.isArray(data.open_positions) || !Number.isInteger(data.stats?.slots_available)) throw new Error('Invalid portfolio response');
+      setPortfolio(data);
+    } catch (e) { setError(`Unable to load printing portfolio: ${e.message}`); }
   }, []);
 
   const loadRegime = useCallback(async () => {
@@ -450,7 +451,8 @@ export default function PrintingProfits() {
   const openPos    = portfolio?.open_positions  || [];
   const closedPos  = (portfolio?.closed_positions || []).slice().reverse();
   const totalPnl   = pf.total_pnl || 0;
-  const slots      = Math.max(0, 5 - (pf.open_count || 0));
+  const slots = Number.isInteger(pf.slots_available) ? Math.max(0, pf.slots_available) : 0;
+  const maxSlots = openPos.length + slots;
 
   const subTabs = [
     { id:'scanner',   label:'SCANNER',   icon:<Activity size={12}/> },
@@ -515,16 +517,17 @@ export default function PrintingProfits() {
         </div>
       </div>
 
-      {/* Portfolio header stats (always visible) */}
-      <div style={{ display:'flex', gap:10, marginBottom:16, flexWrap:'wrap' }}>
-        <Stat label="TOTAL VALUE"  value={usd(st.total_value||25000)} color='#fbbf24' />
-        <Stat label="CASH"         value={usd(st.cash||25000)} color='#7ee8ff' sub={`${slots} slots`} />
+      {/* Show balances only after a confirmed portfolio response. */}
+      {!portfolio && <div role="status" style={{color:'#fbbf24',padding:12}}>Printing portfolio data unavailable; balances and slots are unverified.</div>}
+      {portfolio && <div style={{ display:'flex', gap:10, marginBottom:16, flexWrap:'wrap' }}>
+        <Stat label="TOTAL VALUE"  value={usd(st.total_value ?? 0)} color='#fbbf24' />
+        <Stat label="CASH"         value={usd(st.cash ?? 0)} color='#7ee8ff' sub={`${slots} slots`} />
         <Stat label="TOTAL P&L"    value={`${totalPnl>=0?'+':''}${fmt(totalPnl,0)}`} color={clr(totalPnl)} sub={pct(pf.total_pnl_pct||0)} />
         <Stat label="LONG EXP"     value={usd(pf.long_exposure||0)}  color='#00ff88' />
         <Stat label="SHORT EXP"    value={usd(pf.short_exposure||0)} color='#ff4466' />
         <Stat label="WIN RATE"     value={`${pf.win_rate||0}%`} color={pf.win_rate>=55?'#00ff88':pf.win_rate>=40?'#fbbf24':'#ff4466'} sub={`${pf.total_closed||0} closed`} />
         <Stat label="OPEN"         value={pf.open_count||0} color='#fbbf24' sub="positions" />
-      </div>
+      </div>}
 
       {error && (
         <div style={{ background:'rgba(255,68,102,0.1)', border:'1px solid #ff4466',
@@ -613,7 +616,7 @@ export default function PrintingProfits() {
               <Zap size={40} color="#fbbf24" style={{ marginBottom:12 }}/>
               <div style={{ fontSize:14 }}>Click RUN DUAL SCAN to find long + short opportunities</div>
               <div style={{ fontSize:11, marginTop:6 }}>
-                Existing system only goes LONG. This scanner profits in both directions.
+                Screens long and short setups. Paper results require validation after costs.
               </div>
             </div>
           )}
@@ -666,7 +669,7 @@ export default function PrintingProfits() {
             padding:14, marginBottom:16 }}>
             <div style={{ display:'flex', justifyContent:'space-between', alignItems:'center', marginBottom:12 }}>
               <div style={{ fontSize:12, fontWeight:'bold', color:'#fbbf24', letterSpacing:1 }}>
-                LONG/SHORT POSITIONS — {openPos.length}/5 SLOTS
+                LONG/SHORT POSITIONS — {portfolio ? `${openPos.length}/${maxSlots}` : 'UNAVAILABLE'} SLOTS
               </div>
               <div style={{ display:'flex', gap:8 }}>
                 <input value={ticker} onChange={e => setTicker(e.target.value.toUpperCase())}
@@ -674,7 +677,7 @@ export default function PrintingProfits() {
                   style={{ width:80, background:'#0d1a2a', border:'1px solid #1a2535',
                     borderRadius:6, padding:'6px 10px', color:'#e0e0e0', fontSize:13,
                     fontFamily:'monospace', textAlign:'center' }}/>
-                <button onClick={autopilot} disabled={loading||slots===0}
+                <button onClick={autopilot} disabled={!portfolio||loading||slots===0}
                   style={{ background: slots===0?'#1a2535':'linear-gradient(135deg,#fbbf24,#f97316)',
                     border:'none', borderRadius:6, padding:'6px 14px',
                     color: slots===0?'#8899aa':'#000', fontSize:11, fontWeight:'bold',
@@ -689,7 +692,7 @@ export default function PrintingProfits() {
               </div>
             )}
             {openPos.map(p => <PositionCard key={p.id} pos={p} onClose={closePos}/>)}
-            {Array.from({length: Math.max(0,5-openPos.length)}).map((_,i) => (
+            {Array.from({length: slots}).map((_,i) => (
               <div key={i} style={{ border:'1px dashed #1a2535', borderRadius:8,
                 padding:12, marginBottom:8, textAlign:'center', color:'#1a2535', fontSize:11 }}>
                 — empty slot {openPos.length+i+1} —

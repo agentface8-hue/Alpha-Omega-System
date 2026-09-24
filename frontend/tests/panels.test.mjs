@@ -188,3 +188,13 @@ test('unavailable history displays provenance without invented performance', asy
       assert.ok(!host.textContent.includes('TRADE HISTORY (0)'));
     });
 });
+
+test('printing slots use backend capacity and zero cash stays zero', async()=>{
+  await mounted('PrintingProfits',async url=>response(url.endsWith('/api/printing/portfolio')
+    ? {state:{cash:0,total_value:0},stats:{slots_available:8,open_count:0},open_positions:[],closed_positions:[]} : {}),async host=>{
+      await act(async()=>[...host.querySelectorAll('button')].find(b=>b.textContent.trim()==='PORTFOLIO').click());
+      assert.match(host.textContent,/0\/8 SLOTS/);
+      assert.equal((host.textContent.match(/empty slot/g)||[]).length,8);
+      assert.ok(!host.textContent.includes('$25,000'));
+    });
+});
