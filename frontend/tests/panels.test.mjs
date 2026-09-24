@@ -177,3 +177,14 @@ test('System Monitor distinguishes failed requests from healthy refresh', async 
     assert.ok(!host.textContent.includes('Refresh OK'));
   });
 });
+
+test('unavailable history displays provenance without invented performance', async()=>{
+  await mounted('PortfolioTab',async url=>response(url.endsWith('/api/trade-history')
+    ? {trades:[],stats:null,history_available:false,message:'Older remote history is unavailable'}
+    : url.endsWith('/api/portfolio') ? portfolio : {active:[],closed:[],candidates:[]}),async host=>{
+      await act(async()=>[...host.querySelectorAll('button')].find(b=>b.textContent.includes('TRADE HISTORY')).click());
+      assert.match(host.textContent,/Older remote history is unavailable/);
+      assert.ok(!host.textContent.includes('PROFIT FACTOR'));
+      assert.ok(!host.textContent.includes('TRADE HISTORY (0)'));
+    });
+});

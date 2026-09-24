@@ -2529,6 +2529,13 @@ async def monitor_run_now():
 @app.get("/api/trade-history")
 async def get_trade_history(limit: int = 200):
     """Return all historical trades from trade_log for Portfolio history tab."""
+    from core.storage_paths import use_supabase
+    if not use_supabase():
+        from core.local_trade_history import read_local_trade_history
+        try:
+            return read_local_trade_history(limit)
+        except (OSError, ValueError):
+            raise HTTPException(status_code=503, detail="Local trade archive cannot be read safely")
     import asyncio, concurrent.futures
     def _fetch():
         import os, urllib.request as _ur

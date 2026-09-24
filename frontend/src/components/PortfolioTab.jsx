@@ -1090,7 +1090,7 @@ export default function PortfolioTab({ compact = false, isOwner = false, backend
         {/* Tab header */}
         <div style={{ display:'flex', alignItems:'center', justifyContent:'space-between', marginBottom:10 }}>
           <div style={{ display:'flex', gap:4 }}>
-            {[['log','SYSTEM ACTION LOG'],['history',`TRADE HISTORY${tradeHistory ? ` (${tradeHistory.stats?.total ?? tradeHistory.trades?.length ?? 0})` : ''}`]].map(([key,label]) => (
+            {[['log','SYSTEM ACTION LOG'],['history',`TRADE HISTORY${tradeHistory && tradeHistory.history_available !== false ? ` (${tradeHistory.stats?.total ?? tradeHistory.trades?.length ?? 0})` : ''}`]].map(([key,label]) => (
               <button key={key} onClick={() => { setHistoryTab(key); if(key==='history' && !tradeHistory) fetchTradeHistory(); }}
                 style={{ background: historyTab===key ? '#1a2535' : 'transparent',
                          border:`1px solid ${historyTab===key ? '#2a4a6a' : '#1a2535'}`,
@@ -1149,8 +1149,9 @@ export default function PortfolioTab({ compact = false, isOwner = false, backend
           {historyLoading && !tradeHistory ? (
             <div style={{ textAlign:'center', padding:'20px', color:'#2a4a5a', fontSize:12 }}>Loading history...</div>
           ) : tradeHistory ? (<>
-            {/* Summary stats bar */}
-            <div style={{ display:'flex', gap:12, flexWrap:'wrap', marginBottom:14 }}>
+            {tradeHistory.message && <div role="status" style={{color:'#fbbf24', padding:12}}>{tradeHistory.message}</div>}
+            {/* Only aggregate when the source supplies account statistics. */}
+            {tradeHistory.stats && <div style={{ display:'flex', gap:12, flexWrap:'wrap', marginBottom:14 }}>
               {[
                 ['TOTAL',          tradeHistory.stats?.total ?? '—'],
                 ['WIN RATE',       `${tradeHistory.stats?.win_rate ?? 0}%`],
@@ -1164,7 +1165,7 @@ export default function PortfolioTab({ compact = false, isOwner = false, backend
                   <div style={{ fontSize:13, fontWeight:'bold', color: lbl==='WIN RATE' ? (parseFloat(val)>=50?'#00ff88':'#ff4466') : lbl==='AVG P&L' ? (parseFloat(val)>=0?'#00ff88':'#ff4466') : '#e0e0e0' }}>{val}</div>
                 </div>
               ))}
-            </div>
+            </div>}
             {/* Table */}
             <div style={{ overflowX:'auto' }}>
               <table style={{ width:'100%', borderCollapse:'collapse', fontSize:10, fontFamily:'monospace' }}>
@@ -1177,7 +1178,7 @@ export default function PortfolioTab({ compact = false, isOwner = false, backend
                 </thead>
                 <tbody>
                   {(tradeHistory.trades || []).map((t, i) => {
-                    const pnl = parseFloat(t.pnl_pct ?? 0);
+                    const pnl = t.pnl_pct == null ? null : parseFloat(t.pnl_pct);
                     const pnlColor = pnl > 0 ? '#00ff88' : pnl < 0 ? '#ff4466' : '#94a3b8';
                     const exitColor = t.exit_reason?.includes('TP') ? '#00ff88' : t.exit_reason?.includes('SL') ? '#ff4466' : '#8899aa';
                     return (
@@ -1189,7 +1190,7 @@ export default function PortfolioTab({ compact = false, isOwner = false, backend
                         <td style={{ padding:'4px 6px', color: t.tas_num>=3 ? '#00d4ff' : '#4a6a8a' }}>{t.tas_num != null ? `${t.tas_num}/4` : '—'}</td>
                         <td style={{ padding:'4px 6px', color: parseFloat(t.vol_ratio||0)>=1.0 ? '#00ff88' : '#ff4466' }}>{t.vol_ratio ? `${parseFloat(t.vol_ratio).toFixed(2)}x` : '—'}</td>
                         <td style={{ padding:'4px 6px', color: exitColor }}>{t.exit_reason || '—'}</td>
-                        <td style={{ padding:'4px 6px', color: pnlColor, fontWeight:'bold' }}>{pnl > 0 ? '+' : ''}{pnl.toFixed(2)}%</td>
+                        <td style={{ padding:'4px 6px', color: pnlColor, fontWeight:'bold' }}>{pnl == null || !Number.isFinite(pnl) ? '—' : `${pnl > 0 ? '+' : ''}${pnl.toFixed(2)}%`}</td>
                         <td style={{ padding:'4px 6px', color:'#00ff88' }}>{t.mfe_pct != null ? `+${parseFloat(t.mfe_pct).toFixed(2)}%` : '—'}</td>
                         <td style={{ padding:'4px 6px', color:'#ff4466' }}>{t.mae_pct != null ? `${parseFloat(t.mae_pct).toFixed(2)}%` : '—'}</td>
                       </tr>
